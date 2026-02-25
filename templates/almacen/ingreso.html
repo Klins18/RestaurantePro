@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Registrar Ingreso{% endblock %}
+{% block page_title %}Registrar Ingreso{% endblock %}
+{% block page_subtitle %}Entrada de productos al almacén{% endblock %}
+{% block header_actions %}<a href="{{ url_for("almacen.index") }}" class="btn-secondary btn-sm">← Inventario</a>{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto;">
+<form method="POST" action="{{ url_for("almacen.ingreso") }}">
+<div class="card" style="margin-bottom:14px;">
+    <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">📦 Datos del Ingreso</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        <div><label class="label">Producto *</label>
+            <select name="producto_id" class="input" required>
+                <option value="">— Seleccionar —</option>
+                {% for p in productos %}<option value="{{ p.id }}">{{ p.nombre }} ({{ p.unidad_medida }}) — Stock: {{ p.stock_actual }}</option>{% endfor %}
+            </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div><label class="label">Cantidad *</label><input type="number" name="cantidad" class="input" step="0.01" min="0.001" required placeholder="0.00"></div>
+            <div><label class="label">Fecha</label><input type="date" name="fecha" class="input" value="{{ hoy }}"></div>
+        </div>
+        <div><label class="label">Motivo</label><input type="text" name="motivo" class="input" placeholder="Compra, donación, ajuste..."></div>
+        <div><label class="label">Referencia</label><input type="text" name="referencia" class="input" placeholder="N° factura, orden..."></div>
+        <div><label class="label">Observaciones</label><textarea name="observaciones" class="input" rows="2" placeholder="Notas adicionales..."></textarea></div>
+    </div>
+</div>
+<div style="display:flex;gap:10px;">
+    <button type="submit" class="btn-primary" style="flex:1;text-align:center;">💾 Registrar Ingreso</button>
+    <a href="{{ url_for("almacen.index") }}" class="btn-secondary" style="flex:1;text-align:center;display:flex;align-items:center;justify-content:center;">Cancelar</a>
+</div>
+</form>
+</div>
+{% endblock %}

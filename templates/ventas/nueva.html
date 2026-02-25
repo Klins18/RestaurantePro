@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Venta{% endblock %}
+{% block page_title %}Registrar Venta{% endblock %}
+{% block page_subtitle %}Servicio del día{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('ventas.nueva') }}" id="form-venta">
+<input type="hidden" name="total_items" id="hidden-total-items" value="0">
+<input type="hidden" name="subtotal"    id="hidden-subtotal"    value="0">
+
+<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;" id="venta-grid">
+
+<!-- ══ PANEL IZQUIERDO ══ -->
+<div style="display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Datos básicos -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:13px;font-size:0.92rem;">🍽️ Datos del Servicio</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+                <label class="label">Fecha *</label>
+                <input type="date" name="fecha" class="input" value="{{ hoy }}" required>
+            </div>
+            <div>
+                <label class="label">Empresa *</label>
+                <select name="empresa_id" class="input" id="sel-empresa" onchange="onEmpresaChange(this)">
+                    <option value="">👤 Grupo Privado</option>
+                    {% for e in empresas %}
+                    <option value="{{ e.id }}"
+                        data-peruhop="{{ 'si' if e.nombre == 'Peru Hop' else 'no' }}"
+                        data-color="{{ e.color }}">{{ e.nombre }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="es_privado" id="es-privado" value="0">
+            </div>
+
+            <!-- Nombre grupo (solo privados) -->
+            <div id="row-nombre-grupo">
+                <label class="label">Nombre del grupo *</label>
+                <input type="text" name="nombre_grupo" class="input" placeholder="Ej: Familia Rodríguez...">
+            </div>
+
+            <!-- Ruta (empresas turísticas) -->
+            <div id="row-ruta" style="display:none;">
+                <label class="label">Ruta</label>
+                <input type="text" name="ruta" class="input" placeholder="Ej: Cusco → Puno">
+            </div>
+
+            <div>
+                <label class="label">N° Pax (buffet)</label>
+                <input type="number" name="num_pax" id="num-pax" class="input" min="0" value="0"
+                    oninput="calcularTotal()">
+            </div>
+
+            <!-- Precio buffet -->
+            <div id="row-precio-buffet">
+                <label class="label">Precio buffet / pax (S/.)</label>
+                <input type="number" name="precio_buffet" id="precio-buffet" class="input"
+                    min="0" step="0.50" value="0" oninput="calcularTotal()">
+                <p id="hint-peruhop" style="display:none;font-size:0.72rem;color:#10b981;margin-top:3px;font-weight:600;">
+                    ✓ Peru Hop: S/.{{ precio_peruhop }} × pax (automático)
+                </p>
+            </div>
+
+            <div>
+                <label class="label">Observaciones</label>
+                <textarea name="observaciones" class="input" rows="2" placeholder="Notas..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen de totales -->
+    <div class="card" style="background:#1e293b;color:white;padding:16px;">
+        <p style="font-size:0.68rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Resumen</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+                <span style="color:#94a3b8;">Buffet (<span id="disp-pax">0</span> pax × S/.<span id="disp-precio-pax">0</span>)</span>
+                <span id="disp-buffet" style="font-weight:700;">S/.0.00</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+                <span style="color:#94a3b8;">Bebidas / otros</span>
+                <span id="disp-items" style="font-weight:700;">S/.0.00</span>
+            </div>
+            <div style="border-top:1px solid #334155;margin:4px 0;"></div>
+            <div style="display:flex;justify-content:space-between;">
+                <span style="font-size:0.9rem;font-weight:700;">TOTAL</span>
+                <span id="disp-total" style="font-size:1.3rem;font-weight:800;color:#fbbf24;">S/.0.00</span>
+            </div>
+        </div>
+        <div style="margin-top:10px;">
+            <label style="font-size:0.72rem;color:#64748b;display:block;margin-bottom:4px;">Descuento (S/.)</label>
+            <input type="number" name="descuento" id="inp-descuento" class="input"
+                min="0" step="0.50" value="0"
+                style="background:#334155;color:white;border-color:#475569;"
+                oninput="calcularTotal()">
+        </div>
+    </div>
+
+    <!-- Pago (solo privados) -->
+    <div id="row-pago" style="display:none;" class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:12px;font-size:0.88rem;">💳 Método de pago</h3>
+        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">Solo para grupos privados con cobro directo.</p>
+        <select name="tipo_pago" class="input">
+            <option value="">— Selecciona —</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="yape">Yape / PagoEfectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="mixto">Mixto</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn-primary" id="btn-guardar"
+        style="width:100%;text-align:center;padding:12px;font-size:0.95rem;">
+        💾 Registrar Venta
+    </button>
+    <a href="{{ url_for('ventas.index') }}" class="btn-secondary"
+        style="display:block;text-align:center;padding:10px;">Cancelar</a>
+</div>
+
+<!-- ══ PANEL DERECHO: CARTA ══ -->
+<div>
+    <!-- Pedido actual -->
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;" id="panel-pedido">
+        <div style="background:#1e293b;padding:11px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <p style="color:white;font-weight:700;font-size:0.88rem;">🧾 Bebidas consumidas</p>
+            <span id="badge-items" style="background:#fbbf24;color:#1e293b;font-size:0.72rem;font-weight:800;padding:2px 9px;border-radius:9999px;">0 ítems</span>
+        </div>
+        <!-- Cabeceras -->
+        <div style="display:grid;grid-template-columns:1fr 70px 80px 24px;gap:6px;padding:7px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <span style="font-size:0.67rem;font-weight:700;color:#64748b;text-transform:uppercase;">Producto</span>
+            <span style="font-size:0.67rem;font-weight:700;color:#64748b;text-transform:uppercase;text-align:center;">Cant.</span>
+            <span style="font-size:0.67rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;text-align:right;">Subtotal</span>
+            <span></span>
+        </div>
+        <div id="lista-pedido">
+            <div id="msg-pedido-vacio" style="padding:24px;text-align:center;color:#cbd5e1;font-size:0.85rem;font-style:italic;">
+                Agrega productos de la carta →
+            </div>
+        </div>
+    </div>
+
+    <!-- CARTA DE PRODUCTOS -->
+    <div>
+        {% for cat in categorias %}
+        {% if cat.productos | selectattr('activo') | list %}
+        <div style="margin-bottom:16px;">
+            <p style="font-size:0.72rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;padding-left:2px;">
+                {{ cat.nombre }}
+            </p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+            {% for prod in cat.productos if prod.activo %}
+            <div onclick="agregarProducto({{ prod.id }}, '{{ prod.nombre|replace("'","\\'") }}', {{ prod.precio }}, {{ prod.tiene_variantes|lower }})"
+                style="cursor:pointer;border:2px solid #e2e8f0;border-radius:14px;overflow:hidden;background:white;transition:all 0.18s;"
+                onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,0.1)';this.style.borderColor='#fbbf24'"
+                onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor='#e2e8f0'">
+                <!-- Imagen del producto -->
+                <div style="height:80px;background:#f8fafc;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                    <img src="/static/img/carta/{{ prod.id }}.jpg"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+                         style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;">
+                    <div style="font-size:2rem;display:none;align-items:center;justify-content:center;width:100%;height:100%;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);">
+                        {% if cat.nombre == 'Bebidas' %}🥤
+                        {% elif cat.nombre == 'Jugos' %}🍹
+                        {% elif cat.nombre == 'Cafés' %}☕
+                        {% elif cat.nombre == 'Cervezas' %}🍺
+                        {% else %}🍶{% endif %}
+                    </div>
+                </div>
+                <div style="padding:7px 8px;">
+                    <p style="font-size:0.78rem;font-weight:700;color:#1e293b;line-height:1.2;margin-bottom:2px;">{{ prod.nombre }}</p>
+                    <p style="font-size:0.85rem;font-weight:800;color:#fbbf24;">S/.{{ '%.2f'|format(prod.precio) }}</p>
+                    {% if prod.tiene_variantes and prod.variantes %}
+                    <p style="font-size:0.65rem;color:#94a3b8;margin-top:2px;">{{ prod.variantes|selectattr('activo')|list|map(attribute='nombre')|join(', ') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+</div><!-- fin grid -->
+</form>
+
+<!-- Modal variantes -->
+<div id="modal-var" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center;">
+    <div class="card" style="width:320px;max-width:90vw;padding:20px;">
+        <p style="font-weight:700;color:#1e293b;margin-bottom:4px;" id="modal-titulo">Selecciona variante</p>
+        <p style="font-size:0.8rem;color:#64748b;margin-bottom:14px;">¿Cuál deseas agregar?</p>
+        <div id="modal-opciones" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
+        <button onclick="cerrarModal()"
+            style="width:100%;background:#f1f5f9;color:#64748b;border:none;border-radius:8px;padding:9px;cursor:pointer;font-weight:600;">Cancelar</button>
+    </div>
+</div>
+
+<style>
+@media(max-width:768px){
+    #venta-grid{grid-template-columns:1fr!important;}
+}
+</style>
+
+{% block scripts %}
+<script>
+let pedido = [];   // [{id, varId, nombre, precio, cant, desc}]
+let pendingId = null, pendingNombre = '', pendingPrecio = 0;
+const PRECIO_PERUHOP = {{ precio_peruhop }};
+
+// ── Empresa change ──
+function onEmpresaChange(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    const esPrivado = sel.value === '';
+    const esPeruHop = opt.dataset.peruhop === 'si';
+
+    document.getElementById('es-privado').value = esPrivado ? '1' : '0';
+    document.getElementById('row-nombre-grupo').style.display = esPrivado ? 'block' : 'none';
+    document.getElementById('row-ruta').style.display = !esPrivado ? 'block' : 'none';
+    document.getElementById('row-pago').style.display = esPrivado ? 'block' : 'none';
+
+    const rpb = document.getElementById('row-precio-buffet');
+    const pb  = document.getElementById('precio-buffet');
+    const hint = document.getElementById('hint-peruhop');
+
+    if (esPeruHop) {
+        pb.value = PRECIO_PERUHOP;
+        pb.readOnly = true;
+        hint.style.display = 'block';
+    } else {
+        pb.readOnly = false;
+        hint.style.display = 'none';
+        if (!esPrivado) pb.value = pb.value || 0;
+    }
+    calcularTotal();
+}
+
+// ── Calcular total ──
+function calcularTotal() {
+    const pax   = parseInt(document.getElementById('num-pax').value) || 0;
+    const ppax  = parseFloat(document.getElementById('precio-buffet').value) || 0;
+    const desc  = parseFloat(document.getElementById('inp-descuento').value) || 0;
+    const tItems = pedido.reduce((s, i) => s + i.precio * i.cant, 0);
+
+    const tBuffet = pax * ppax;
+    const subtotal = tBuffet + tItems;
+    const total    = Math.max(0, subtotal - desc);
+
+    document.getElementById('disp-pax').textContent = pax;
+    document.getElementById('disp-precio-pax').textContent = ppax.toFixed(2);
+    document.getElementById('disp-buffet').textContent = 'S/.' + tBuffet.toFixed(2);
+    document.getElementById('disp-items').textContent  = 'S/.' + tItems.toFixed(2);
+    document.getElementById('disp-total').textContent  = 'S/.' + total.toFixed(2);
+
+    document.getElementById('hidden-total-items').value = tItems.toFixed(2);
+    document.getElementById('hidden-subtotal').value    = subtotal.toFixed(2);
+}
+
+// ── Agregar producto a la lista ──
+function agregarProducto(id, nombre, precio, tieneVar) {
+    if (tieneVar) {
+        pendingId = id; pendingNombre = nombre; pendingPrecio = precio;
+        document.getElementById('modal-titulo').textContent = nombre;
+        const cont = document.getElementById('modal-opciones');
+        cont.innerHTML = '';
+        document.getElementById('modal-var').style.display = 'flex';
+        fetch(`/ventas/api/variantes/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                data.variantes.forEach(v => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = v.nombre;
+                    btn.style.cssText = 'background:#f1f5f9;color:#1e293b;border:2px solid #e2e8f0;border-radius:9px;padding:7px 14px;cursor:pointer;font-size:0.875rem;font-weight:600;transition:all 0.15s;';
+                    btn.onmouseover = () => { btn.style.background='#fef3c7'; btn.style.borderColor='#fbbf24'; };
+                    btn.onmouseout  = () => { btn.style.background='#f1f5f9'; btn.style.borderColor='#e2e8f0'; };
+                    btn.onclick = () => { confirmarAgregar(id, v.id, nombre + ' ' + v.nombre, precio); cerrarModal(); };
+                    cont.appendChild(btn);
+                });
+            });
+    } else {
+        confirmarAgregar(id, null, nombre, precio);
+    }
+}
+
+function confirmarAgregar(prodId, varId, nombre, precio) {
+    // Si ya está en la lista, incrementar
+    const exist = pedido.find(i => i.id === prodId && i.varId === varId);
+    if (exist) {
+        exist.cant++;
+    } else {
+        pedido.push({ id: prodId, varId: varId, nombre: nombre, precio: precio, cant: 1 });
+    }
+    renderPedido();
+    calcularTotal();
+}
+
+function cerrarModal() {
+    document.getElementById('modal-var').style.display = 'none';
+}
+
+// ── Render de la lista de pedido ──
+function renderPedido() {
+    const lista = document.getElementById('lista-pedido');
+    const vacioMsg = document.getElementById('msg-pedido-vacio');
+    // Limpiar ítems previos (no el mensaje vacío)
+    lista.querySelectorAll('.item-row').forEach(el => el.remove());
+
+    if (pedido.length === 0) {
+        vacioMsg.style.display = 'block';
+        document.getElementById('badge-items').textContent = '0 ítems';
+        limpiarHiddens();
+        return;
+    }
+    vacioMsg.style.display = 'none';
+    document.getElementById('badge-items').textContent = pedido.length + ' ítem(s)';
+
+    pedido.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        const S = 'border:1px solid #e2e8f0;border-radius:7px;padding:4px 7px;font-size:0.85rem;text-align:center;outline:none;width:60px;';
+        row.style.cssText = 'display:grid;grid-template-columns:1fr 70px 80px 24px;gap:6px;padding:7px 14px;border-bottom:1px solid #f1f5f9;align-items:center;';
+        row.innerHTML = `
+            <span style="font-size:0.875rem;font-weight:500;color:#1e293b;">${item.nombre}</span>
+            <input type="number" value="${item.cant}" min="1" style="${S}"
+                oninput="pedido[${idx}].cant=parseInt(this.value)||1;calcularTotal();renderPedido()">
+            <span style="text-align:right;font-weight:700;color:#1d4ed8;font-size:0.9rem;">S/.${(item.precio*item.cant).toFixed(2)}</span>
+            <button type="button" onclick="quitarItem(${idx})"
+                style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;width:22px;height:22px;cursor:pointer;font-weight:700;font-size:0.85rem;">×</button>
+        `;
+        lista.appendChild(row);
+    });
+
+    limpiarHiddens();
+    pedido.forEach(item => {
+        addHidden('item_producto_id[]', item.id || '');
+        addHidden('item_variante_id[]', item.varId || '');
+        addHidden('item_desc[]', item.nombre);
+        addHidden('item_cant[]', item.cant);
+        addHidden('item_precio[]', item.precio);
+    });
+}
+
+function quitarItem(idx) {
+    pedido.splice(idx, 1);
+    renderPedido();
+    calcularTotal();
+}
+
+function limpiarHiddens() {
+    ['item_producto_id[]','item_variante_id[]','item_desc[]','item_cant[]','item_precio[]'].forEach(n => {
+        document.querySelectorAll(`input[name="${n}"]`).forEach(el => el.remove());
+    });
+}
+
+function addHidden(name, value) {
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = name;
+    inp.value = value;
+    document.getElementById('form-venta').appendChild(inp);
+}
+
+// Inicializar
+onEmpresaChange(document.getElementById('sel-empresa'));
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Reporte Asistencia{% endblock %}
+{% block page_title %}Reporte de Asistencia{% endblock %}
+{% block page_subtitle %}{{ nombre_mes }} {{ anio }}{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('empleados.asistencia') }}" class="btn-secondary btn-sm">📋 Tomar asistencia</a>
+{% endblock %}
+
+{% block content %}
+<!-- Selector mes/año -->
+<div class="card" style="margin-bottom:16px;padding:14px 18px;">
+    <form method="GET" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label class="label" style="margin:0;">Mes:</label>
+        <select name="mes" class="input" style="width:140px;">
+            {% for m in range(1,13) %}
+            <option value="{{ m }}" {% if m == mes %}selected{% endif %}>
+                {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'][m-1] }}
+            </option>
+            {% endfor %}
+        </select>
+        <select name="anio" class="input" style="width:100px;">
+            {% for a in range(2024, 2028) %}
+            <option value="{{ a }}" {% if a == anio %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary btn-sm">Ver reporte</button>
+    </form>
+</div>
+
+<!-- Leyenda -->
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+    {% for estado, color, texto in [
+        ('presente','#dcfce7','✓ Presente'),
+        ('falta','#fee2e2','✗ Falta'),
+        ('tardanza','#fef3c7','⏰ Tardanza'),
+        ('libre','#f1f5f9','🏖 Libre'),
+        ('feriado','#ede9fe','🎉 Feriado'),
+    ] %}
+    <span style="background:{{ color }};padding:4px 10px;border-radius:8px;font-size:0.75rem;font-weight:600;">{{ texto }}</span>
+    {% endfor %}
+    <span style="background:#f8fafc;border:1px dashed #e2e8f0;padding:4px 10px;border-radius:8px;font-size:0.75rem;color:#94a3b8;">— Sin registro</span>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+        <thead>
+            <tr style="background:#1e293b;color:white;">
+                <th style="padding:10px 14px;text-align:left;white-space:nowrap;position:sticky;left:0;background:#1e293b;z-index:2;">Empleado</th>
+                {% for dia in dias %}
+                <th style="padding:6px 4px;text-align:center;min-width:32px;
+                    {% if dia.weekday() == 6 %}background:#1d3a5f;{% elif dia.weekday() == 5 %}background:#253352;{% endif %}">
+                    <div style="font-size:0.6rem;color:#64748b;">{{ ['L','M','X','J','V','S','D'][dia.weekday()] }}</div>
+                    <div style="font-weight:700;">{{ dia.day }}</div>
+                </th>
+                {% endfor %}
+                <th style="padding:10px 8px;text-align:center;background:#1a2942;white-space:nowrap;">✓ Pres.</th>
+                <th style="padding:10px 8px;text-align:center;background:#1a2942;white-space:nowrap;">✗ Faltas</th>
+                <th style="padding:10px 8px;text-align:center;background:#1a2942;white-space:nowrap;">⏰ Tard.</th>
+                <th style="padding:10px 8px;text-align:center;background:#1a2942;white-space:nowrap;">🏖 Libre</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for emp in empleados %}
+        {% set presentes = namespace(n=0) %}
+        {% set faltas = namespace(n=0) %}
+        {% set tardanzas = namespace(n=0) %}
+        {% set libres = namespace(n=0) %}
+        <tr style="{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td style="padding:8px 14px;font-weight:600;color:#1e293b;white-space:nowrap;position:sticky;left:0;background:{% if loop.index % 2 == 0 %}#fafafa{% else %}white{% endif %};z-index:1;border-right:1px solid #e2e8f0;">
+                {{ emp.nombre_completo }}
+                <div style="font-size:0.68rem;color:#94a3b8;">{{ emp.cargo or '' }}</div>
+            </td>
+            {% for dia in dias %}
+            {% set asist = asist_map.get((emp.id, dia)) %}
+            {% if asist %}
+                {% if asist.estado == 'presente' %}{% set presentes.n = presentes.n + 1 %}{% endif %}
+                {% if asist.estado == 'falta' %}{% set faltas.n = faltas.n + 1 %}{% endif %}
+                {% if asist.estado == 'tardanza' %}{% set tardanzas.n = tardanzas.n + 1 %}{% endif %}
+                {% if asist.estado == 'libre' %}{% set libres.n = libres.n + 1 %}{% endif %}
+            {% endif %}
+            <td style="padding:4px 2px;text-align:center;
+                {% if asist %}
+                    {% if asist.estado == 'presente' %}background:#f0fdf4;
+                    {% elif asist.estado == 'falta' %}background:#fef2f2;
+                    {% elif asist.estado == 'tardanza' %}background:#fefce8;
+                    {% elif asist.estado == 'libre' %}background:#f1f5f9;
+                    {% elif asist.estado == 'feriado' %}background:#f5f3ff;{% endif %}
+                {% endif %}
+                {% if dia.weekday() >= 5 %}border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;{% endif %}">
+                {% if asist %}
+                    {% if asist.estado == 'presente' %}<span style="color:#166534;font-weight:700;">✓</span>
+                    {% elif asist.estado == 'falta' %}<span style="color:#dc2626;font-weight:700;">✗</span>
+                    {% elif asist.estado == 'tardanza' %}<span style="color:#d97706;">T</span>
+                    {% elif asist.estado == 'libre' %}<span style="color:#64748b;">L</span>
+                    {% elif asist.estado == 'feriado' %}<span style="color:#7c3aed;">F</span>{% endif %}
+                {% else %}
+                    <span style="color:#e2e8f0;">·</span>
+                {% endif %}
+            </td>
+            {% endfor %}
+            <td style="text-align:center;font-weight:700;color:#166534;background:#f0fdf4;">{{ presentes.n }}</td>
+            <td style="text-align:center;font-weight:700;color:#dc2626;background:#fef2f2;">{{ faltas.n }}</td>
+            <td style="text-align:center;font-weight:700;color:#d97706;background:#fefce8;">{{ tardanzas.n }}</td>
+            <td style="text-align:center;font-weight:700;color:#64748b;background:#f1f5f9;">{{ libres.n }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="100" style="padding:40px;text-align:center;color:#94a3b8;">No hay empleados activos.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

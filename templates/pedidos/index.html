@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Listas de Pedido{% endblock %}
+{% block page_title %}Listas de Pedido{% endblock %}
+{% block page_subtitle %}Requerimientos de insumos y materia prima{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('pedidos.nueva') }}" class="btn-primary btn-sm">➕ Nueva Lista</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div>
+            <label class="label">Estado</label>
+            <select name="estado" class="input" style="width:160px;">
+                <option value="">Todos</option>
+                <option value="pendiente" {% if estado_filtro == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                <option value="en_verificacion" {% if estado_filtro == 'en_verificacion' %}selected{% endif %}>En Verificación</option>
+                <option value="completado" {% if estado_filtro == 'completado' %}selected{% endif %}>Completado</option>
+                <option value="aprobado" {% if estado_filtro == 'aprobado' %}selected{% endif %}>Aprobado</option>
+            </select>
+        </div>
+        <div>
+            <label class="label">Tipo de Requerimiento</label>
+            <select name="tipo" class="input" style="width:220px;">
+                <option value="">Todos</option>
+                {% for t in tipos %}
+                <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn-primary btn-sm">🔍 Filtrar</button>
+        <a href="{{ url_for('pedidos.index') }}" class="btn-secondary btn-sm">Limpiar</a>
+    </form>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:600px;">
+        <thead>
+            <tr>
+                <th class="th">Lista / Tipo</th>
+                <th class="th">Fecha</th>
+                <th class="th">Elaborado por</th>
+                <th class="th">Verificado por</th>
+                <th class="th">Estado</th>
+                <th class="th" style="text-align:center;">Items</th>
+                <th class="th" style="text-align:right;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lista in listas %}
+            <tr>
+                <td class="td">
+                    <p style="font-weight:600;color:#1e293b;">{{ lista.titulo }}</p>
+                    <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ lista.tipo_requerimiento or '—' }}</p>
+                </td>
+                <td class="td" style="white-space:nowrap;color:#64748b;font-size:0.875rem;">{{ lista.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="td">
+                    <p style="font-size:0.875rem;font-weight:500;color:#374151;">{{ lista.elaborado_por.nombre_completo }}</p>
+                    <p style="font-size:0.72rem;color:#94a3b8;">{{ lista.elaborado_en.strftime('%d/%m %H:%M') }}</p>
+                </td>
+                <td class="td">
+                    {% if lista.verificado_por %}
+                    <p style="font-size:0.875rem;font-weight:500;color:#374151;">{{ lista.verificado_por.nombre_completo }}</p>
+                    <p style="font-size:0.72rem;color:#94a3b8;">{{ lista.verificado_en.strftime('%d/%m %H:%M') if lista.verificado_en else '' }}</p>
+                    {% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
+                </td>
+                <td class="td">
+                    {% if lista.estado == 'pendiente' %}<span class="badge-pendiente">⏳ Pendiente</span>
+                    {% elif lista.estado == 'en_verificacion' %}<span class="badge-verificacion">🔍 Verificando</span>
+                    {% elif lista.estado == 'completado' %}<span class="badge-completado">✅ Completado</span>
+                    {% elif lista.estado == 'aprobado' %}<span class="badge-aprobado">🎯 Aprobado</span>{% endif %}
+                </td>
+                <td class="td" style="text-align:center;font-weight:700;color:#64748b;">{{ lista.items|length }}</td>
+                <td class="td" style="text-align:right;white-space:nowrap;">
+                    <a href="{{ url_for('pedidos.ver', id=lista.id) }}" style="color:#6366f1;font-weight:600;font-size:0.82rem;text-decoration:none;margin-right:10px;">Ver</a>
+                    {% if lista.estado in ['pendiente','en_verificacion'] %}
+                    <a href="{{ url_for('pedidos.verificar', id=lista.id) }}" style="color:#f59e0b;font-weight:600;font-size:0.82rem;text-decoration:none;margin-right:10px;">Verificar</a>
+                    {% endif %}
+                    <a href="{{ url_for('pedidos.imprimir', id=lista.id) }}" target="_blank" style="color:#10b981;font-weight:600;font-size:0.82rem;text-decoration:none;">🖨️</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="padding:50px;text-align:center;color:#94a3b8;">No hay listas con los filtros seleccionados.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Nuevo Empleado{% endblock %}
+{% block page_title %}Registrar Nuevo Empleado{% endblock %}
+{% block page_subtitle %}Datos personales y laborales{% endblock %}
+{% block header_actions %}<a href="{{ url_for('empleados.index') }}" class="btn-secondary btn-sm">← Volver</a>{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('empleados.nuevo') }}">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="nuevo-emp-grid">
+
+    <!-- Datos personales -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">👤 Datos Personales</h3>
+        <div style="display:flex;flex-direction:column;gap:13px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Nombres *</label><input type="text" name="nombres" class="input" required placeholder="Ej: María"></div>
+                <div><label class="label">Apellidos *</label><input type="text" name="apellidos" class="input" required placeholder="Ej: García López"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">DNI</label><input type="text" name="dni" class="input" maxlength="12" placeholder="00000000"></div>
+                <div>
+                    <label class="label">Tipo de Sangre</label>
+                    <select name="tipo_sangre" class="input">
+                        <option value="">— No registrado —</option>
+                        {% for g in ['O+','O-','A+','A-','B+','B-','AB+','AB-'] %}
+                        <option value="{{ g }}">{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div><label class="label">Fecha de Nacimiento 🎂</label><input type="date" name="fecha_nacimiento" class="input"></div>
+            <div><label class="label">Teléfono</label><input type="text" name="telefono" class="input" placeholder="999 999 999"></div>
+            <div><label class="label">Dirección</label><textarea name="direccion" class="input" rows="2" placeholder="Calle, número, distrito..."></textarea></div>
+        </div>
+    </div>
+
+    <!-- Datos laborales -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">💼 Datos Laborales</h3>
+        <div style="display:flex;flex-direction:column;gap:13px;">
+            <div>
+                <label class="label">Cargo *</label>
+                <input type="text" name="cargo" class="input" required placeholder="Ej: Cocinero, Mozo, Cajero..." list="cargos-list">
+                <datalist id="cargos-list">
+                    {% for c in ['Cocinero/a','Ayudante de cocina','Mozo/Mesero','Cajero/a','Almacenero','Bartender','Recepcionista','Limpieza','Administrador/a'] %}
+                    <option value="{{ c }}">{% endfor %}
+                </datalist>
+            </div>
+            <div><label class="label">Fecha de Ingreso</label><input type="date" name="fecha_ingreso" class="input" value="{{ hoy }}"></div>
+            <div>
+                <label class="label">Tipo de Contrato</label>
+                <select name="tipo_contrato" class="input">
+                    <option value="fijo">Fijo (mensual)</option>
+                    <option value="por_dia">Por día</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">Sueldo Base (S/.)</label>
+                <input type="number" name="sueldo_base" class="input" step="0.01" min="0" placeholder="0.00">
+                <p style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">Para contrato fijo: mensual. Para por día: jornal diario.</p>
+            </div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;display:flex;flex-direction:column;gap:10px;">
+            <button type="submit" class="btn-primary" style="text-align:center;padding:12px;font-size:1rem;">💾 Registrar Empleado</button>
+            <a href="{{ url_for('empleados.index') }}" class="btn-secondary" style="text-align:center;display:block;padding:12px;">Cancelar</a>
+        </div>
+    </div>
+</div>
+</form>
+<style>@media(max-width:768px).nuevo-emp-grid{grid-template-columns:1fr!important;} }</style>
+{% endblock %}

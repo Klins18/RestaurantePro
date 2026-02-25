@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Empleados{% endblock %}
+{% block page_title %}Empleados{% endblock %}
+{% block page_subtitle %}Personal activo y gestión de asistencia{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('empleados.asistencia') }}" class="btn-secondary btn-sm">📋 Asistencia hoy</a>
+<a href="{{ url_for('empleados.nuevo') }}" class="btn-primary btn-sm">➕ Nuevo empleado</a>
+{% endblock %}
+
+{% block content %}
+
+{% if cumpleanos_proximos %}
+<div style="margin-bottom:16px;">
+    {% for emp, dias in cumpleanos_proximos %}
+    <div style="background:{% if dias == 0 %}linear-gradient(135deg,#fef3c7,#fde68a){% else %}#fffbeb{% endif %};border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:1.6rem;">🎂</span>
+        <div>
+            <p style="font-weight:700;color:#92400e;font-size:0.9rem;">
+                {% if dias == 0 %}¡Hoy es el cumpleaños de {% else %}Cumpleaños en {{ dias }} día{{ 's' if dias != 1 }} — {% endif %}
+                {{ emp.nombre_completo }}
+            </p>
+            <p style="font-size:0.78rem;color:#b45309;">{{ emp.cargo or '' }} {% if emp.fecha_nacimiento %}· {{ emp.fecha_nacimiento.strftime('%d/%m/%Y') }} ({{ emp.edad }} años){% endif %}</p>
+        </div>
+        <a href="{{ url_for('empleados.ver', id=emp.id) }}" style="margin-left:auto;color:#f59e0b;font-weight:600;font-size:0.82rem;text-decoration:none;">Ver →</a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Accesos rápidos -->
+<div class="grid-4" style="margin-bottom:16px;">
+    <a href="{{ url_for('empleados.asistencia') }}" style="text-decoration:none;">
+        <div class="card" style="padding:16px;cursor:pointer;border-left:4px solid #6366f1;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <p style="font-size:1.5rem;margin-bottom:6px;">📋</p>
+            <p style="font-weight:700;color:#1e293b;">Tomar asistencia</p>
+            <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Registro del día</p>
+        </div>
+    </a>
+    <a href="{{ url_for('empleados.reporte') }}" style="text-decoration:none;">
+        <div class="card" style="padding:16px;cursor:pointer;border-left:4px solid #10b981;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <p style="font-size:1.5rem;margin-bottom:6px;">📊</p>
+            <p style="font-weight:700;color:#1e293b;">Reporte mensual</p>
+            <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Asistencia del mes</p>
+        </div>
+    </a>
+    <a href="{{ url_for('empleados.funciones') }}" style="text-decoration:none;">
+        <div class="card" style="padding:16px;cursor:pointer;border-left:4px solid #f59e0b;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <p style="font-size:1.5rem;margin-bottom:6px;">✅</p>
+            <p style="font-weight:700;color:#1e293b;">Funciones del día</p>
+            <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">Tareas asignadas</p>
+        </div>
+    </a>
+    <div class="card" style="padding:16px;border-left:4px solid #ef4444;">
+        <p style="font-size:1.5rem;margin-bottom:6px;">👥</p>
+        <p style="font-weight:700;color:#1e293b;">{{ empleados|length }} empleados</p>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">activos en el sistema</p>
+    </div>
+</div>
+
+<!-- Lista de empleados -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:500px;">
+        <thead>
+            <tr>
+                <th class="th">Empleado</th>
+                <th class="th">DNI</th>
+                <th class="th">Cargo</th>
+                <th class="th">Contrato</th>
+                <th class="th" style="text-align:right;">Sueldo Base</th>
+                <th class="th">Cumpleaños</th>
+                <th class="th" style="text-align:center;">Estado</th>
+                <th class="th"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for emp in empleados %}
+            <tr style="{% if emp.cumpleanos_hoy %}background:#fffbeb;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+                <td class="td">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;border-radius:50%;background:{{ ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6'][loop.index0 % 5] }};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.9rem;flex-shrink:0;">
+                            {{ emp.nombres[0].upper() }}
+                        </div>
+                        <div>
+                            <p style="font-weight:700;color:#1e293b;font-size:0.875rem;">{{ emp.nombre_completo }}{% if emp.cumpleanos_hoy %} 🎂{% endif %}</p>
+                            <p style="font-size:0.72rem;color:#94a3b8;">{{ emp.telefono or '' }}</p>
+                        </div>
+                    </div>
+                </td>
+                <td class="td" style="font-family:monospace;font-size:0.875rem;color:#64748b;">{{ emp.dni or '—' }}</td>
+                <td class="td" style="font-size:0.875rem;color:#374151;">{{ emp.cargo or '—' }}</td>
+                <td class="td">
+                    {% if emp.tipo_contrato == 'fijo' %}<span style="background:#dbeafe;color:#1e40af;font-size:0.72rem;font-weight:700;padding:3px 8px;border-radius:9999px;">Fijo</span>
+                    {% else %}<span style="background:#fef9c3;color:#854d0e;font-size:0.72rem;font-weight:700;padding:3px 8px;border-radius:9999px;">Por día</span>{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-weight:700;color:#1e293b;">
+                    {% if emp.sueldo_base %}S/.{{ '%.2f'|format(emp.sueldo_base) }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
+                </td>
+                <td class="td" style="font-size:0.82rem;color:#64748b;">
+                    {% if emp.fecha_nacimiento %}
+                    {{ emp.fecha_nacimiento.strftime('%d/%m/%Y') }}
+                    {% if emp.edad %}<br><span style="font-size:0.72rem;color:#94a3b8;">{{ emp.edad }} años</span>{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:center;">
+                    {% if emp.activo %}<span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 8px;border-radius:9999px;">Activo</span>
+                    {% else %}<span style="background:#f1f5f9;color:#94a3b8;font-size:0.72rem;font-weight:700;padding:3px 8px;border-radius:9999px;">Inactivo</span>{% endif %}
+                </td>
+                <td class="td">
+                    <a href="{{ url_for('empleados.ver', id=emp.id) }}" style="color:#6366f1;font-weight:600;font-size:0.82rem;text-decoration:none;margin-right:8px;">Ver</a>
+                    <a href="{{ url_for('empleados.editar', id=emp.id) }}" style="color:#f59e0b;font-weight:600;font-size:0.82rem;text-decoration:none;">Editar</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" style="padding:50px;text-align:center;color:#94a3b8;">No hay empleados registrados. <a href="{{ url_for('empleados.nuevo') }}" style="color:#f59e0b;font-weight:600;">Agrega el primero →</a></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

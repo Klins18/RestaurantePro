@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Cierre de Caja{% endblock %}
+{% block page_title %}Cierre de Caja{% endblock %}
+{% block page_subtitle %}Resumen de medios de pago del día{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 340px;gap:16px;" id="cierre-grid">
+
+<!-- VENTAS DEL DÍA -->
+<div>
+    <!-- Selector de fecha -->
+    <div class="card" style="padding:12px 16px;margin-bottom:14px;">
+        <form method="GET" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:0.82rem;font-weight:600;color:#64748b;">📅 Fecha:</label>
+            <input type="date" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}"
+                class="input" style="max-width:160px;"
+                onchange="this.form.submit()">
+            {% if fecha.strftime('%Y-%m-%d') != hoy.strftime('%Y-%m-%d') %}
+            <a href="{{ url_for('ventas.cierre') }}" style="font-size:0.8rem;color:#6366f1;">Ver hoy</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="background:#1e293b;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <p style="font-size:0.62rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;">VENTAS DEL DÍA</p>
+                <p style="color:white;font-weight:700;font-size:0.9rem;margin-top:2px;">
+                    {{ fecha.strftime('%d/%m/%Y') }} — {{ ventas_dia|length }} servicio(s) · {{ total_pax }} pax
+                </p>
+            </div>
+            <div style="text-align:right;">
+                <p style="font-size:0.7rem;color:#64748b;">Total ventas</p>
+                <p style="font-size:1.2rem;font-weight:800;color:#fbbf24;">S/.{{ '%.2f'|format(total_ventas) }}</p>
+            </div>
+        </div>
+
+        {% if ventas_dia %}
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#f8fafc;">
+                    <th class="th">Empresa / Grupo</th>
+                    <th class="th" style="text-align:center;">Ruta</th>
+                    <th class="th" style="text-align:center;">Pax</th>
+                    <th class="th" style="text-align:right;">Buffet</th>
+                    <th class="th" style="text-align:right;">Bebidas</th>
+                    <th class="th" style="text-align:right;">Total</th>
+                    <th class="th" style="text-align:center;">Pago</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for v in ventas_dia %}
+            <tr style="{% if loop.index%2==0 %}background:#fafafa;{% endif %}border-bottom:1px solid #f1f5f9;">
+                <td class="td">
+                    {% if v.empresa %}
+                    <span style="background:{{ v.empresa.color }}20;color:{{ v.empresa.color }};padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;">{{ v.empresa.nombre }}</span>
+                    {% else %}
+                    <span style="font-size:0.85rem;font-weight:600;color:#1e293b;">👤 {{ v.nombre_grupo or 'Privado' }}</span>
+                    {% endif %}
+                </td>
+                <td class="td" style="text-align:center;font-size:0.8rem;color:#64748b;">{{ v.ruta or '—' }}</td>
+                <td class="td" style="text-align:center;font-weight:700;">{{ v.num_pax or '—' }}</td>
+                <td class="td" style="text-align:right;color:#64748b;font-size:0.85rem;">
+                    {% set tb = (v.num_pax or 0) * (v.precio_buffet or 0) %}
+                    {% if tb > 0 %}S/.{{ '%.2f'|format(tb) }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:right;color:#1d4ed8;font-size:0.85rem;">
+                    {% set tb2 = v.items|sum(attribute='subtotal') %}
+                    {% if tb2 > 0 %}S/.{{ '%.2f'|format(tb2) }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(v.total) }}</td>
+                <td class="td" style="text-align:center;">
+                    {% if v.es_privado and v.tipo_pago %}
+                    <span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:2px 7px;border-radius:6px;">{{ v.tipo_pago }}</span>
+                    {% else %}
+                    <span style="color:#94a3b8;font-size:0.78rem;">cierre general</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            <tr style="background:#f0fdf4;font-weight:700;border-top:2px solid #86efac;">
+                <td class="td" colspan="2" style="font-weight:700;color:#166534;">TOTAL DEL DÍA</td>
+                <td class="td" style="text-align:center;font-weight:700;">{{ total_pax }}</td>
+                <td class="td" colspan="2"></td>
+                <td class="td" style="text-align:right;font-size:1rem;font-weight:800;color:#166534;">S/.{{ '%.2f'|format(total_ventas) }}</td>
+                <td class="td"></td>
+            </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:#94a3b8;">
+            <p style="font-size:2rem;margin-bottom:8px;">📋</p>
+            <p>No hay ventas registradas para este día.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- FORMULARIO CIERRE -->
+<div>
+    {% if cierre %}
+    <div style="background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">✅</span>
+        <div>
+            <p style="font-size:0.8rem;font-weight:700;color:#166534;">Cierre registrado</p>
+            <p style="font-size:0.72rem;color:#15803d;">{{ cierre.creado_en.strftime('%H:%M') if cierre.creado_en else '' }} — Puedes actualizarlo.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;font-size:0.92rem;">💰 Medios de Pago</h3>
+        <form method="POST" action="{{ url_for('ventas.cierre') }}" style="display:flex;flex-direction:column;gap:11px;">
+            <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
+
+            {% set fields = [
+                ('efectivo',      '💵 Efectivo',       '#166534'),
+                ('tarjeta',       '💳 Tarjeta',        '#1d4ed8'),
+                ('yape',          '📱 Yape / PagoEfect.', '#7c3aed'),
+                ('transferencia', '🏦 Transferencia',  '#0891b2'),
+            ] %}
+            {% for fname, flabel, fcolor in fields %}
+            <div>
+                <label style="font-size:0.75rem;font-weight:700;color:{{ fcolor }};display:block;margin-bottom:4px;">{{ flabel }}</label>
+                <div style="position:relative;">
+                    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:0.85rem;color:#94a3b8;font-weight:700;">S/.</span>
+                    <input type="number" name="{{ fname }}" id="inp-{{ fname }}"
+                        value="{{ cierre[fname] if cierre else 0 }}"
+                        min="0" step="0.50"
+                        style="border:2px solid #e2e8f0;border-radius:9px;padding:8px 10px 8px 36px;font-size:1rem;width:100%;box-sizing:border-box;outline:none;font-weight:700;"
+                        onfocus="this.style.borderColor='{{ fcolor }}'"
+                        onfocusout="this.style.borderColor='#e2e8f0'"
+                        oninput="calcularCierre()">
+                </div>
+            </div>
+            {% endfor %}
+
+            <div style="border-top:2px solid #e2e8f0;padding-top:10px;margin-top:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:0.85rem;font-weight:700;color:#64748b;">Total cobrado:</span>
+                    <span id="disp-total-cierre" style="font-size:1.2rem;font-weight:800;color:#1e293b;">S/.0.00</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.82rem;color:#64748b;">Total ventas del día:</span>
+                    <span style="font-size:0.9rem;font-weight:700;color:#64748b;">S/.{{ '%.2f'|format(total_ventas) }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;" id="row-diferencia">
+                    <span style="font-size:0.78rem;color:#94a3b8;">Diferencia:</span>
+                    <span id="disp-diferencia" style="font-size:0.85rem;font-weight:700;color:#94a3b8;">—</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="label">Observaciones</label>
+                <textarea name="observaciones" class="input" rows="2"
+                    placeholder="Notas del cierre...">{{ cierre.observaciones if cierre else '' }}</textarea>
+            </div>
+
+            <button type="submit" class="btn-primary" style="text-align:center;padding:11px;font-size:0.95rem;">
+                {{ '🔄 Actualizar Cierre' if cierre else '✅ Cerrar Caja' }}
+            </button>
+        </form>
+    </div>
+</div>
+</div>
+
+<style>
+@media(max-width:768px){ .cierre-grid{grid-template-columns:1fr!important;} }
+</style>
+{% block scripts %}
+<script>
+const TOTAL_VENTAS = {{ total_ventas }};
+function calcularCierre() {
+    const ef = parseFloat(document.getElementById('inp-efectivo').value)||0;
+    const ta = parseFloat(document.getElementById('inp-tarjeta').value)||0;
+    const ya = parseFloat(document.getElementById('inp-yape').value)||0;
+    const tr = parseFloat(document.getElementById('inp-transferencia').value)||0;
+    const total = ef+ta+ya+tr;
+    document.getElementById('disp-total-cierre').textContent = 'S/.' + total.toFixed(2);
+    const diff = total - TOTAL_VENTAS;
+    const el = document.getElementById('disp-diferencia');
+    if (Math.abs(diff) < 0.01) {
+        el.textContent = '✓ Cuadrado'; el.style.color='#16a34a';
+    } else if (diff > 0) {
+        el.textContent = '+S/.' + diff.toFixed(2) + ' (sobrante)'; el.style.color='#1d4ed8';
+    } else {
+        el.textContent = '-S/.' + Math.abs(diff).toFixed(2) + ' (faltante)'; el.style.color='#dc2626';
+    }
+}
+calcularCierre();
+</script>
+{% endblock %}
+{% endblock %}

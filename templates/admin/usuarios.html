@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block page_title %}Gestión de Usuarios{% endblock %}
+{% block page_subtitle %}Cuentas y roles del sistema{% endblock %}
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" class="usr-grid">
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:420px;">
+        <thead><tr><th class="th">Usuario</th><th class="th">Rol</th><th class="th" style="text-align:center;">Estado</th><th class="th">Acciones</th></tr></thead>
+        <tbody>
+        {% for u in usuarios %}
+        <tr>
+            <td class="td">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:34px;height:34px;background:#f59e0b;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.9rem;flex-shrink:0;">{{ u.nombre_completo[0].upper() }}</div>
+                    <div><p style="font-weight:600;color:#1e293b;font-size:0.875rem;">{{ u.nombre_completo }}</p><p style="font-size:0.75rem;color:#94a3b8;">@{{ u.username }}</p></div>
+                </div>
+            </td>
+            <td class="td" style="text-transform:capitalize;font-size:0.875rem;">{{ u.rol }}</td>
+            <td class="td" style="text-align:center;">
+                {% if u.activo %}<span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Activo</span>
+                {% else %}<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Inactivo</span>{% endif %}
+            </td>
+            <td class="td">
+                {% if u.id != current_user.id %}
+                <form method="POST" action="{{ url_for("admin.toggle_usuario", id=u.id) }}" style="display:inline;">
+                    <button type="submit" style="background:none;border:none;cursor:pointer;font-size:0.82rem;font-weight:600;color:{% if u.activo %}#ef4444{% else %}#10b981{% endif %};">
+                        {% if u.activo %}Desactivar{% else %}Activar{% endif %}
+                    </button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+<div class="card">
+    <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;">➕ Nuevo Usuario</h3>
+    <form method="POST" action="{{ url_for("admin.nuevo_usuario") }}" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label class="label">Nombre completo</label><input type="text" name="nombre_completo" class="input" required></div>
+        <div><label class="label">Username</label><input type="text" name="username" class="input" required></div>
+        <div><label class="label">Contraseña</label><input type="password" name="password" class="input" required></div>
+        <div><label class="label">Rol</label>
+            <select name="rol" class="input">
+                <option value="empleado">Empleado</option>
+                <option value="administrador">Administrador</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary" style="text-align:center;">Crear Usuario</button>
+    </form>
+</div>
+</div>
+<style>@media(max-width:768px).usr-grid{grid-template-columns:1fr!important;}}</style>
+{% endblock %}

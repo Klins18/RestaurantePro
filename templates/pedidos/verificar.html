@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+{% block title %}Verificar #{{ lista.id }}{% endblock %}
+{% block page_title %}Verificar Pedido{% endblock %}
+{% block page_subtitle %}{{ lista.titulo }}{% endblock %}
+{% block header_actions %}<a href="{{ url_for('pedidos.ver', id=lista.id) }}" class="btn-secondary btn-sm">← Volver</a>{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('pedidos.verificar', id=lista.id) }}" id="form-verificar">
+
+<!-- BARRA STICKY -->
+<div style="position:sticky;top:60px;z-index:30;background:white;border-bottom:2px solid #e2e8f0;padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 3px 10px rgba(0,0,0,0.07);margin:-16px -16px 16px -16px;">
+    <div style="flex:1;min-width:130px;">
+        <p style="font-size:0.72rem;font-weight:700;color:#1e293b;margin:0;">{{ lista.tipo_requerimiento }}</p>
+        <p style="font-size:0.68rem;color:#94a3b8;margin:0;">
+            <span id="resumen-ok" style="color:#16a34a;font-weight:700;">0</span> /
+            {{ lista.items | selectattr('producto_nombre') | list | length }} recibidos
+        </p>
+    </div>
+    <button type="button" onclick="marcarTodos(true)"
+        style="background:#dcfce7;color:#166534;border:none;border-radius:8px;padding:7px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+        ✅ Todos OK
+    </button>
+    <button type="button" onclick="marcarTodos(false)"
+        style="background:#f1f5f9;color:#475569;border:none;border-radius:8px;padding:7px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+        Limpiar
+    </button>
+    <button type="submit" class="btn-primary" style="padding:8px 18px;font-size:0.875rem;white-space:nowrap;">
+        💾 Guardar
+    </button>
+</div>
+
+<!-- INFO CABECERA -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:16px;">
+    <div class="card" style="padding:11px 14px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.65rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:3px;">Elaborado por</p>
+        <p style="font-size:0.88rem;font-weight:700;">{{ lista.elaborado_por.nombre_completo }}</p>
+        <p style="font-size:0.72rem;color:#94a3b8;">{{ lista.fecha.strftime('%d/%m/%Y') }}</p>
+    </div>
+    <div class="card" style="padding:11px 14px;border-left:4px solid #f59e0b;">
+        <p style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:3px;">⚡ Cómo funciona</p>
+        <p style="font-size:0.76rem;color:#78350f;line-height:1.4;">
+            Si llegó <strong>todo</strong>: solo marca ✓<br>
+            Si llegó <strong>menos</strong>: escribe la cantidad real<br>
+            Si <strong>no llegó</strong>: deja en blanco
+        </p>
+    </div>
+    <div class="card" style="padding:11px 14px;border-left:4px solid #10b981;">
+        <p style="font-size:0.65rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:3px;">Stock automático</p>
+        <p style="font-size:0.76rem;color:#065f46;line-height:1.4;">
+            Al guardar, los ítems marcados ✓ se añaden al inventario con la cantidad ingresada (o la pedida si no cambias el campo).
+        </p>
+    </div>
+</div>
+
+<!-- ÍTEMS: solo los que tienen cantidad pedida -->
+{% set items_con_cantidad = lista.items | selectattr('cantidad_solicitada') | list %}
+{% if not items_con_cantidad %}
+<div class="card" style="padding:40px;text-align:center;">
+    <p style="color:#94a3b8;font-size:0.9rem;">Esta lista no tiene ítems con cantidad pedida.</p>
+    <a href="{{ url_for('pedidos.ver', id=lista.id) }}" class="btn-secondary" style="display:inline-block;margin-top:12px;">← Volver</a>
+</div>
+{% else %}
+<div style="display:flex;flex-direction:column;gap:8px;" id="items-container">
+{% for item in items_con_cantidad %}
+<div id="row_{{ item.id }}"
+    style="background:white;border:2px solid #e2e8f0;border-radius:14px;overflow:hidden;transition:all 0.18s;"
+    class="item-card {% if item.verificado %}card-checked{% endif %}">
+
+    <!-- CABECERA del ítem: nombre + CHECK GRANDE -->
+    <div style="display:flex;align-items:center;gap:10px;padding:13px 14px 8px;">
+
+        <!-- Número -->
+        <span style="font-size:0.72rem;color:#cbd5e1;font-weight:700;min-width:22px;flex-shrink:0;">{{ loop.index }}</span>
+
+        <!-- Nombre + unidad -->
+        <div style="flex:1;min-width:0;">
+            <p style="font-size:1rem;font-weight:700;color:#1e293b;margin:0;line-height:1.2;">{{ item.producto_nombre }}</p>
+            <p style="font-size:0.75rem;color:#94a3b8;margin:2px 0 0;">{{ item.unidad_medida or '' }}</p>
+        </div>
+
+        <!-- BOTÓN CHECK GRANDE (44x44 mínimo para mobile) -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;">
+            <div id="chkbox_{{ item.id }}"
+                onclick="toggleCheck({{ item.id }})"
+                style="width:48px;height:48px;border-radius:12px;
+                       border:2.5px solid {% if item.verificado %}#10b981{% else %}#d1d5db{% endif %};
+                       background:{% if item.verificado %}#10b981{% else %}#f9fafb{% endif %};
+                       display:flex;align-items:center;justify-content:center;
+                       font-size:1.5rem;cursor:pointer;transition:all 0.18s;
+                       user-select:none;-webkit-user-select:none;">
+                <span id="chkicon_{{ item.id }}">{% if item.verificado %}✓{% else %}&nbsp;{% endif %}</span>
+            </div>
+            <span style="font-size:0.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;">CHECK</span>
+            <!-- Input oculto real -->
+            <input type="checkbox" name="check_{{ item.id }}" id="check_{{ item.id }}"
+                {% if item.verificado %}checked{% endif %}
+                style="position:absolute;opacity:0;width:1px;height:1px;">
+        </div>
+    </div>
+
+    <!-- FILA CANTIDAD: pedido vs recibido -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid #f1f5f9;">
+
+        <!-- Pedido (solo lectura) -->
+        <div style="padding:10px 14px;background:#f8fafc;border-right:1px solid #f1f5f9;">
+            <p style="font-size:0.65rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:4px;">📋 Pedido</p>
+            <p style="font-size:1.3rem;font-weight:800;color:#1e293b;">
+                {{ item.cantidad_solicitada | int if item.cantidad_solicitada == (item.cantidad_solicitada | int) else item.cantidad_solicitada }}
+                <span style="font-size:0.75rem;font-weight:400;color:#94a3b8;">{{ item.unidad_medida or '' }}</span>
+            </p>
+        </div>
+
+        <!-- Recibido (editable, placeholder = lo pedido) -->
+        <div style="padding:10px 14px;">
+            <p style="font-size:0.65rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">✓ Recibido</p>
+            <input type="number" name="cant_{{ item.id }}" id="cant_{{ item.id }}"
+                value="{{ item.cantidad_recibida if item.cantidad_recibida is not none else '' }}"
+                min="0" step="0.01"
+                placeholder="{{ item.cantidad_solicitada | int if item.cantidad_solicitada == (item.cantidad_solicitada | int) else item.cantidad_solicitada }}"
+                style="border:2px solid #d1fae5;border-radius:10px;padding:8px 10px;font-size:1.1rem;width:100%;box-sizing:border-box;text-align:center;outline:none;font-weight:700;color:#065f46;background:#f0fdf4;"
+                onfocus="this.style.borderColor='#10b981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,0.15)'"
+                onfocusout="this.style.borderColor='#d1fae5';this.style.boxShadow='none'"
+                oninput="onCantidadChange({{ item.id }}, this.value, {{ item.cantidad_solicitada or 0 }})">
+        </div>
+    </div>
+
+    <!-- PRECIO + OBSERVACIÓN -->
+    <div style="padding:8px 14px 12px;display:grid;grid-template-columns:1fr 2fr;gap:8px;border-top:1px solid #f1f5f9;">
+        <div>
+            <label style="font-size:0.65rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;display:block;margin-bottom:4px;">S/. Precio unit.</label>
+            <input type="number" name="precio_{{ item.id }}" id="precio_{{ item.id }}"
+                value="{{ item.precio_unitario or '' }}"
+                min="0" step="0.01"
+                style="border:2px solid #dbeafe;border-radius:8px;padding:7px 10px;font-size:0.95rem;width:100%;box-sizing:border-box;text-align:right;outline:none;color:#1d4ed8;font-weight:700;"
+                placeholder="0.00"
+                onfocus="this.style.borderColor='#3b82f6'" onfocusout="this.style.borderColor='#dbeafe'">
+        </div>
+        <div>
+            <label style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;display:block;margin-bottom:4px;">⚠ Observación / incidencia</label>
+            <input type="text" name="obs_{{ item.id }}"
+                value="{{ item.observacion or '' }}"
+                style="border:2px solid #fef3c7;border-radius:8px;padding:7px 10px;font-size:0.875rem;width:100%;box-sizing:border-box;outline:none;"
+                placeholder="Ej: llegó en mal estado, faltó cantidad..."
+                onfocus="this.style.borderColor='#fbbf24'" onfocusout="this.style.borderColor='#fef3c7'">
+        </div>
+    </div>
+
+    <!-- ALERTA diferencia de cantidad -->
+    <div id="alerta_{{ item.id }}" style="display:none;background:#fef3c7;padding:6px 14px;border-top:1px solid #fde68a;">
+        <p id="alerta_txt_{{ item.id }}" style="font-size:0.78rem;color:#92400e;font-weight:600;margin:0;">⚠ Diferencia detectada</p>
+    </div>
+
+</div>
+{% endfor %}
+</div>
+
+<!-- BOTÓN GUARDAR AL FINAL -->
+<div style="margin-top:20px;padding:14px 16px;background:#f8fafc;border-radius:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;">
+    <span id="resumen-pie" style="font-size:0.85rem;color:#64748b;flex:1;">0 ítems verificados</span>
+    <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:0.95rem;">💾 Guardar Verificación</button>
+</div>
+{% endif %}
+
+</form>
+
+<style>
+.card-checked { background:#f0fdf4 !important; border-color:#10b981 !important; }
+.card-falta   { background:#fef2f2 !important; border-color:#fca5a5 !important; }
+</style>
+
+{% block scripts %}
+<script>
+const SOL_MAP = {};  // cantidad solicitada por item id
+{% for item in lista.items %}
+{% if item.cantidad_solicitada %}
+SOL_MAP[{{ item.id }}] = {{ item.cantidad_solicitada }};
+{% endif %}
+{% endfor %}
+
+function toggleCheck(id) {
+    const cb   = document.getElementById('check_' + id);
+    const box  = document.getElementById('chkbox_' + id);
+    const icon = document.getElementById('chkicon_' + id);
+    const row  = document.getElementById('row_' + id);
+    const cant = document.getElementById('cant_' + id);
+
+    cb.checked = !cb.checked;
+
+    if (cb.checked) {
+        box.style.background    = '#10b981';
+        box.style.borderColor   = '#10b981';
+        box.style.color         = 'white';
+        icon.textContent        = '✓';
+        row.classList.add('card-checked');
+        row.classList.remove('card-falta');
+        // Si el campo recibido está vacío, llenarlo con lo pedido
+        if (cant && !cant.value) {
+            cant.value = SOL_MAP[id] || cant.placeholder;
+        }
+    } else {
+        box.style.background  = '#f9fafb';
+        box.style.borderColor = '#d1d5db';
+        box.style.color       = '';
+        icon.innerHTML        = '&nbsp;';
+        row.classList.remove('card-checked');
+        // No limpiar la cantidad — el usuario puede haber escrito algo
+    }
+    actualizarResumen();
+}
+
+function onCantidadChange(id, valor, pedido) {
+    const row    = document.getElementById('row_' + id);
+    const alerta = document.getElementById('alerta_' + id);
+    const txtAl  = document.getElementById('alerta_txt_' + id);
+    const cb     = document.getElementById('check_' + id);
+    const val    = parseFloat(valor) || 0;
+
+    if (valor !== '' && val < pedido && pedido > 0) {
+        const falta = pedido - val;
+        alerta.style.display = 'block';
+        txtAl.textContent = `⚠ Llegó ${val} de ${pedido} — faltan ${falta.toFixed(val%1===0?0:2)} unidades`;
+        row.classList.add('card-falta');
+        row.classList.remove('card-checked');
+        // Auto-desmarcar si cantidad menor
+        if (cb.checked) {
+            const box  = document.getElementById('chkbox_' + id);
+            const icon = document.getElementById('chkicon_' + id);
+            cb.checked = false;
+            box.style.background  = '#f9fafb';
+            box.style.borderColor = '#fca5a5';
+            icon.innerHTML        = '&nbsp;';
+        }
+    } else if (val > 0) {
+        alerta.style.display = 'none';
+        // Si tiene la cantidad completa, auto-marcar
+        if (!cb.checked && val >= pedido && pedido > 0) {
+            toggleCheck(id);
+            return; // toggleCheck ya llama actualizarResumen
+        }
+        row.classList.remove('card-falta');
+        if (cb.checked) row.classList.add('card-checked');
+    } else {
+        alerta.style.display = 'none';
+    }
+    actualizarResumen();
+}
+
+function marcarTodos(estado) {
+    {% for item in lista.items %}
+    {% if item.cantidad_solicitada %}
+    (function(){
+        const cb = document.getElementById('check_{{ item.id }}');
+        if (cb && cb.checked !== estado) toggleCheck({{ item.id }});
+    })();
+    {% endif %}
+    {% endfor %}
+}
+
+function actualizarResumen() {
+    let ok = 0;
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => { if(cb.checked) ok++; });
+    const total = {{ lista.items | selectattr('cantidad_solicitada') | list | length }};
+    document.getElementById('resumen-ok').textContent  = ok;
+    if(document.getElementById('resumen-pie'))
+        document.getElementById('resumen-pie').textContent = ok + ' de ' + total + ' ítems verificados';
+}
+
+// Inicializar estado visual
+document.querySelectorAll('.card-checked').forEach(row => {
+    const id  = row.id.replace('row_','');
+    const box  = document.getElementById('chkbox_'+id);
+    const icon = document.getElementById('chkicon_'+id);
+    if (box) { box.style.background='#10b981'; box.style.borderColor='#10b981'; box.style.color='white'; }
+    if (icon) icon.textContent = '✓';
+});
+actualizarResumen();
+</script>
+{% endblock %}
+{% endblock %}

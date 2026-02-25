@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Editar {{ empleado.nombre_completo }}{% endblock %}
+{% block page_title %}Editar Empleado{% endblock %}
+{% block page_subtitle %}{{ empleado.nombre_completo }}{% endblock %}
+{% block header_actions %}<a href="{{ url_for('empleados.ver', id=empleado.id) }}" class="btn-secondary btn-sm">← Volver</a>{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('empleados.editar', id=empleado.id) }}">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="edit-emp-grid">
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">👤 Datos Personales</h3>
+        <div style="display:flex;flex-direction:column;gap:13px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Nombres *</label><input type="text" name="nombres" class="input" value="{{ empleado.nombres }}" required></div>
+                <div><label class="label">Apellidos *</label><input type="text" name="apellidos" class="input" value="{{ empleado.apellidos }}" required></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">DNI</label><input type="text" name="dni" class="input" value="{{ empleado.dni or '' }}" maxlength="12"></div>
+                <div>
+                    <label class="label">Tipo de Sangre</label>
+                    <select name="tipo_sangre" class="input">
+                        <option value="">— No registrado —</option>
+                        {% for g in ['O+','O-','A+','A-','B+','B-','AB+','AB-'] %}
+                        <option value="{{ g }}" {% if empleado.tipo_sangre == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div><label class="label">Fecha de Nacimiento 🎂</label>
+                <input type="date" name="fecha_nacimiento" class="input" value="{{ empleado.fecha_nacimiento.strftime('%Y-%m-%d') if empleado.fecha_nacimiento else '' }}">
+            </div>
+            <div><label class="label">Teléfono</label><input type="text" name="telefono" class="input" value="{{ empleado.telefono or '' }}"></div>
+            <div><label class="label">Dirección</label><textarea name="direccion" class="input" rows="2">{{ empleado.direccion or '' }}</textarea></div>
+        </div>
+    </div>
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">💼 Datos Laborales</h3>
+        <div style="display:flex;flex-direction:column;gap:13px;">
+            <div><label class="label">Cargo</label>
+                <input type="text" name="cargo" class="input" value="{{ empleado.cargo or '' }}" list="cargos-list">
+                <datalist id="cargos-list">
+                    {% for c in ['Cocinero/a','Ayudante de cocina','Mozo/Mesero','Cajero/a','Almacenero','Bartender','Recepcionista','Limpieza','Administrador/a'] %}
+                    <option value="{{ c }}">{% endfor %}
+                </datalist>
+            </div>
+            <div><label class="label">Fecha de Ingreso</label>
+                <input type="date" name="fecha_ingreso" class="input" value="{{ empleado.fecha_ingreso.strftime('%Y-%m-%d') if empleado.fecha_ingreso else '' }}">
+            </div>
+            <div>
+                <label class="label">Tipo de Contrato</label>
+                <select name="tipo_contrato" class="input">
+                    <option value="fijo" {% if empleado.tipo_contrato == 'fijo' %}selected{% endif %}>Fijo (mensual)</option>
+                    <option value="por_dia" {% if empleado.tipo_contrato == 'por_dia' %}selected{% endif %}>Por día</option>
+                </select>
+            </div>
+            <div><label class="label">Sueldo Base (S/.)</label>
+                <input type="number" name="sueldo_base" class="input" step="0.01" min="0" value="{{ empleado.sueldo_base or '' }}">
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;background:#f8fafc;border-radius:10px;">
+                <input type="checkbox" name="activo" id="chk-activo" {% if empleado.activo %}checked{% endif %} style="width:18px;height:18px;accent-color:#10b981;">
+                <label for="chk-activo" style="font-weight:600;color:#1e293b;cursor:pointer;">Empleado activo</label>
+            </div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;display:flex;flex-direction:column;gap:10px;">
+            <button type="submit" class="btn-primary" style="text-align:center;padding:12px;">💾 Guardar Cambios</button>
+            <a href="{{ url_for('empleados.ver', id=empleado.id) }}" class="btn-secondary" style="text-align:center;display:block;padding:12px;">Cancelar</a>
+        </div>
+    </div>
+</div>
+</form>
+<style>@media(max-width:768px).edit-emp-grid{grid-template-columns:1fr!important;}}</style>
+{% endblock %}

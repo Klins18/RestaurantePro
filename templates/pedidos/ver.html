@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block title %}Lista #{{ lista.id }}{% endblock %}
+{% block page_title %}{{ lista.titulo }}{% endblock %}
+{% block page_subtitle %}{{ lista.tipo_requerimiento }} · {{ lista.fecha.strftime('%d/%m/%Y') }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pedidos.index') }}" class="btn-secondary btn-sm">← Volver</a>
+<a href="{{ url_for('pedidos.imprimir', id=lista.id) }}" target="_blank"
+   style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;font-weight:600;padding:6px 12px;border-radius:10px;text-decoration:none;font-size:0.8rem;display:inline-flex;align-items:center;gap:4px;">
+   🖨️ Imprimir
+</a>
+{% if lista.estado in ['pendiente', 'en_verificacion'] %}
+<a href="{{ url_for('pedidos.verificar', id=lista.id) }}" class="btn-primary btn-sm">🔍 Verificar</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Estado + progreso + acciones rápidas -->
+<div class="card" style="padding:14px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;">
+    {% if lista.estado == 'pendiente' %}<span class="badge-pendiente">⏳ Pendiente</span>
+    {% elif lista.estado == 'en_verificacion' %}<span class="badge-verificacion">🔍 En Verificación</span>
+    {% elif lista.estado == 'completado' %}<span class="badge-completado">✅ Completado</span>
+    {% elif lista.estado == 'aprobado' %}<span class="badge-aprobado">🎯 Aprobado</span>{% endif %}
+
+    {% set total_items = lista.items|selectattr('producto_nombre')|list|length %}
+    {% set verificados = lista.items|selectattr('verificado')|list|length %}
+    {% if total_items > 0 %}
+    <div style="flex:1;min-width:140px;max-width:260px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b;margin-bottom:3px;">
+            <span>Verificados</span><span style="font-weight:700;">{{ verificados }}/{{ total_items }}</span>
+        </div>
+        <div style="background:#f1f5f9;border-radius:9999px;height:7px;overflow:hidden;">
+            <div style="background:#10b981;height:100%;width:{{ (verificados/total_items*100)|int }}%;border-radius:9999px;"></div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
+        {% if lista.estado in ['completado', 'en_verificacion'] and current_user.es_admin() %}
+        <form method="POST" action="{{ url_for('pedidos.aprobar', id=lista.id) }}" onsubmit="return confirm('¿Aprobar esta lista?')" style="margin:0;">
+            <button type="submit" class="btn-success btn-sm">🎯 Aprobar</button>
+        </form>
+        {% endif %}
+        {% if current_user.es_admin() %}
+        <form method="POST" action="{{ url_for('pedidos.eliminar', id=lista.id) }}" onsubmit="return confirm('¿Eliminar?')" style="margin:0;">
+            <button type="submit" class="btn-danger btn-sm">🗑️</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:220px 1fr;gap:16px;" id="layout-grid">
+
+    <!-- Lateral -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card" style="padding:16px;">
+            <p style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Trazabilidad</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;gap:9px;">
+                    <span style="width:28px;height:28px;background:#fef3c7;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;">📝</span>
+                    <div><p style="font-size:0.7rem;color:#94a3b8;">Elaborado por</p><p style="font-size:0.82rem;font-weight:700;color:#1e293b;">{{ lista.elaborado_por.nombre_completo }}</p><p style="font-size:0.7rem;color:#94a3b8;">{{ lista.elaborado_en.strftime('%d/%m/%Y %H:%M') }}</p></div>
+                </div>
+                {% if lista.verificado_por %}
+                <div style="display:flex;gap:9px;">
+                    <span style="width:28px;height:28px;background:#dbeafe;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;">🔍</span>
+                    <div><p style="font-size:0.7rem;color:#94a3b8;">Verificado por</p><p style="font-size:0.82rem;font-weight:700;color:#1e293b;">{{ lista.verificado_por.nombre_completo }}</p><p style="font-size:0.7rem;color:#94a3b8;">{{ lista.verificado_en.strftime('%d/%m/%Y %H:%M') if lista.verificado_en else '' }}</p></div>
+                </div>
+                {% endif %}
+                {% if lista.aprobado_por %}
+                <div style="display:flex;gap:9px;">
+                    <span style="width:28px;height:28px;background:#dcfce7;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;">✅</span>
+                    <div><p style="font-size:0.7rem;color:#94a3b8;">Aprobado por</p><p style="font-size:0.82rem;font-weight:700;color:#1e293b;">{{ lista.aprobado_por.nombre_completo }}</p></div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% set total_est = namespace(val=0) %}
+        {% for i in lista.items %}{% if i.cantidad_solicitada and i.precio_unitario %}{% set total_est.val = total_est.val + (i.cantidad_solicitada * i.precio_unitario) %}{% endif %}{% endfor %}
+        {% if total_est.val > 0 %}
+        <div class="card" style="padding:14px;background:#eff6ff;border:1px solid #bfdbfe;">
+            <p style="font-size:0.7rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;margin-bottom:4px;">Costo Estimado</p>
+            <p style="font-size:1.4rem;font-weight:700;color:#1d4ed8;">S/.{{ '%.2f'|format(total_est.val) }}</p>
+        </div>
+        {% endif %}
+
+        {% if lista.observaciones %}
+        <div class="card" style="padding:14px;">
+            <p style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:5px;">Observaciones</p>
+            <p style="font-size:0.875rem;color:#374151;">{{ lista.observaciones }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tabla principal -->
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="background:#1e293b;color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <div>
+                <p style="font-size:0.63rem;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;">REQUERIMIENTO DE INSUMOS</p>
+                <p style="font-weight:700;font-size:0.92rem;">{{ lista.tipo_requerimiento }}</p>
+            </div>
+            <span style="font-size:0.78rem;color:#94a3b8;">{{ lista.fecha.strftime('%d/%m/%Y') }}</span>
+        </div>
+        <div class="table-wrap">
+        <table style="width:100%;border-collapse:collapse;min-width:540px;">
+            <thead>
+                <tr>
+                    <th class="th" style="width:28px;">#</th>
+                    <th class="th">Producto</th>
+                    <th class="th" style="text-align:center;">Unidad</th>
+                    <th class="th" style="text-align:center;">Pedido</th>
+                    <th class="th" style="text-align:right;">P.Unit.</th>
+                    <th class="th" style="text-align:right;">Total</th>
+                    <th class="th" style="text-align:center;">Recibido</th>
+                    <th class="th" style="text-align:center;width:36px;">✓</th>
+                    <th class="th">Observación</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in lista.items %}
+                {% if item.producto_nombre.strip() %}
+                <tr style="{% if item.verificado %}background:#f0fdf4;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+                    <td class="td" style="color:#cbd5e1;font-size:0.75rem;text-align:center;">{{ loop.index }}</td>
+                    <td class="td" style="font-weight:600;color:#1e293b;font-size:0.875rem;">{{ item.producto_nombre }}</td>
+                    <td class="td" style="text-align:center;color:#64748b;font-size:0.8rem;">{{ item.unidad_medida or '—' }}</td>
+                    <td class="td" style="text-align:center;font-weight:700;font-size:0.9rem;">{{ item.cantidad_solicitada or '—' }}</td>
+                    <td class="td" style="text-align:right;color:#1d4ed8;font-size:0.85rem;">
+                        {% if item.precio_unitario %}S/.{{ '%.2f'|format(item.precio_unitario) }}{% else %}<span style="color:#e2e8f0">—</span>{% endif %}
+                    </td>
+                    <td class="td" style="text-align:right;font-weight:700;color:#166534;font-size:0.85rem;">
+                        {% if item.cantidad_solicitada and item.precio_unitario %}S/.{{ '%.2f'|format(item.cantidad_solicitada * item.precio_unitario) }}{% else %}<span style="color:#e2e8f0">—</span>{% endif %}
+                    </td>
+                    <td class="td" style="text-align:center;font-size:0.875rem;{% if item.cantidad_recibida %}color:#166534;font-weight:700;{% else %}color:#cbd5e1;{% endif %}">
+                        {{ item.cantidad_recibida or '—' }}
+                    </td>
+                    <td class="td" style="text-align:center;font-size:1.1rem;">
+                        {% if item.verificado %}<span style="color:#16a34a;">✓</span>{% else %}<span style="color:#e2e8f0;">○</span>{% endif %}
+                    </td>
+                    <td class="td" style="font-size:0.78rem;color:#64748b;font-style:italic;">
+                        {% if item.observacion %}
+                        <span style="background:#fef9c3;padding:2px 7px;border-radius:6px;color:#854d0e;font-style:normal;font-weight:500;">⚠ {{ item.observacion }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% else %}
+                <tr><td colspan="8" style="padding:40px;text-align:center;color:#94a3b8;">Sin items.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<style>
+@media (max-width: 768px) {
+    #layout-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

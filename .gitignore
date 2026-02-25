@@ -1,0 +1,25 @@
+# Entorno virtual
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite
+*.db
+*.sqlite3
+
+# Archivos temporales
+*.log
+*.tmp
+
+# VS Code
+.vscode/
+
+# Mac / Windows
+.DS_Store
+Thumbs.db

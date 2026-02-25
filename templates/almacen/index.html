@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Inventario{% endblock %}
+{% block page_title %}Inventario / Stock{% endblock %}
+{% block page_subtitle %}Estado actual del almacén{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for("almacen.ingreso") }}" class="btn-primary btn-sm">⬇️ Ingreso</a>
+<a href="{{ url_for("almacen.egreso") }}" class="btn-danger btn-sm">⬆️ Egreso</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div><label class="label">Categoría</label>
+            <select name="categoria" class="input" style="width:200px;">
+                <option value="">Todas</option>
+                {% for cat in categorias %}<option value="{{ cat.id }}" {% if cat_filtro == cat.id|string %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <div><label class="label">Buscar</label><input type="text" name="q" value="{{ q_filtro }}" class="input" style="width:180px;" placeholder="Nombre del producto..."></div>
+        <button type="submit" class="btn-primary btn-sm">🔍 Filtrar</button>
+        <a href="{{ url_for("almacen.index") }}" class="btn-secondary btn-sm">Limpiar</a>
+        {% if alertas > 0 %}
+        <div style="margin-left:auto;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+            <span>⚠️</span><span style="font-size:0.875rem;color:#b91c1c;font-weight:600;">{{ alertas }} producto(s) bajo stock mínimo</span>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:500px;">
+        <thead><tr>
+            <th class="th">Producto</th>
+            <th class="th">Categoría</th>
+            <th class="th" style="text-align:center;">Unidad</th>
+            <th class="th" style="text-align:right;">Stock Actual</th>
+            <th class="th" style="text-align:right;">Stock Mínimo</th>
+            <th class="th" style="text-align:center;">Estado</th>
+        </tr></thead>
+        <tbody>
+            {% for p in productos %}
+            <tr style="{% if p.stock_actual <= p.stock_minimo %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+                <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
+                <td class="td" style="font-size:0.82rem;color:#64748b;">{{ p.categoria.nombre if p.categoria else "—" }}</td>
+                <td class="td" style="text-align:center;color:#64748b;font-size:0.875rem;">{{ p.unidad_medida }}</td>
+                <td class="td" style="text-align:right;font-weight:700;font-size:1rem;color:{% if p.stock_actual <= p.stock_minimo %}#dc2626{% else %}#166534{% endif %};">{{ p.stock_actual|round(2) }}</td>
+                <td class="td" style="text-align:right;color:#94a3b8;font-size:0.875rem;">{{ p.stock_minimo|round(2) }}</td>
+                <td class="td" style="text-align:center;">
+                    {% if p.stock_actual <= 0 %}<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Sin stock</span>
+                    {% elif p.stock_actual <= p.stock_minimo %}<span style="background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⚠️ Bajo</span>
+                    {% else %}<span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">✓ Normal</span>{% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8;">No hay productos.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

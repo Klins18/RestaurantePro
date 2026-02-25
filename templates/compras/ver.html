@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Compra #{{ compra.id }}{% endblock %}
+{% block page_title %}Compra #{{ compra.id }}{% endblock %}
+{% block page_subtitle %}{{ compra.fecha.strftime('%d/%m/%Y') }} · {{ compra.proveedor.nombre if compra.proveedor else compra.proveedor_nombre or 'Sin proveedor' }}{% endblock %}
+{% block header_actions %}<a href="{{ url_for('compras.index') }}" class="btn-secondary">← Volver</a>{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:300px 1fr;gap:20px;">
+    <!-- Info lateral -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">Estado</h3>
+            <div style="text-align:center;margin-bottom:16px;">
+                {% if compra.estado == 'pagado' %}<span class="badge-pagado" style="font-size:0.9rem;padding:6px 16px;">✓ Pagado</span>
+                {% elif compra.estado == 'anulado' %}<span class="badge-anulado" style="font-size:0.9rem;padding:6px 16px;">✗ Anulado</span>
+                {% else %}<span class="badge-pendiente" style="font-size:0.9rem;padding:6px 16px;">⏳ Registrado</span>{% endif %}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:0.875rem;">
+                <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">Subtotal</span><span>S/.{{ '%.2f'|format(compra.subtotal) }}</span></div>
+                <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">IGV</span><span>S/.{{ '%.2f'|format(compra.igv) }}</span></div>
+                <div style="display:flex;justify-content:space-between;border-top:2px solid #f1f5f9;padding-top:8px;"><span style="font-weight:700;">TOTAL</span><span style="font-weight:700;font-size:1.1rem;color:#1e293b;">S/.{{ '%.2f'|format(compra.total) }}</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Comprobante</h3>
+            <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:6px;">
+                <div><span style="color:#64748b;">Tipo: </span><span style="font-weight:600;">{{ compra.tipo_comprobante|upper if compra.tipo_comprobante else '—' }}</span></div>
+                <div><span style="color:#64748b;">Serie-N°: </span><span style="font-weight:600;font-family:monospace;">{{ (compra.serie_comprobante ~ '-' ~ compra.numero_comprobante) if compra.numero_comprobante else '—' }}</span></div>
+            </div>
+            {% if compra.archivo_comprobante %}
+            <a href="{{ url_for('compras.archivo', filename=compra.archivo_comprobante) }}" target="_blank"
+               style="display:block;margin-top:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px;text-align:center;text-decoration:none;color:#92400e;font-weight:600;font-size:0.875rem;">
+                📎 Ver comprobante adjunto
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Pago</h3>
+            <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:6px;">
+                <div><span style="color:#64748b;">Tipo: </span><span style="font-weight:600;text-transform:capitalize;">{{ compra.tipo_pago or '—' }}</span></div>
+                <div><span style="color:#64748b;">Fecha pago: </span><span>{{ compra.fecha_pago.strftime('%d/%m/%Y') if compra.fecha_pago else '—' }}</span></div>
+                <div><span style="color:#64748b;">N° Op.: </span><span style="font-family:monospace;">{{ compra.numero_operacion or '—' }}</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Trazabilidad</h3>
+            <div style="font-size:0.82rem;display:flex;flex-direction:column;gap:6px;">
+                <div><span style="color:#64748b;">Registrado por:</span><br><span style="font-weight:600;">{{ compra.usuario.nombre_completo }}</span></div>
+                <div><span style="color:#64748b;">Fecha/hora:</span><br><span>{{ compra.creado_en.strftime('%d/%m/%Y %H:%M') }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalle items -->
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="background:#1e293b;color:white;padding:14px 20px;">
+            <p style="font-size:0.7rem;color:#64748b;text-transform:uppercase;">DETALLE DE COMPRA</p>
+            <p style="font-weight:700;font-size:1rem;margin-top:2px;">{{ compra.proveedor.nombre if compra.proveedor else compra.proveedor_nombre or 'Sin proveedor' }}</p>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th class="th">#</th>
+                    <th class="th">Descripción</th>
+                    <th class="th" style="text-align:right;">Cant.</th>
+                    <th class="th">Unidad</th>
+                    <th class="th" style="text-align:right;">P.Unit.</th>
+                    <th class="th" style="text-align:right;">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in compra.items %}
+                <tr>
+                    <td class="td" style="color:#94a3b8;font-size:0.8rem;">{{ loop.index }}</td>
+                    <td class="td"><p style="font-weight:500;">{{ item.descripcion }}</p>{% if item.producto %}<p style="font-size:0.75rem;color:#94a3b8;">→ Vinculado a: {{ item.producto.nombre }}</p>{% endif %}</td>
+                    <td class="td" style="text-align:right;font-weight:600;">{{ item.cantidad|round(3) }}</td>
+                    <td class="td" style="color:#64748b;">{{ item.unidad or '—' }}</td>
+                    <td class="td" style="text-align:right;">S/.{{ '%.4f'|format(item.precio_unitario) }}</td>
+                    <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(item.subtotal) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background:#f8fafc;">
+                    <td colspan="5" style="padding:12px 16px;text-align:right;font-weight:700;color:#1e293b;">TOTAL</td>
+                    <td style="padding:12px 16px;text-align:right;font-weight:700;font-size:1.1rem;color:#166534;">S/.{{ '%.2f'|format(compra.total) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        {% if compra.observaciones %}
+        <div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #f1f5f9;">
+            <p style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Observaciones</p>
+            <p style="font-size:0.875rem;color:#374151;">{{ compra.observaciones }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

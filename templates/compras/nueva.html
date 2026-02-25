@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Compra{% endblock %}
+{% block page_title %}Registrar Nueva Compra{% endblock %}
+{% block page_subtitle %}Con comprobante, tipo de pago y detalle de productos{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('compras.nueva') }}" enctype="multipart/form-data">
+<div style="display:grid;grid-template-columns:1fr 1.7fr;gap:20px;">
+
+    <!-- Panel izquierdo -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Datos generales -->
+        <div class="card">
+            <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">📋 Datos de la Compra</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div><label class="label">Fecha *</label><input type="date" name="fecha" class="input" value="{{ hoy }}" required></div>
+                <div>
+                    <label class="label">Proveedor (en lista)</label>
+                    <select name="proveedor_id" class="input" id="sel-proveedor" onchange="autoProveedor(this)">
+                        <option value="">— Seleccionar o escribir abajo —</option>
+                        {% for p in proveedores %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div><label class="label">Proveedor (nombre libre)</label><input type="text" name="proveedor_nombre" id="input-proveedor" class="input" placeholder="Si no está en la lista..."></div>
+                <div>
+                    <label class="label">Observaciones</label>
+                    <textarea name="observaciones" class="input" rows="2" placeholder="Notas..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comprobante -->
+        <div class="card">
+            <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">🧾 Comprobante de Pago</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="label">Tipo de Comprobante</label>
+                    <select name="tipo_comprobante" class="input">
+                        <option value="">Sin comprobante</option>
+                        <option value="factura">Factura</option>
+                        <option value="boleta">Boleta</option>
+                        <option value="ticket">Ticket</option>
+                        <option value="recibo">Recibo</option>
+                    </select>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div><label class="label">Serie</label><input type="text" name="serie_comprobante" class="input" placeholder="F001"></div>
+                    <div><label class="label">Número</label><input type="text" name="numero_comprobante" class="input" placeholder="00001234"></div>
+                </div>
+                <div>
+                    <label class="label">Adjuntar comprobante (PDF o foto)</label>
+                    <input type="file" name="archivo_comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        style="width:100%;border:2px dashed #e2e8f0;border-radius:10px;padding:12px;font-size:0.875rem;cursor:pointer;box-sizing:border-box;"
+                        onchange="mostrarArchivo(this)">
+                    <p id="nombre-archivo" style="font-size:0.78rem;color:#f59e0b;margin-top:4px;"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pago -->
+        <div class="card">
+            <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">💳 Datos de Pago</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="label">Tipo de Pago</label>
+                    <select name="tipo_pago" class="input">
+                        <option value="">Sin especificar</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia bancaria</option>
+                        <option value="tarjeta">Tarjeta</option>
+                        <option value="credito">Al crédito</option>
+                        <option value="cheque">Cheque</option>
+                    </select>
+                </div>
+                <div><label class="label">Fecha de Pago</label><input type="date" name="fecha_pago" class="input"></div>
+                <div><label class="label">N° Operación / Transferencia</label><input type="text" name="numero_operacion" class="input" placeholder="N° de operación bancaria"></div>
+            </div>
+        </div>
+
+        <!-- Totales -->
+        <div class="card" style="background:#f8fafc;">
+            <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">💰 Totales</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <label class="label" style="margin:0;">Subtotal</label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="color:#64748b;font-size:0.875rem;">S/.</span>
+                        <input type="number" name="subtotal" id="inp-subtotal" class="input" step="0.01" min="0" value="0" style="width:120px;text-align:right;" readonly>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <label class="label" style="margin:0;">IGV (18%)</label>
+                        <label style="font-size:0.75rem;color:#94a3b8;"><input type="checkbox" id="chk-igv" onchange="calcularTotales()"> Incluye IGV</label>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="color:#64748b;font-size:0.875rem;">S/.</span>
+                        <input type="number" name="igv" id="inp-igv" class="input" step="0.01" min="0" value="0" style="width:120px;text-align:right;" readonly>
+                    </div>
+                </div>
+                <div style="border-top:2px solid #e2e8f0;padding-top:10px;display:flex;justify-content:space-between;align-items:center;">
+                    <label style="font-weight:700;color:#1e293b;font-size:1rem;">TOTAL</label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="color:#1e293b;font-weight:700;">S/.</span>
+                        <input type="number" name="total" id="inp-total" class="input" step="0.01" min="0" value="0" required style="width:120px;text-align:right;font-weight:700;font-size:1rem;" oninput="calcularTotales()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width:100%;text-align:center;padding:12px;">💾 Guardar Compra</button>
+        <a href="{{ url_for('compras.index') }}" class="btn-secondary" style="width:100%;text-align:center;display:block;padding:12px;">Cancelar</a>
+    </div>
+
+    <!-- Panel derecho: items -->
+    <div>
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="background:#1e293b;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;">
+                <p style="font-weight:700;">📦 Detalle de Productos Comprados</p>
+                <button type="button" onclick="agregarItem()" class="btn-primary" style="padding:7px 14px;font-size:0.82rem;">+ Agregar ítem</button>
+            </div>
+            <div style="padding:12px 16px;background:#f8fafc;display:grid;grid-template-columns:1fr 80px 80px 90px 90px 36px;gap:8px;">
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Descripción</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Cant.</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Unidad</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right;">P.Unit.</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right;">Subtotal</span>
+                <span></span>
+            </div>
+            <div id="items-container" style="padding:8px 16px;min-height:200px;">
+                <div id="msg-vacio" style="text-align:center;padding:40px;color:#94a3b8;font-size:0.875rem;">
+                    Haz clic en "+ Agregar ítem" para comenzar
+                </div>
+            </div>
+            <!-- Vincular a producto de almacén (oculto) -->
+            <div id="items-prod-links" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="productos-data">
+{{ productos | tojson | safe }}
+</script>
+<script>
+const productosAlmacen = JSON.parse(document.getElementById('productos-data').textContent)
+    .map(p => ({id: p.id, nombre: p.nombre, unidad: p.unidad_medida}));
+
+let itemCount = 0;
+
+function autoProveedor(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt.value) document.getElementById('input-proveedor').value = opt.text;
+}
+
+function mostrarArchivo(input) {
+    const el = document.getElementById('nombre-archivo');
+    if (input.files[0]) el.textContent = '📎 ' + input.files[0].name;
+}
+
+function agregarItem() {
+    itemCount++;
+    const id = 'item_' + itemCount;
+    document.getElementById('msg-vacio').style.display = 'none';
+
+    const optsProductos = '<option value="">— sin vincular —</option>' +
+        productosAlmacen.map(p => `<option value="${p.id}" data-unidad="${p.unidad}">${p.nombre}</option>`).join('');
+
+    const div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 80px 80px 90px 90px 36px;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;align-items:center;';
+    div.innerHTML = `
+        <div>
+            <input type="text" name="item_desc[]" required placeholder="Descripción del producto..."
+                style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:0.82rem;width:100%;box-sizing:border-box;"
+                list="lista-productos-${itemCount}">
+            <datalist id="lista-productos-${itemCount}">
+                ${productosAlmacen.map(p => `<option value="${p.nombre}">`).join('')}
+            </datalist>
+            <select name="item_producto_id[]" style="display:none;">
+                ${optsProductos}
+            </select>
+        </div>
+        <input type="number" name="item_cant[]" required min="0.001" step="0.001" value="1" placeholder="0"
+            style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;text-align:center;"
+            oninput="calcSubtotal('${id}');calcularTotales()">
+        <input type="text" name="item_unidad[]" placeholder="kg,uni..."
+            style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;">
+        <input type="number" name="item_precio[]" required min="0" step="0.0001" value="0" placeholder="0.00"
+            style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;text-align:right;"
+            oninput="calcSubtotal('${id}');calcularTotales()">
+        <input type="text" id="subtotal_${id}" readonly placeholder="0.00"
+            style="border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;text-align:right;font-weight:600;color:#166534;">
+        <button type="button" onclick="eliminarItem('${id}')"
+            style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;width:30px;height:30px;font-weight:700;font-size:1rem;cursor:pointer;">×</button>
+    `;
+    document.getElementById('items-container').appendChild(div);
+}
+
+function calcSubtotal(id) {
+    const row = document.getElementById(id);
+    const cant = parseFloat(row.querySelector('[name="item_cant[]"]').value) || 0;
+    const precio = parseFloat(row.querySelector('[name="item_precio[]"]').value) || 0;
+    const sub = (cant * precio).toFixed(2);
+    document.getElementById('subtotal_' + id).value = sub;
+}
+
+function eliminarItem(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+    calcularTotales();
+    if (!document.querySelector('[name="item_desc[]"]')) {
+        document.getElementById('msg-vacio').style.display = 'block';
+    }
+}
+
+function calcularTotales() {
+    let subtotal = 0;
+    document.querySelectorAll('[name="item_cant[]"]').forEach((inp, i) => {
+        const cant = parseFloat(inp.value) || 0;
+        const precios = document.querySelectorAll('[name="item_precio[]"]');
+        const precio = parseFloat(precios[i]?.value) || 0;
+        subtotal += cant * precio;
+    });
+
+    const conIgv = document.getElementById('chk-igv').checked;
+    const igv = conIgv ? subtotal * 0.18 / 1.18 : 0;
+    const total = subtotal;
+
+    document.getElementById('inp-subtotal').value = (total - igv).toFixed(2);
+    document.getElementById('inp-igv').value = igv.toFixed(2);
+    document.getElementById('inp-total').value = total.toFixed(2);
+}
+
+// Agregar primer ítem automáticamente
+agregarItem();
+</script>
+{% endblock %}

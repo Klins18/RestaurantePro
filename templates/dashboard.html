@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Resumen general del sistema{% endblock %}
+
+{% block content %}
+<div class="grid-4" style="margin-bottom:20px;">
+    <div class="card" style="padding:18px;border-left:4px solid #f59e0b;">
+        <p style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">Total Productos</p>
+        <p style="font-size:2rem;font-weight:800;color:#1e293b;">{{ total_productos or 0 }}</p>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">en inventario</p>
+    </div>
+    <div class="card" style="padding:18px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">Pedidos Pendientes</p>
+        <p style="font-size:2rem;font-weight:800;color:#1e293b;">{{ pedidos_pendientes or 0 }}</p>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">por verificar</p>
+    </div>
+    <div class="card" style="padding:18px;border-left:4px solid #ef4444;">
+        <p style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">Stock Bajo</p>
+        <p style="font-size:2rem;font-weight:800;color:#ef4444;">{{ alertas_stock or 0 }}</p>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">productos bajo mínimo</p>
+    </div>
+    <div class="card" style="padding:18px;border-left:4px solid #10b981;">
+        <p style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">Ventas Hoy</p>
+        <p style="font-size:2rem;font-weight:800;color:#10b981;">S/.{{ "%.2f"|format(ventas_hoy or 0) }}</p>
+        <p style="font-size:0.78rem;color:#94a3b8;margin-top:2px;">ingresos del día</p>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+            <p style="font-weight:700;color:#1e293b;">Últimos Movimientos</p>
+            <a href="{{ url_for("almacen.movimientos") }}" style="font-size:0.8rem;color:#f59e0b;text-decoration:none;font-weight:600;">Ver todos →</a>
+        </div>
+        <div>
+        {% for mov in ultimos_movimientos %}
+        <div style="padding:10px 18px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;">
+            <span style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;{% if mov.tipo == "ingreso" %}background:#dbeafe;{% else %}background:#fee2e2;{% endif %}">
+                {% if mov.tipo == "ingreso" %}⬇️{% else %}⬆️{% endif %}
+            </span>
+            <div style="flex:1;min-width:0;">
+                <p style="font-size:0.875rem;font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ mov.producto.nombre }}</p>
+                <p style="font-size:0.72rem;color:#94a3b8;">{{ mov.fecha_hora.strftime("%d/%m %H:%M") }} · {{ mov.usuario.nombre_completo }}</p>
+            </div>
+            <span style="font-weight:700;font-size:0.875rem;{% if mov.tipo == "ingreso" %}color:#1d4ed8;{% else %}color:#dc2626;{% endif %}">
+                {% if mov.tipo == "ingreso" %}+{% else %}-{% endif %}{{ mov.cantidad }}
+            </span>
+        </div>
+        {% else %}
+        <p style="padding:30px;text-align:center;color:#94a3b8;font-size:0.875rem;">Sin movimientos recientes</p>
+        {% endfor %}
+        </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+            <p style="font-weight:700;color:#1e293b;">Últimas Listas de Pedido</p>
+            <a href="{{ url_for("pedidos.index") }}" style="font-size:0.8rem;color:#f59e0b;text-decoration:none;font-weight:600;">Ver todas →</a>
+        </div>
+        <div>
+        {% for lista in ultimas_listas %}
+        <div style="padding:10px 18px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="flex:1;min-width:0;">
+                <p style="font-size:0.875rem;font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ lista.titulo }}</p>
+                <p style="font-size:0.72rem;color:#94a3b8;">{{ lista.fecha.strftime("%d/%m/%Y") }} · {{ lista.elaborado_por.nombre_completo }}</p>
+            </div>
+            {% if lista.estado == "pendiente" %}<span class="badge-pendiente">Pendiente</span>
+            {% elif lista.estado == "en_verificacion" %}<span class="badge-verificacion">Verificando</span>
+            {% elif lista.estado == "completado" %}<span class="badge-completado">Completado</span>
+            {% elif lista.estado == "aprobado" %}<span class="badge-aprobado">Aprobado</span>{% endif %}
+        </div>
+        {% else %}
+        <p style="padding:30px;text-align:center;color:#94a3b8;font-size:0.875rem;">Sin listas recientes</p>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

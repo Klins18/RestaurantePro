@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}Pasajeros del Día{% endblock %}
+{% block page_title %}Registro de Pasajeros{% endblock %}
+{% block page_subtitle %}Cantidad por empresa y ruta{% endblock %}
+
+{% block content %}
+<!-- Selector de fecha -->
+<div class="card" style="padding:12px 16px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:0.82rem;font-weight:600;color:#64748b;">📅 Fecha:</label>
+        <input type="date" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}"
+            class="input" style="max-width:160px;" onchange="this.form.submit()">
+        {% if fecha != hoy %}
+        <a href="{{ url_for('ventas.pasajeros') }}" style="font-size:0.8rem;color:#6366f1;">Ver hoy</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if ventas_dia %}
+<!-- Resumen por empresa -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px;">
+{% set empresas_vistas = [] %}
+{% for v in ventas_dia if v.empresa %}
+{% if v.empresa.nombre not in empresas_vistas %}
+{% set _ = empresas_vistas.append(v.empresa.nombre) %}
+{% set total_pax_emp = ventas_dia|selectattr('empresa')|selectattr('empresa.nombre','equalto',v.empresa.nombre)|sum(attribute='num_pax') %}
+<div class="card" style="padding:14px;border-left:4px solid {{ v.empresa.color }};display:flex;align-items:center;gap:12px;">
+    <div style="flex:1;">
+        <p style="font-size:0.72rem;font-weight:700;color:{{ v.empresa.color }};text-transform:uppercase;margin-bottom:3px;">{{ v.empresa.nombre }}</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ total_pax_emp }}</p>
+        <p style="font-size:0.75rem;color:#94a3b8;">pasajeros</p>
+    </div>
+    <div style="font-size:2rem;">🚌</div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% set pax_privados = ventas_dia|selectattr('es_privado')|sum(attribute='num_pax') %}
+{% if pax_privados > 0 %}
+<div class="card" style="padding:14px;border-left:4px solid #10b981;display:flex;align-items:center;gap:12px;">
+    <div style="flex:1;">
+        <p style="font-size:0.72rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:3px;">Privados</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ pax_privados }}</p>
+        <p style="font-size:0.75rem;color:#94a3b8;">pasajeros</p>
+    </div>
+    <div style="font-size:2rem;">👥</div>
+</div>
+{% endif %}
+
+<div class="card" style="padding:14px;border-left:4px solid #fbbf24;background:#fffbeb;display:flex;align-items:center;gap:12px;">
+    <div style="flex:1;">
+        <p style="font-size:0.72rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:3px;">TOTAL DEL DÍA</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ ventas_dia|sum(attribute='num_pax') }}</p>
+        <p style="font-size:0.75rem;color:#94a3b8;">pasajeros totales</p>
+    </div>
+    <div style="font-size:2rem;">📊</div>
+</div>
+</div>
+
+<!-- Detalle por servicio -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 18px;border-bottom:1px solid #f1f5f9;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.92rem;">Detalle por servicio — {{ fecha.strftime('%d/%m/%Y') }}</p>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;">
+            <th class="th">Empresa / Grupo</th>
+            <th class="th">Ruta</th>
+            <th class="th" style="text-align:center;">Pax buffet</th>
+            <th class="th" style="text-align:right;">P./pax</th>
+            <th class="th" style="text-align:right;">Total buffet</th>
+            <th class="th" style="text-align:right;">Bebidas</th>
+            <th class="th" style="text-align:right;">Total</th>
+            <th class="th">Registrado por</th>
+        </tr></thead>
+        <tbody>
+        {% for v in ventas_dia %}
+        <tr style="{% if loop.index%2==0 %}background:#fafafa;{% endif %}border-bottom:1px solid #f1f5f9;">
+            <td class="td">
+                {% if v.empresa %}
+                <span style="background:{{ v.empresa.color }}20;color:{{ v.empresa.color }};padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;">{{ v.empresa.nombre }}</span>
+                {% else %}
+                <span style="font-size:0.85rem;color:#1e293b;font-weight:600;">👤 {{ v.nombre_grupo or 'Privado' }}</span>
+                {% endif %}
+            </td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;">{{ v.ruta or '—' }}</td>
+            <td class="td" style="text-align:center;font-size:1.05rem;font-weight:800;color:#1e293b;">{{ v.num_pax or 0 }}</td>
+            <td class="td" style="text-align:right;font-size:0.82rem;color:#64748b;">
+                {% if v.precio_buffet %}S/.{{ '%.2f'|format(v.precio_buffet) }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:700;font-size:0.9rem;">
+                {% set tb = (v.num_pax or 0)*(v.precio_buffet or 0) %}
+                {% if tb > 0 %}S/.{{ '%.2f'|format(tb) }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;color:#1d4ed8;font-size:0.85rem;">
+                {% set tb2 = v.items|sum(attribute='subtotal') %}
+                {% if tb2 > 0 %}S/.{{ '%.2f'|format(tb2) }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(v.total) }}</td>
+            <td class="td" style="font-size:0.78rem;color:#94a3b8;">{{ v.usuario.nombre_completo if v.usuario else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+<div class="card" style="padding:60px;text-align:center;">
+    <p style="font-size:2.5rem;margin-bottom:10px;">📋</p>
+    <p style="font-weight:700;color:#64748b;">No hay servicios registrados para este día.</p>
+    <a href="{{ url_for('ventas.nueva') }}" class="btn-primary" style="display:inline-block;margin-top:14px;">+ Registrar venta</a>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Movimientos{% endblock %}
+{% block page_title %}Movimientos de Almacén{% endblock %}
+{% block page_subtitle %}Historial de ingresos y egresos{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div><label class="label">Tipo</label>
+            <select name="tipo" class="input" style="width:140px;">
+                <option value="">Todos</option>
+                <option value="ingreso" {% if tipo_filtro=="ingreso" %}selected{% endif %}>Ingreso</option>
+                <option value="egreso" {% if tipo_filtro=="egreso" %}selected{% endif %}>Egreso</option>
+            </select>
+        </div>
+        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
+        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
+        <button type="submit" class="btn-primary btn-sm">🔍 Filtrar</button>
+        <a href="{{ url_for("almacen.movimientos") }}" class="btn-secondary btn-sm">Limpiar</a>
+    </form>
+</div>
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:500px;">
+        <thead><tr>
+            <th class="th">Fecha/Hora</th>
+            <th class="th">Tipo</th>
+            <th class="th">Producto</th>
+            <th class="th" style="text-align:right;">Cantidad</th>
+            <th class="th">Motivo</th>
+            <th class="th">Usuario</th>
+        </tr></thead>
+        <tbody>
+            {% for m in movimientos %}
+            <tr>
+                <td class="td" style="white-space:nowrap;font-size:0.8rem;color:#64748b;">{{ m.fecha_hora.strftime("%d/%m/%Y %H:%M") }}</td>
+                <td class="td">
+                    {% if m.tipo == "ingreso" %}<span style="background:#dbeafe;color:#1e40af;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⬇️ Ingreso</span>
+                    {% else %}<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⬆️ Egreso</span>{% endif %}
+                </td>
+                <td class="td" style="font-weight:600;color:#1e293b;">{{ m.producto.nombre }}</td>
+                <td class="td" style="text-align:right;font-weight:700;color:{% if m.tipo=="ingreso" %}#1d4ed8{% else %}#dc2626{% endif %};">
+                    {% if m.tipo=="ingreso" %}+{% else %}-{% endif %}{{ m.cantidad }}
+                </td>
+                <td class="td" style="font-size:0.82rem;color:#64748b;">{{ m.motivo or "—" }}</td>
+                <td class="td" style="font-size:0.82rem;color:#64748b;">{{ m.usuario.nombre_completo }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8;">Sin movimientos en este período.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

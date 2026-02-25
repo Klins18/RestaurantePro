@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedido #{{ lista.id }} — {{ lista.tipo_requerimiento }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            background: #f0f0f0;
+            color: #111;
+        }
+
+        /* ─── PANTALLA: contenedor centrado ─── */
+        .page-wrap {
+            max-width: 720px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        /* ─── BARRA DE ACCIONES (solo pantalla) ─── */
+        .action-bar {
+            background: #1e293b;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .action-bar a, .action-bar button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-print { background: #f59e0b; color: white; }
+        .btn-back  { background: rgba(255,255,255,0.1); color: white; }
+        .btn-print:hover { background: #d97706; }
+        .action-bar p { color: #94a3b8; font-size: 0.82rem; margin-left: auto; }
+
+        /* ─── DOCUMENTO ─── */
+        .doc {
+            padding: 28px 32px;
+        }
+
+        /* Encabezado del documento */
+        .doc-header {
+            border: 2px solid #1e293b;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .doc-header-top {
+            background: #1e293b;
+            color: white;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .doc-header-top h1 { font-size: 13pt; font-weight: 700; }
+        .doc-header-top .badge {
+            background: #f59e0b;
+            color: white;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 9pt;
+            font-weight: 700;
+        }
+        .doc-header-body {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+        }
+        .doc-field {
+            padding: 8px 14px;
+            border-right: 1px solid #e2e8f0;
+        }
+        .doc-field:last-child { border-right: none; }
+        .doc-field label { display: block; font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+        .doc-field span { font-size: 10pt; font-weight: 600; color: #1e293b; }
+
+        /* Tabla de productos */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+        }
+        thead tr {
+            background: #1e293b;
+            color: white;
+        }
+        thead th {
+            padding: 8px 10px;
+            font-size: 8.5pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            text-align: left;
+        }
+        thead th.right { text-align: right; }
+        thead th.center { text-align: center; }
+
+        tbody tr:nth-child(even) { background: #f8fafc; }
+        tbody tr:hover { background: #fef3c7; }
+        tbody td {
+            padding: 7px 10px;
+            font-size: 10pt;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tbody td.num { text-align: center; color: #94a3b8; font-size: 9pt; width: 28px; }
+        tbody td.right { text-align: right; }
+        tbody td.center { text-align: center; }
+        tbody td.name { font-weight: 600; color: #1e293b; }
+        tbody td.unit { color: #64748b; font-size: 9pt; }
+        tbody td.qty { font-weight: 700; color: #1e293b; text-align: center; }
+        tbody td.price { text-align: right; color: #1d4ed8; font-weight: 600; }
+        tbody td.total { text-align: right; font-weight: 700; color: #166534; }
+        tbody td.obs { font-size: 9pt; color: #64748b; font-style: italic; }
+
+        /* Espacio para firma / recibe */
+        .firma-section {
+            margin-top: 28px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .firma-box {
+            border-top: 1.5px solid #1e293b;
+            padding-top: 6px;
+            text-align: center;
+        }
+        .firma-box p { font-size: 8.5pt; color: #64748b; }
+        .firma-box strong { font-size: 9pt; display: block; margin-top: 2px; }
+
+        .footer-note {
+            margin-top: 16px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+            font-size: 8.5pt;
+            color: #64748b;
+            border-left: 3px solid #f59e0b;
+        }
+
+        /* ─── TOTALES ─── */
+        .totales-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 32px;
+            margin-top: 10px;
+            padding: 10px 10px 0;
+            border-top: 2px solid #1e293b;
+        }
+        .totales-row .item { text-align: right; }
+        .totales-row .item label { font-size: 8pt; color: #64748b; text-transform: uppercase; font-weight: 700; }
+        .totales-row .item span { display: block; font-size: 12pt; font-weight: 700; color: #1e293b; }
+
+        /* ─── PRINT ─── */
+        @media print {
+            body { background: white; font-size: 10pt; }
+            .action-bar { display: none !important; }
+            .page-wrap { margin: 0; box-shadow: none; border-radius: 0; max-width: 100%; }
+            .doc { padding: 16px 20px; }
+            tbody tr:hover { background: transparent; }
+            @page { margin: 1cm; size: A4 portrait; }
+        }
+
+        /* ─── MOBILE ─── */
+        @media (max-width: 600px) {
+            .doc { padding: 16px; }
+            .doc-header-body { grid-template-columns: 1fr 1fr; }
+            .firma-section { grid-template-columns: 1fr; gap: 12px; }
+            .action-bar { flex-wrap: wrap; }
+            table { font-size: 9pt; }
+            tbody td { padding: 5px 7px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-wrap">
+    <!-- Barra de acciones (no se imprime) -->
+    <div class="action-bar">
+        <a href="{{ url_for('pedidos.ver', id=lista.id) }}" class="btn-back">← Volver</a>
+        <button onclick="window.print()" class="btn-print">🖨️ Imprimir / Guardar PDF</button>
+        <p>Para guardar como PDF: en el diálogo de impresión, elige "Guardar como PDF"</p>
+    </div>
+
+    <div class="doc">
+        <!-- Encabezado del documento -->
+        <div class="doc-header">
+            <div class="doc-header-top">
+                <div>
+                    <h1>REQUERIMIENTO DE INSUMOS Y MATERIA PRIMA</h1>
+                    <p style="font-size:9pt;color:#94a3b8;margin-top:2px;">Restaurante Turístico Marangani</p>
+                </div>
+                <span class="badge">{{ lista.tipo_requerimiento }}</span>
+            </div>
+            <div class="doc-header-body">
+                <div class="doc-field">
+                    <label>Fecha</label>
+                    <span>{{ lista.fecha.strftime('%d / %m / %Y') }}</span>
+                </div>
+                <div class="doc-field">
+                    <label>Elaborado por</label>
+                    <span>{{ lista.elaborado_por.nombre_completo }}</span>
+                </div>
+                <div class="doc-field">
+                    <label>Estado</label>
+                    <span>{{ lista.estado|upper }}</span>
+                </div>
+                <div class="doc-field">
+                    <label>N° de pedido</label>
+                    <span>#{{ lista.id }}</span>
+                </div>
+                <div class="doc-field">
+                    <label>Total ítems</label>
+                    <span>{{ items_imprimir|length }} productos</span>
+                </div>
+                <div class="doc-field">
+                    <label>Hora elaboración</label>
+                    <span>{{ lista.elaborado_en.strftime('%H:%M') if lista.elaborado_en else '—' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de productos (solo los que tienen cantidad) -->
+        <table>
+            <thead>
+                <tr>
+                    <th class="center">#</th>
+                    <th>Descripción del Producto</th>
+                    <th>Unidad</th>
+                    <th class="center">Cant. Solicitada</th>
+                    <th class="right">P. Unitario</th>
+                    <th class="right">Total Est.</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items_imprimir %}
+                <tr>
+                    <td class="num">{{ loop.index }}</td>
+                    <td class="name">{{ item.producto_nombre }}</td>
+                    <td class="unit">{{ item.unidad_medida or '—' }}</td>
+                    <td class="qty">{{ item.cantidad_solicitada | int if item.cantidad_solicitada and item.cantidad_solicitada == item.cantidad_solicitada|int else item.cantidad_solicitada }}</td>
+                    <td class="price">
+                        {% if item.precio_unitario %}S/.{{ '%.2f'|format(item.precio_unitario) }}{% else %}—{% endif %}
+                    </td>
+                    <td class="total">
+                        {% if item.cantidad_solicitada and item.precio_unitario %}
+                            S/.{{ '%.2f'|format(item.cantidad_solicitada * item.precio_unitario) }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="obs">{{ item.observacion or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totales -->
+        {% set total_est = namespace(val=0) %}
+        {% for item in items_imprimir %}
+            {% if item.cantidad_solicitada and item.precio_unitario %}
+                {% set total_est.val = total_est.val + (item.cantidad_solicitada * item.precio_unitario) %}
+            {% endif %}
+        {% endfor %}
+        {% if total_est.val > 0 %}
+        <div class="totales-row">
+            <div class="item">
+                <label>Total Estimado</label>
+                <span>S/.{{ '%.2f'|format(total_est.val) }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Sección firmas -->
+        <div class="firma-section">
+            <div class="firma-box">
+                <p>Elaborado por</p>
+                <strong>{{ lista.elaborado_por.nombre_completo }}</strong>
+            </div>
+            <div class="firma-box">
+                <p>Verificado por</p>
+                <strong>{{ lista.verificado_por.nombre_completo if lista.verificado_por else '________________________' }}</strong>
+            </div>
+            <div class="firma-box">
+                <p>Aprobado por</p>
+                <strong>{{ lista.aprobado_por.nombre_completo if lista.aprobado_por else '________________________' }}</strong>
+            </div>
+        </div>
+
+        {% if lista.observaciones %}
+        <div class="footer-note">
+            <strong>Observaciones:</strong> {{ lista.observaciones }}
+        </div>
+        {% endif %}
+
+        <div style="margin-top:12px;text-align:center;font-size:8pt;color:#cbd5e1;">
+            Generado el {{ now_date }} · RestoPro v2.0 · Restaurante Turístico Marangani
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}Compras{% endblock %}
+{% block page_title %}Registro de Compras{% endblock %}
+{% block page_subtitle %}Historial de compras con comprobantes{% endblock %}
+{% block header_actions %}<a href="{{ url_for('compras.nueva') }}" class="btn-primary">➕ Nueva Compra</a>{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card" style="margin-bottom:18px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
+        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
+        <div>
+            <label class="label">Proveedor</label>
+            <select name="proveedor" class="input" style="width:200px;">
+                <option value="">Todos</option>
+                {% for p in proveedores %}<option value="{{ p.id }}" {% if prov_filtro == p.id|string %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="label">Estado</label>
+            <select name="estado" class="input" style="width:140px;">
+                <option value="">Todos</option>
+                <option value="registrado" {% if estado_filtro == 'registrado' %}selected{% endif %}>Registrado</option>
+                <option value="pagado" {% if estado_filtro == 'pagado' %}selected{% endif %}>Pagado</option>
+                <option value="anulado" {% if estado_filtro == 'anulado' %}selected{% endif %}>Anulado</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary">🔍 Filtrar</button>
+        <a href="{{ url_for('compras.index') }}" class="btn-secondary">Limpiar</a>
+        <div style="margin-left:auto;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 16px;">
+            <p style="font-size:0.75rem;color:#166534;">Total período</p>
+            <p style="font-size:1.2rem;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(total_periodo) }}</p>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr>
+                <th class="th">#</th>
+                <th class="th">Fecha</th>
+                <th class="th">Proveedor</th>
+                <th class="th">Comprobante</th>
+                <th class="th">Tipo Pago</th>
+                <th class="th" style="text-align:right;">Total</th>
+                <th class="th">Estado</th>
+                <th class="th">Adjunto</th>
+                <th class="th">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in compras %}
+            <tr style="{% if c.estado == 'anulado' %}opacity:0.5;{% endif %}">
+                <td class="td" style="color:#94a3b8;font-size:0.8rem;">{{ c.id }}</td>
+                <td class="td" style="white-space:nowrap;font-size:0.875rem;">{{ c.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="td">
+                    <p style="font-weight:600;font-size:0.875rem;color:#1e293b;">{{ c.proveedor.nombre if c.proveedor else c.proveedor_nombre or '—' }}</p>
+                    <p style="font-size:0.75rem;color:#94a3b8;">{{ c.creado_en.strftime('%H:%M') }} por {{ c.usuario.nombre_completo }}</p>
+                </td>
+                <td class="td" style="font-size:0.82rem;">
+                    {% if c.tipo_comprobante %}
+                    <span style="font-weight:600;color:#1e293b;">{{ c.tipo_comprobante|upper }}</span>
+                    {% if c.serie_comprobante %}{{ c.serie_comprobante }}-{{ c.numero_comprobante }}{% endif %}
+                    {% else %}<span style="color:#94a3b8;">Sin comprobante</span>{% endif %}
+                </td>
+                <td class="td" style="font-size:0.82rem;text-transform:capitalize;">{{ c.tipo_pago or '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:700;color:#1e293b;">S/.{{ '%.2f'|format(c.total) }}</td>
+                <td class="td">
+                    {% if c.estado == 'pagado' %}<span class="badge-pagado">✓ Pagado</span>
+                    {% elif c.estado == 'anulado' %}<span class="badge-anulado">✗ Anulado</span>
+                    {% else %}<span class="badge-pendiente">⏳ Registrado</span>{% endif %}
+                </td>
+                <td class="td">
+                    {% if c.archivo_comprobante %}
+                    <a href="{{ url_for('compras.archivo', filename=c.archivo_comprobante) }}" target="_blank"
+                       style="color:#f59e0b;font-size:0.82rem;font-weight:600;text-decoration:none;">📎 Ver</a>
+                    {% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
+                </td>
+                <td class="td">
+                    <a href="{{ url_for('compras.ver', id=c.id) }}" style="color:#6366f1;font-weight:600;font-size:0.82rem;text-decoration:none;margin-right:10px;">Ver</a>
+                    {% if current_user.es_admin() and c.estado != 'anulado' %}
+                    <form method="POST" action="{{ url_for('compras.anular', id=c.id) }}" style="display:inline;" onsubmit="return confirm('¿Anular esta compra?')">
+                        <button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.82rem;font-weight:600;">Anular</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" style="padding:50px;text-align:center;color:#94a3b8;">No hay compras registradas con los filtros seleccionados.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

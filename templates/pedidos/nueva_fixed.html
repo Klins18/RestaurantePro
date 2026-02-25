@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Lista de Pedido{% endblock %}
+{% block page_title %}Nueva Lista de Pedido{% endblock %}
+{% block page_subtitle %}Requerimiento de insumos y materia prima{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('pedidos.nueva') }}" id="form-pedido">
+<div style="display:grid;grid-template-columns:260px 1fr;gap:16px;" id="nueva-grid">
+
+    <!-- Panel lateral -->
+    <div>
+        <div class="card" style="position:sticky;top:70px;">
+            <h2 style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:0.95rem;">📋 Datos del Pedido</h2>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="label">Tipo de Requerimiento *</label>
+                    <select name="tipo_requerimiento" id="select-tipo" class="input" required onchange="cargarListaPredefinida(this.value)">
+                        <option value="">Seleccionar...</option>
+                        {% for t in tipos %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="label">Fecha *</label>
+                    <input type="date" name="fecha" class="input" value="{{ hoy }}" required>
+                </div>
+                <div>
+                    <label class="label">Título (opcional)</label>
+                    <input type="text" name="titulo" class="input" placeholder="Se genera automáticamente">
+                </div>
+                <div>
+                    <label class="label">Observaciones</label>
+                    <textarea name="observaciones" class="input" rows="3" placeholder="Notas adicionales..."></textarea>
+                </div>
+                <div style="background:#fef3c7;border-radius:10px;padding:12px;border:1px solid #fde68a;">
+                    <p style="font-size:0.8rem;color:#92400e;font-weight:600;">Items con cantidad: <span id="contador-items" style="font-size:1.1rem;">0</span></p>
+                    <p style="font-size:0.73rem;color:#b45309;margin-top:2px;">Los campos vacíos se ignoran al guardar.</p>
+                </div>
+                <button type="submit" class="btn-primary" style="width:100%;text-align:center;padding:11px;">💾 Guardar Lista</button>
+                <a href="{{ url_for('pedidos.index') }}" class="btn-secondary" style="width:100%;text-align:center;display:block;padding:11px;">Cancelar</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de productos -->
+    <div>
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="background:#1e293b;color:white;padding:14px 20px;">
+                <p style="font-size:0.65rem;font-weight:600;letter-spacing:0.1em;color:#64748b;text-transform:uppercase;margin-bottom:3px;">REQUERIMIENTO DE INSUMOS · REST. TCO. MARANGANI</p>
+                <p id="header-tipo" style="font-size:1rem;font-weight:700;">Selecciona un tipo de requerimiento</p>
+            </div>
+
+            <div id="msg-inicial" style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                <p style="font-size:2rem;margin-bottom:8px;">📋</p>
+                <p style="font-weight:600;color:#64748b;">Selecciona el tipo de requerimiento</p>
+                <p style="font-size:0.85rem;margin-top:4px;">La lista de productos se cargará automáticamente</p>
+            </div>
+
+            <div id="tabla-wrapper" style="display:none;">
+                <!-- Encabezados -->
+                <div style="display:grid;grid-template-columns:36px 1fr 110px 90px 90px 70px;gap:6px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                    <div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;">#</div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;">Descripción</div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;">Unidad</div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;text-align:center;">Cantidad</div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;text-align:right;">P.Unit S/.</div>
+                    <div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;">Obs.</div>
+                </div>
+
+                <div id="items-predefinidos"></div>
+
+                <!-- Sección extras -->
+                <div style="border-top:2px dashed #e2e8f0;margin-top:8px;">
+                    <div style="padding:10px 16px 4px;display:flex;align-items:center;justify-content:space-between;">
+                        <p style="font-size:0.75rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.05em;">➕ Productos adicionales</p>
+                        <button type="button" onclick="agregarExtra()" class="btn-primary" style="padding:5px 12px;font-size:0.8rem;">+ Agregar</button>
+                    </div>
+                    <div id="items-extra"></div>
+                    <div id="msg-extra-vacio" style="padding:10px 16px 14px;font-size:0.82rem;color:#cbd5e1;font-style:italic;">
+                        Haz clic en "+ Agregar" para añadir productos fuera de la lista estándar.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+
+<style>
+@media (max-width: 768px) {
+    #nueva-grid { grid-template-columns: 1fr !important; }
+    #nueva-grid > div:first-child .card { position: static !important; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="listas-data">{{ listas_predefinidas | tojson | safe }}</script>
+<script>
+const LISTAS = JSON.parse(document.getElementById("listas-data").textContent);
+const UNIDADES = ['', 'kg', 'kilos', '@', 'gramos', 'litro', 'ml', 'unidad', 'uni', 'caja',
+                  'bolsa', 'saco', 'galon', 'atado', 'docena', 'barra', 'sobre', 'pac',
+                  'sol', 'soles', 'kilo', 'kdo', 'col.'];
+let itemCount = 0;
+
+function opcionesUnidad(sel) {
+    return UNIDADES.map(u => `<option value="${u}" ${u===sel?'selected':''}>${u||'— sin unidad —'}</option>`).join('');
+}
+
+function cargarListaPredefinida(tipo) {
+    const wrapper   = document.getElementById('tabla-wrapper');
+    const msgInicial = document.getElementById('msg-inicial');
+    const headerTipo = document.getElementById('header-tipo');
+    const contenedor = document.getElementById('items-predefinidos');
+    const itemsExtra = document.getElementById('items-extra');
+
+    if (!tipo || !LISTAS[tipo]) {
+        wrapper.style.display = 'none';
+        msgInicial.style.display = 'block';
+        headerTipo.textContent = 'Selecciona un tipo de requerimiento';
+        actualizarContador();
+        return;
+    }
+
+    headerTipo.textContent = tipo;
+    msgInicial.style.display = 'none';
+    wrapper.style.display = 'block';
+    itemsExtra.innerHTML = '';
+    document.getElementById('msg-extra-vacio').style.display = 'block';
+    itemCount = 0;
+    contenedor.innerHTML = '';
+
+    LISTAS[tipo].forEach((prod, idx) => {
+        contenedor.appendChild(crearFilaPredefinida(idx + 1, prod[0], prod[1]));
+    });
+    actualizarContador();
+}
+
+function crearFilaPredefinida(num, nombre, unidad) {
+    const div = document.createElement('div');
+    const s = 'border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;outline:none;';
+    div.style.cssText = 'display:grid;grid-template-columns:36px 1fr 110px 90px 90px 70px;gap:6px;padding:7px 14px;border-bottom:1px solid #f1f5f9;align-items:center;';
+    div.innerHTML = `
+        <div style="font-size:0.75rem;color:#94a3b8;text-align:center;">${num}</div>
+        <div>
+            <input type="hidden" name="item_nombre[]" value="${nombre}">
+            <span style="font-size:0.875rem;font-weight:500;color:#1e293b;">${nombre}</span>
+        </div>
+        <div><select name="item_unidad[]" style="${s}">${opcionesUnidad(unidad)}</select></div>
+        <div><input type="number" name="item_cantidad[]" min="0" step="0.01"
+            style="${s}text-align:center;" placeholder="—"
+            onfocus="this.style.borderColor='#fbbf24'"
+            onfocusout="this.style.borderColor='#e2e8f0'"
+            oninput="actualizarContador()"></div>
+        <div><input type="number" name="item_precio[]" min="0" step="0.01"
+            style="${s}text-align:right;color:#1d4ed8;" placeholder="—"
+            onfocus="this.style.borderColor='#3b82f6'"
+            onfocusout="this.style.borderColor='#e2e8f0'"></div>
+        <div><input type="text" name="item_obs[]" style="${s}" placeholder="—"
+            onfocus="this.style.borderColor='#fbbf24'"
+            onfocusout="this.style.borderColor='#e2e8f0'"></div>
+    `;
+    return div;
+}
+
+function agregarExtra() {
+    itemCount++;
+    const id = `extra_${itemCount}`;
+    const contenedor = document.getElementById('items-extra');
+    document.getElementById('msg-extra-vacio').style.display = 'none';
+    const s = 'border:1px solid #fde68a;border-radius:8px;padding:7px 10px;font-size:0.875rem;width:100%;box-sizing:border-box;outline:none;background:#fffef7;';
+    const div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = 'display:grid;grid-template-columns:30px 1fr 110px 90px 90px 30px;gap:6px;padding:7px 14px;background:#fffbeb;border-bottom:1px solid #fde68a;align-items:center;';
+    div.innerHTML = `
+        <div style="font-size:0.9rem;text-align:center;color:#f59e0b;">+</div>
+        <input type="text" name="item_nombre[]" required style="${s}" placeholder="Nombre del producto..."
+            onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#fde68a'">
+        <select name="item_unidad[]" style="${s}">${opcionesUnidad('')}</select>
+        <input type="number" name="item_cantidad[]" min="0" step="0.01" style="${s}text-align:center;" placeholder="—"
+            onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#fde68a'"
+            oninput="actualizarContador()">
+        <input type="text" name="item_obs[]" style="${s}" placeholder="—">
+        <button type="button" onclick="eliminarExtra('${id}')"
+            style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;width:26px;height:26px;font-weight:700;cursor:pointer;font-size:1rem;">×</button>
+    `;
+    contenedor.appendChild(div);
+    div.querySelector('input[name="item_nombre[]"]').focus();
+    actualizarContador();
+}
+
+function eliminarExtra(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+    if (!document.getElementById('items-extra').children.length)
+        document.getElementById('msg-extra-vacio').style.display = 'block';
+    actualizarContador();
+}
+
+function actualizarContador() {
+    let count = 0;
+    document.querySelectorAll('input[name="item_cantidad[]"]').forEach(i => { if (i.value.trim()) count++; });
+    document.getElementById('contador-items').textContent = count;
+}
+</script>
+{% endblock %}

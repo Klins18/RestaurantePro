@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Venta #{{ venta.id }}{% endblock %}
+{% block page_title %}Venta #{{ venta.id }}{% endblock %}
+{% block page_subtitle %}{{ venta.fecha.strftime('%d/%m/%Y') }} · {{ venta.empresa.nombre_completo if venta.empresa else 'Privado' }}{% endblock %}
+{% block header_actions %}<a href="{{ url_for('ventas.index') }}" class="btn-secondary">← Volver</a>{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:280px 1fr;gap:18px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;margin-bottom:12px;">Servicio</h3>
+            <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:7px;">
+                <div><span style="color:#64748b;">Fecha: </span><span style="font-weight:600;">{{ venta.fecha.strftime('%d/%m/%Y') }}</span></div>
+                <div><span style="color:#64748b;">Empresa: </span>
+                    {% if venta.empresa %}<span style="font-weight:700;color:{{ venta.empresa.color }};">{{ venta.empresa.nombre_completo }}</span>
+                    {% else %}<span style="font-weight:600;">Privado</span>{% endif %}
+                </div>
+                <div><span style="color:#64748b;">Grupo: </span><span>{{ venta.nombre_grupo or '—' }}</span></div>
+                <div><span style="color:#64748b;">Pax: </span><span style="font-weight:600;">{{ venta.num_pax }}</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <h3 style="font-weight:700;font-size:0.85rem;color:#64748b;text-transform:uppercase;margin-bottom:12px;">Pago</h3>
+            <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:7px;">
+                <div><span style="color:#64748b;">Tipo: </span><span style="text-transform:capitalize;">{{ venta.tipo_pago or '—' }}</span></div>
+                <div><span style="color:#64748b;">Estado: </span>
+                    {% if venta.estado_pago == 'pagado' %}<span class="badge-pagado">✓ Pagado</span>
+                    {% elif venta.estado_pago == 'credito' %}<span class="badge-credito">Crédito</span>
+                    {% else %}<span class="badge-pendiente">Pendiente</span>{% endif %}
+                </div>
+                {% if venta.tipo_comprobante %}
+                <div><span style="color:#64748b;">Comprobante: </span><span style="font-weight:600;">{{ venta.tipo_comprobante|upper }} {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</span></div>
+                {% endif %}
+            </div>
+            {% if venta.archivo_comprobante %}
+            <a href="{{ url_for('ventas.archivo', filename=venta.archivo_comprobante) }}" target="_blank"
+               style="display:block;margin-top:10px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px;text-align:center;text-decoration:none;color:#92400e;font-weight:600;font-size:0.82rem;">
+                📎 Ver comprobante
+            </a>
+            {% endif %}
+        </div>
+        <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:0.9rem;">
+                <div style="display:flex;justify-content:space-between;"><span style="color:#166534;">Subtotal</span><span>S/.{{ '%.2f'|format(venta.subtotal) }}</span></div>
+                {% if venta.descuento %}<div style="display:flex;justify-content:space-between;"><span style="color:#dc2626;">Descuento</span><span style="color:#dc2626;">-S/.{{ '%.2f'|format(venta.descuento) }}</span></div>{% endif %}
+                <div style="border-top:2px solid #86efac;padding-top:8px;display:flex;justify-content:space-between;"><span style="font-weight:700;color:#166534;font-size:1rem;">TOTAL</span><span style="font-weight:700;font-size:1.2rem;color:#166534;">S/.{{ '%.2f'|format(venta.total) }}</span></div>
+            </div>
+        </div>
+        <div class="card" style="font-size:0.82rem;">
+            <p style="color:#64748b;margin-bottom:4px;">Registrado por</p>
+            <p style="font-weight:600;">{{ venta.usuario.nombre_completo }}</p>
+            <p style="color:#94a3b8;">{{ venta.creado_en.strftime('%d/%m/%Y %H:%M') }}</p>
+        </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="background:#1e293b;color:white;padding:14px 20px;">
+            <p style="font-size:0.68rem;color:#64748b;text-transform:uppercase;">DETALLE DE VENTA</p>
+            <p style="font-weight:700;font-size:1rem;margin-top:2px;">{{ venta.nombre_grupo or (venta.empresa.nombre_completo if venta.empresa else 'Privado') }}</p>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+            <thead><tr><th class="th">#</th><th class="th">Producto</th><th class="th" style="text-align:center;">Cant.</th><th class="th" style="text-align:right;">P.Unit.</th><th class="th" style="text-align:right;">Subtotal</th></tr></thead>
+            <tbody>
+                {% for item in venta.items %}
+                <tr>
+                    <td class="td" style="color:#94a3b8;font-size:0.8rem;">{{ loop.index }}</td>
+                    <td class="td" style="font-weight:500;font-size:0.875rem;">{{ item.descripcion }}</td>
+                    <td class="td" style="text-align:center;font-weight:700;">{{ item.cantidad }}</td>
+                    <td class="td" style="text-align:right;">S/.{{ '%.2f'|format(item.precio_unitario) }}</td>
+                    <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(item.subtotal) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="background:#f8fafc;">
+                    <td colspan="4" style="padding:12px 16px;text-align:right;font-weight:700;">TOTAL</td>
+                    <td style="padding:12px 16px;text-align:right;font-weight:700;font-size:1.1rem;color:#166534;">S/.{{ '%.2f'|format(venta.total) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        {% if venta.observaciones %}
+        <div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #f1f5f9;">
+            <p style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;">Observaciones</p>
+            <p style="font-size:0.875rem;color:#374151;margin-top:4px;">{{ venta.observaciones }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

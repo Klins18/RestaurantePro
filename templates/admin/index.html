@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block page_title %}Panel de Administración{% endblock %}
+{% block page_subtitle %}Configuración y gestión del sistema{% endblock %}
+{% block content %}
+<div class="grid-3">
+    {% for item in [
+        ("👥","Usuarios",url_for("admin.usuarios"),"Gestionar cuentas y roles","#6366f1"),
+        ("📦","Productos",url_for("admin.productos"),"Inventario de insumos","#f59e0b"),
+        ("🏷️","Categorías",url_for("admin.categorias"),"Organizar categorías","#10b981"),
+        ("🚚","Proveedores",url_for("admin.proveedores"),"Base de proveedores","#3b82f6"),
+        ("📋","Auditoría",url_for("admin.auditoria"),"Historial de acciones","#64748b"),
+    ] %}
+    <a href="{{ item[2] }}" style="text-decoration:none;">
+        <div class="card" style="padding:20px;cursor:pointer;transition:all 0.2s;border-left:4px solid {{ item[4] }};" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="font-size:1.8rem;margin-bottom:10px;">{{ item[0] }}</div>
+            <p style="font-weight:700;color:#1e293b;font-size:1rem;">{{ item[1] }}</p>
+            <p style="font-size:0.82rem;color:#94a3b8;margin-top:4px;">{{ item[3] }}</p>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

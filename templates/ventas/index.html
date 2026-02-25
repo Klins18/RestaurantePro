@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Ventas{% endblock %}
+{% block page_title %}Dashboard de Ventas{% endblock %}
+{% block page_subtitle %}Estadísticas por empresa y período{% endblock %}
+{% block header_actions %}<a href="{{ url_for('ventas.nueva') }}" class="btn-primary">💰 Registrar Venta</a>{% endblock %}
+
+{% block content %}
+<!-- Filtro de fechas -->
+<div class="card" style="margin-bottom:18px;">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:150px;"></div>
+        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:150px;"></div>
+        <button type="submit" class="btn-primary">🔍 Filtrar</button>
+        <a href="{{ url_for('ventas.index') }}" class="btn-secondary">Hoy</a>
+        <div style="margin-left:auto;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:12px;padding:10px 20px;color:white;">
+            <p style="font-size:0.75rem;opacity:0.85;">Total del período</p>
+            <p style="font-size:1.6rem;font-weight:700;">S/.{{ '%.2f'|format(total_periodo) }}</p>
+        </div>
+    </form>
+</div>
+
+<!-- Tarjetas por empresa -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
+    {% for nombre, datos in por_empresa.items() %}
+    <div class="card" style="padding:16px;border-left:4px solid {{ datos.color }};">
+        <p style="font-size:0.75rem;color:#64748b;margin-bottom:4px;">{{ nombre }}</p>
+        <p style="font-size:1.5rem;font-weight:700;color:#1e293b;">S/.{{ '%.0f'|format(datos.total) }}</p>
+        <p style="font-size:0.78rem;color:#94a3b8;">{{ datos.ventas }} servicio{{ 's' if datos.ventas != 1 }} · {{ datos.pax }} pax</p>
+    </div>
+    {% else %}
+    <div class="card" style="padding:16px;grid-column:1/-1;text-align:center;color:#94a3b8;">No hay ventas en este período.</div>
+    {% endfor %}
+</div>
+
+<!-- Gráficos -->
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:20px;">
+    <!-- Línea: ventas diarias -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;">📈 Ventas Diarias (S/.)</h3>
+        <canvas id="grafico-diario" height="220"></canvas>
+    </div>
+    <!-- Dona: por empresa -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;">🏢 Ventas por Empresa</h3>
+        <canvas id="grafico-empresa" height="220"></canvas>
+        <div style="margin-top:12px;">
+            {% for nombre, datos in por_empresa.items() %}
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:0.82rem;">
+                <div style="width:12px;height:12px;border-radius:3px;background:{{ datos.color }};flex-shrink:0;"></div>
+                <span style="color:#374151;">{{ nombre }}</span>
+                <span style="margin-left:auto;font-weight:600;">S/.{{ '%.2f'|format(datos.total) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Top productos + tabla de ventas -->
+<div style="display:grid;grid-template-columns:320px 1fr;gap:18px;">
+    <!-- Top productos -->
+    <div class="card">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">🏆 Top Productos</h3>
+        {% for prod in top_productos %}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:0.85rem;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="background:#f1f5f9;color:#64748b;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0;">{{ loop.index }}</span>
+                <div>
+                    <p style="font-weight:500;color:#1e293b;">{{ prod.descripcion }}</p>
+                    <p style="font-size:0.75rem;color:#94a3b8;">{{ prod.cant|int }} unidades</p>
+                </div>
+            </div>
+            <span style="font-weight:700;color:#10b981;">S/.{{ '%.2f'|format(prod.total) }}</span>
+        </div>
+        {% else %}
+        <p style="color:#94a3b8;font-size:0.875rem;text-align:center;padding:20px;">Sin datos</p>
+        {% endfor %}
+    </div>
+
+    <!-- Lista de ventas -->
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+            <h3 style="font-weight:700;color:#1e293b;">Ventas del Período</h3>
+            <span style="font-size:0.82rem;color:#94a3b8;">{{ ventas|length }} registros</span>
+        </div>
+        <div style="max-height:400px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead style="position:sticky;top:0;">
+                <tr><th class="th">Fecha</th><th class="th">Empresa / Grupo</th><th class="th">Pax</th><th class="th">Pago</th><th class="th" style="text-align:right;">Total</th><th class="th">Estado</th><th class="th"></th></tr>
+            </thead>
+            <tbody>
+                {% for v in ventas %}
+                <tr>
+                    <td class="td" style="font-size:0.8rem;white-space:nowrap;">{{ v.fecha.strftime('%d/%m') }}</td>
+                    <td class="td">
+                        {% if v.empresa %}<span style="font-size:0.75rem;font-weight:700;background:{{ v.empresa.color }}22;color:{{ v.empresa.color }};padding:2px 8px;border-radius:20px;">{{ v.empresa.nombre_completo }}</span><br>{% endif %}
+                        <span style="font-size:0.82rem;color:#374151;">{{ v.nombre_grupo or 'Sin nombre' }}</span>
+                    </td>
+                    <td class="td" style="text-align:center;font-size:0.875rem;">{{ v.num_pax }}</td>
+                    <td class="td" style="font-size:0.82rem;text-transform:capitalize;">{{ v.tipo_pago or '—' }}</td>
+                    <td class="td" style="text-align:right;font-weight:700;color:#1e293b;">S/.{{ '%.2f'|format(v.total) }}</td>
+                    <td class="td">
+                        {% if v.estado_pago == 'pagado' %}<span class="badge-pagado">Pagado</span>
+                        {% elif v.estado_pago == 'credito' %}<span class="badge-credito">Crédito</span>
+                        {% else %}<span class="badge-pendiente">Pendiente</span>{% endif %}
+                    </td>
+                    <td class="td"><a href="{{ url_for('ventas.ver', id=v.id) }}" style="color:#6366f1;font-size:0.82rem;font-weight:600;text-decoration:none;">Ver</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" style="padding:40px;text-align:center;color:#94a3b8;">Sin ventas en este período</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Datos para gráficos desde el servidor
+const serieDiaria = {{ serie_diaria | tojson | safe }};
+const porEmpresa = {{ por_empresa | tojson | safe }};
+
+// Gráfico de líneas: ventas diarias
+const ctxDiario = document.getElementById('grafico-diario').getContext('2d');
+new Chart(ctxDiario, {
+    type: 'line',
+    data: {
+        labels: Object.keys(serieDiaria),
+        datasets: [{
+            label: 'Ventas S/.',
+            data: Object.values(serieDiaria),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderWidth: 2.5,
+            pointBackgroundColor: '#f59e0b',
+            pointRadius: 4,
+            tension: 0.3,
+            fill: true,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { callback: v => 'S/.' + v.toFixed(0) } },
+            x: { ticks: { font: { size: 11 } } }
+        }
+    }
+});
+
+// Gráfico de dona: por empresa
+const ctxEmpresa = document.getElementById('grafico-empresa').getContext('2d');
+const nombresEmp = Object.keys(porEmpresa);
+const totalesEmp = nombresEmp.map(k => porEmpresa[k].total);
+const coloresEmp = nombresEmp.map(k => porEmpresa[k].color);
+
+new Chart(ctxEmpresa, {
+    type: 'doughnut',
+    data: {
+        labels: nombresEmp,
+        datasets: [{
+            data: totalesEmp,
+            backgroundColor: coloresEmp,
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        cutout: '65%',
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` S/.${ctx.parsed.toFixed(2)}` } }
+        }
+    }
+});
+</script>
+{% endblock %}

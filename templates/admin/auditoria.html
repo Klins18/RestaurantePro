@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Auditoría{% endblock %}
+{% block page_title %}Registro de Auditoría{% endblock %}
+{% block page_subtitle %}Historial de acciones del sistema{% endblock %}
+{% block content %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;min-width:560px;">
+        <thead><tr><th class="th">Fecha/Hora</th><th class="th">Usuario</th><th class="th">Acción</th><th class="th">Tabla</th><th class="th">Detalle</th><th class="th">IP</th></tr></thead>
+        <tbody>
+        {% for a in registros %}
+        <tr>
+            <td class="td" style="white-space:nowrap;font-size:0.78rem;color:#64748b;">{{ a.fecha_hora.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td class="td" style="font-size:0.875rem;font-weight:500;color:#1e293b;">{{ a.usuario.nombre_completo if a.usuario else "—" }}</td>
+            <td class="td"><span style="background:#f1f5f9;color:#374151;font-size:0.72rem;font-weight:700;padding:3px 8px;border-radius:6px;font-family:monospace;">{{ a.accion }}</span></td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;">{{ a.tabla or "—" }}</td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.detalle or "—" }}</td>
+            <td class="td" style="font-family:monospace;font-size:0.78rem;color:#94a3b8;">{{ a.ip or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8;">Sin registros.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

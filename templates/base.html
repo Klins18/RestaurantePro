@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>{% block title %}RestoPro{% endblock %} | {{ config.RESTAURANTE_NOMBRE }}</title>
+    <script src="/static/libs/tailwind.min.js"></script>
+    <script src="/static/libs/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: ui-sans-serif, system-ui, sans-serif; margin:0; background:#f8fafc; }
+
+        /* ─── SIDEBAR ─── */
+        .sidebar {
+            width: 250px; background: #0f172a;
+            height: 100vh; display: flex; flex-direction: column;
+            position: fixed; left: 0; top: 0; z-index: 40;
+            overflow-y: auto; overflow-x: hidden;
+            transition: transform 0.28s ease;
+            -webkit-overflow-scrolling: touch;
+        }
+        .sidebar-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 39;
+        }
+        .main-content { margin-left: 250px; min-height: 100vh; }
+
+        /* Mobile: sidebar oculto por defecto */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.open { display: block; }
+            .main-content { margin-left: 0; }
+            .hide-mobile { display: none !important; }
+            .show-mobile { display: flex !important; }
+        }
+        @media (min-width: 769px) {
+            .hamburger-btn { display: none !important; }
+            .show-mobile { display: none !important; }
+        }
+
+        /* ─── NAV LINKS ─── */
+        .sidebar-link {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 14px; border-radius: 10px;
+            color: #94a3b8; text-decoration: none;
+            transition: all 0.18s; font-size: 0.84rem; white-space: nowrap;
+        }
+        .sidebar-link:hover { background: rgba(255,255,255,0.08); color: #f1f5f9; }
+        .sidebar-link.active { background: #f59e0b; color: white; font-weight: 700; }
+        .sidebar-section {
+            font-size: 0.62rem; font-weight: 700; color: #334155;
+            text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 14px 4px;
+        }
+
+        /* ─── CARDS / COMPONENTES ─── */
+        .card { background: white; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border: 1px solid #f1f5f9; padding: 20px; }
+        .btn-primary   { background:#f59e0b; color:white; font-weight:600; padding:9px 18px; border-radius:10px; border:none; cursor:pointer; transition:all 0.18s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-size:0.875rem; }
+        .btn-primary:hover   { background:#d97706; color:white; }
+        .btn-secondary { background:#f1f5f9; color:#374151; font-weight:600; padding:9px 18px; border-radius:10px; border:none; cursor:pointer; transition:all 0.18s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-size:0.875rem; }
+        .btn-secondary:hover { background:#e2e8f0; }
+        .btn-danger    { background:#ef4444; color:white; font-weight:600; padding:9px 18px; border-radius:10px; border:none; cursor:pointer; transition:all 0.18s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-size:0.875rem; }
+        .btn-danger:hover    { background:#dc2626; color:white; }
+        .btn-success   { background:#10b981; color:white; font-weight:600; padding:9px 18px; border-radius:10px; border:none; cursor:pointer; transition:all 0.18s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-size:0.875rem; }
+        .btn-success:hover   { background:#059669; color:white; }
+        .btn-sm { padding:6px 12px; font-size:0.8rem; }
+
+        .badge-pendiente    { background:#fef9c3; color:#854d0e; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-verificacion { background:#dbeafe; color:#1e40af; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-completado   { background:#dcfce7; color:#166534; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-aprobado     { background:#d1fae5; color:#065f46; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-pagado       { background:#dcfce7; color:#166534; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-credito      { background:#fef3c7; color:#92400e; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+        .badge-anulado      { background:#fee2e2; color:#991b1b; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:9999px; display:inline-block; white-space:nowrap; }
+
+        .input {
+            width: 100%; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 9px 13px; font-size: 0.875rem; outline: none;
+            transition: all 0.18s; background: white; color: #1e293b;
+        }
+        .input:focus { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.18); }
+        select.input { appearance: auto; }
+        .label { display: block; font-size: 0.83rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
+
+        /* Tabla responsive */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .th { padding: 10px 14px; text-align: left; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; background: #f8fafc; white-space: nowrap; }
+        .td { padding: 11px 14px; font-size: 0.875rem; border-bottom: 1px solid #f1f5f9; }
+        tr:last-child .td { border-bottom: none; }
+        tr:hover .td { background: #fafafa; }
+
+        /* Grids responsivos */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        @media (max-width: 1024px) {
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 640px) {
+            .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+            .card { padding: 14px; }
+            .btn-primary, .btn-secondary, .btn-danger, .btn-success { padding: 8px 14px; font-size: 0.82rem; }
+        }
+
+        /* ─── PRINT ─── */
+        @media print {
+            .sidebar, .main-header, .no-print, .hamburger-btn { display: none !important; }
+            .main-content { margin-left: 0 !important; }
+            body { background: white; font-size: 12px; }
+            .card { box-shadow: none; border: 1px solid #ddd; border-radius: 4px; }
+            .print-full { width: 100% !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Overlay para cerrar sidebar en mobile -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+    <!-- Logo -->
+    <div style="padding:18px 14px 14px; border-bottom:1px solid #1e293b; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:36px;height:36px;background:#f59e0b;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🍽️</div>
+            <div style="min-width:0;">
+                <p style="color:white;font-weight:700;font-size:0.9rem;margin:0;line-height:1.2;">RestoPro</p>
+                <p style="color:#475569;font-size:0.68rem;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ config.RESTAURANTE_NOMBRE }}</p>
+            </div>
+            <!-- Botón cerrar sidebar en mobile -->
+            <button class="show-mobile" onclick="closeSidebar()" style="margin-left:auto;background:none;border:none;color:#64748b;font-size:1.4rem;cursor:pointer;padding:0;line-height:1;">✕</button>
+        </div>
+    </div>
+
+    <!-- Nav -->
+    <nav style="flex:1; padding:6px 8px; overflow-y:auto;">
+        <p class="sidebar-section">Principal</p>
+        <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
+
+        <p class="sidebar-section">Almacén</p>
+        <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if request.endpoint == 'almacen.index' %}active{% endif %}" onclick="closeSidebar()"><span>📦</span> Inventario</a>
+        <a href="{{ url_for('almacen.ingreso') }}" class="sidebar-link {% if request.endpoint == 'almacen.ingreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬇️</span> Ingreso</a>
+        <a href="{{ url_for('almacen.egreso') }}" class="sidebar-link {% if request.endpoint == 'almacen.egreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬆️</span> Egreso</a>
+        <a href="{{ url_for('almacen.movimientos') }}" class="sidebar-link {% if request.endpoint == 'almacen.movimientos' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Movimientos</a>
+
+        <p class="sidebar-section">Kardex</p>
+        <a href="{{ url_for('kardex.almacen') }}" class="sidebar-link {% if request.endpoint == 'kardex.almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🗃️</span> Kardex Almacén</a>
+        <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link {% if request.endpoint == 'kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex Comedor</a>
+
+        <p class="sidebar-section">Compras</p>
+        <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if request.endpoint and 'compras' in request.endpoint and request.endpoint != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro Compras</a>
+        <a href="{{ url_for('compras.nueva') }}" class="sidebar-link {% if request.endpoint == 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Nueva Compra</a>
+
+        <p class="sidebar-section">Pedidos</p>
+        <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if request.endpoint and 'pedidos' in request.endpoint and request.endpoint != 'pedidos.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛒</span> Listas de Pedido</a>
+        <a href="{{ url_for('pedidos.nueva') }}" class="sidebar-link {% if request.endpoint == 'pedidos.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>📝</span> Nueva Lista</a>
+
+        <p class="sidebar-section">Empleados</p>
+        <a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if request.endpoint and 'empleados' in request.endpoint and request.endpoint not in ['empleados.nuevo','empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Personal</a>
+        <a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if request.endpoint == 'empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
+        <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if request.endpoint == 'empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte Mensual</a>
+        <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if request.endpoint == 'empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
+
+        <p class="sidebar-section">Ventas</p>
+        <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if request.endpoint == 'ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Dashboard Ventas</a>
+        <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if request.endpoint == 'ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>💰</span> Registrar Venta</a>
+        <a href="{{ url_for('ventas.pasajeros') }}" class="sidebar-link {% if request.endpoint == 'ventas.pasajeros' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del Día</a>
+        <a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if request.endpoint == 'ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de Caja</a>
+
+        <p class="sidebar-section">Notificaciones</p>
+        <a href="{{ url_for('pedidos.notificaciones') }}" class="sidebar-link {% if request.endpoint == 'pedidos.notificaciones' %}active{% endif %}" onclick="closeSidebar()" style="position:relative;">
+            <span>🔔</span> Mis notificaciones
+            {%- set n_count = notif_no_leidas|default(0) -%}
+            {%- if n_count > 0 %}<span style="background:#ef4444;color:white;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:9999px;position:absolute;right:10px;top:50%;transform:translateY(-50%);">{{ n_count }}</span>{% endif %}
+        </a>
+
+        {% if current_user.es_admin() %}
+        <p class="sidebar-section">Administración</p>
+        <a href="{{ url_for('admin.index') }}" class="sidebar-link {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}" onclick="closeSidebar()"><span>⚙️</span> Panel Admin</a>
+        {% endif %}
+    </nav>
+
+    <!-- User -->
+    <div style="padding:12px 12px 14px; border-top:1px solid #1e293b; flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="width:32px;height:32px;background:#f59e0b;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85rem;flex-shrink:0;">{{ current_user.nombre_completo[0].upper() }}</div>
+            <div style="min-width:0;">
+                <p style="color:white;font-size:0.82rem;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ current_user.nombre_completo }}</p>
+                <p style="color:#475569;font-size:0.7rem;margin:0;text-transform:capitalize;">{{ current_user.rol }}</p>
+            </div>
+        </div>
+        <a href="{{ url_for('auth.logout') }}" style="display:flex;align-items:center;gap:7px;color:#475569;font-size:0.8rem;text-decoration:none;padding:6px 0;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
+            <span>🚪</span> Cerrar sesión
+        </a>
+    </div>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="main-content">
+
+    <!-- Header -->
+    <header class="main-header" style="background:white;border-bottom:1px solid #f1f5f9;padding:0 20px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:30;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <!-- Botón hamburger (solo mobile) -->
+        <button class="hamburger-btn" onclick="openSidebar()"
+            style="background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:#374151;font-size:1.3rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            ☰
+        </button>
+        <div style="flex:1;min-width:0;">
+            <h1 style="font-size:1rem;font-weight:700;color:#1e293b;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</h1>
+            <p style="font-size:0.7rem;color:#94a3b8;margin:0;" class="hide-mobile">{% block page_subtitle %}{% endblock %}</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <span style="font-size:0.72rem;color:#94a3b8;white-space:nowrap;" id="hora-peru" class="hide-mobile"></span>
+            {% block header_actions %}{% endblock %}
+        </div>
+    </header>
+
+    <!-- Flash messages -->
+    <div style="padding:12px 20px 0;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div style="margin-bottom:8px;padding:11px 16px;border-radius:10px;font-size:0.875rem;font-weight:500;display:flex;align-items:flex-start;gap:8px;
+                {% if category == 'error' %}background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;
+                {% elif category == 'success' %}background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;
+                {% else %}background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;{% endif %}">
+                <span>{% if category == 'error' %}⚠️{% elif category == 'success' %}✅{% else %}ℹ️{% endif %}</span>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+        {% endwith %}
+    </div>
+
+    <!-- Page content -->
+    <div style="padding:16px 20px 32px;">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+<script>
+    // Sidebar mobile
+    function openSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        // Solo bloquear scroll del main, no del sidebar
+        const main = document.querySelector('.main-content');
+        if (main) main.style.overflow = 'hidden';
+        // Enfocar el sidebar para que el scroll funcione en mobile
+        sidebar.focus();
+    }
+    function closeSidebar() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebar-overlay').classList.remove('open');
+        const main = document.querySelector('.main-content');
+        if (main) main.style.overflow = '';
+    }
+    // Hora Perú
+    function actualizarHora() {
+        const el = document.getElementById('hora-peru');
+        if (!el) return;
+        const op = { timeZone:'America/Lima', hour:'2-digit', minute:'2-digit', second:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' };
+        el.textContent = new Date().toLocaleString('es-PE', op) + ' (Perú)';
+    }
+    actualizarHora();
+    setInterval(actualizarHora, 1000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+{% block title %}Kardex Almacén{% endblock %}
+{% block page_title %}Kardex Almacén{% endblock %}
+{% block page_subtitle %}Estado del inventario y movimientos valorizados{% endblock %}
+
+{% block content %}
+
+<!-- ══ ALERTAS DE STOCK ══ -->
+{% if alertas_stock %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+    {% for a in alertas_stock %}
+    <a href="{{ url_for('kardex.almacen', producto_id=a.id) }}"
+       style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;
+              background:{% if a.tipo=='sin_stock' %}#fef2f2{% else %}#fffbeb{% endif %};
+              border:1px solid {% if a.tipo=='sin_stock' %}#fca5a5{% else %}#fde68a{% endif %};
+              text-decoration:none;transition:opacity 0.15s;"
+       onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+        <span style="font-size:1.1rem;">{% if a.tipo=='sin_stock' %}🔴{% else %}🟡{% endif %}</span>
+        <span style="font-size:0.85rem;font-weight:700;color:{% if a.tipo=='sin_stock' %}#dc2626{% else %}#92400e{% endif %};">
+            {{ a.nombre }}
+        </span>
+        <span style="font-size:0.78rem;color:#94a3b8;">—</span>
+        <span style="font-size:0.82rem;color:{% if a.tipo=='sin_stock' %}#dc2626{% else %}#b45309{% endif %};">
+            {% if a.tipo=='sin_stock' %}Sin stock{% else %}Stock bajo: {{ a.stock }} {{ a.unidad }}{% endif %}
+        </span>
+        <span style="margin-left:auto;font-size:0.75rem;color:#6366f1;font-weight:600;">Ver kardex →</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ══ MÉTRICAS GENERALES ══ -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px;">
+    <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Productos activos</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ resumen_stock|length }}</p>
+    </div>
+    <div class="card" style="padding:14px;border-left:4px solid #10b981;">
+        <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Valor total inventario</p>
+        <p style="font-size:1.5rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(valor_total_inv) }}</p>
+    </div>
+    <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
+        <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Alertas de stock</p>
+        <p style="font-size:1.8rem;font-weight:800;color:{% if alertas_stock %}#dc2626{% else %}#1e293b{% endif %};">
+            {{ alertas_stock|length }}
+        </p>
+    </div>
+    <div class="card" style="padding:14px;border-left:4px solid #0891b2;">
+        <p style="font-size:0.68rem;font-weight:700;color:#0891b2;text-transform:uppercase;margin-bottom:4px;">Movimientos recientes</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ movimientos_recientes|length }}</p>
+        <p style="font-size:0.72rem;color:#94a3b8;">últimos 10 días</p>
+    </div>
+</div>
+
+<!-- ══ TABS ══ -->
+<div style="display:flex;gap:4px;margin-bottom:14px;background:#f1f5f9;padding:4px;border-radius:12px;width:fit-content;">
+    <button onclick="showTab('tab-general')" id="btn-general"
+        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:700;cursor:pointer;background:#1e293b;color:white;">
+        📊 Estado General
+    </button>
+    <button onclick="showTab('tab-kardex')" id="btn-kardex"
+        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:#64748b;">
+        📋 Kardex por producto
+    </button>
+    <button onclick="showTab('tab-recientes')" id="btn-recientes"
+        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:#64748b;">
+        🕐 Movimientos recientes
+    </button>
+</div>
+
+<!-- TAB 1: Estado general de TODO el inventario -->
+<div id="tab-general">
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:11px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;">
+            <input type="text" id="buscar-prod" placeholder="🔍 Buscar producto..."
+                style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 12px;font-size:0.875rem;outline:none;flex:1;max-width:280px;"
+                oninput="filtrarProductos(this.value)">
+            <span style="font-size:0.78rem;color:#94a3b8;">{{ resumen_stock|length }} productos</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:700px;" id="tabla-stock">
+            <thead>
+                <tr style="background:#f8fafc;">
+                    <th class="th">Producto</th>
+                    <th class="th">Categoría</th>
+                    <th class="th" style="text-align:center;">Stock actual</th>
+                    <th class="th" style="text-align:center;">Mínimo</th>
+                    <th class="th" style="text-align:right;">P. Promedio</th>
+                    <th class="th" style="text-align:right;">Valor S/.</th>
+                    <th class="th" style="text-align:center;">Movs/mes</th>
+                    <th class="th" style="text-align:center;">Estado</th>
+                    <th class="th" style="text-align:center;">Kardex</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in resumen_stock %}
+            <tr class="prod-row" style="border-bottom:1px solid #f1f5f9;{% if p.alerta=='sin_stock' %}background:#fef2f2;{% elif p.alerta=='bajo' %}background:#fffbeb;{% elif loop.index%2==0 %}background:#fafafa;{% endif %}">
+                <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
+                <td class="td" style="font-size:0.78rem;color:#64748b;">{{ p.categoria }}</td>
+                <td class="td" style="text-align:center;font-size:1rem;font-weight:800;color:{% if p.alerta=='sin_stock' %}#dc2626{% elif p.alerta=='bajo' %}#b45309{% else %}#166534{% endif %};">
+                    {{ p.stock }} <span style="font-size:0.72rem;font-weight:400;color:#94a3b8;">{{ p.unidad }}</span>
+                </td>
+                <td class="td" style="text-align:center;font-size:0.82rem;color:#94a3b8;">
+                    {% if p.stock_minimo > 0 %}{{ p.stock_minimo }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-size:0.85rem;color:#64748b;">
+                    {% if p.precio_prom > 0 %}S/.{{ '%.4f'|format(p.precio_prom) }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-weight:700;color:#166534;">
+                    {% if p.valor > 0 %}S/.{{ '%.2f'|format(p.valor) }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:center;">
+                    <span style="background:#eff6ff;color:#1d4ed8;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">{{ p.movs_mes }}</span>
+                </td>
+                <td class="td" style="text-align:center;">
+                    {% if p.alerta=='sin_stock' %}
+                    <span style="background:#fef2f2;color:#dc2626;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">🔴 Sin stock</span>
+                    {% elif p.alerta=='bajo' %}
+                    <span style="background:#fffbeb;color:#92400e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">🟡 Stock bajo</span>
+                    {% else %}
+                    <span style="background:#f0fdf4;color:#166534;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">✓ OK</span>
+                    {% endif %}
+                </td>
+                <td class="td" style="text-align:center;">
+                    <a href="{{ url_for('kardex.almacen', producto_id=p.id) }}"
+                        onclick="showTab('tab-kardex')"
+                        style="background:#eff6ff;color:#1d4ed8;font-size:0.75rem;font-weight:700;padding:4px 10px;border-radius:7px;text-decoration:none;white-space:nowrap;">
+                        Ver →
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" style="padding:40px;text-align:center;color:#94a3b8;">Sin productos registrados.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: Kardex por producto -->
+<div id="tab-kardex" style="display:none;">
+    <div class="card" style="margin-bottom:14px;">
+        <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+            <div style="flex:2;min-width:200px;">
+                <label class="label">Producto</label>
+                <select name="producto_id" class="input" onchange="this.form.submit()">
+                    <option value="">— Seleccionar producto —</option>
+                    {% for p in productos %}
+                    <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>
+                        {{ p.nombre }} ({{ p.unidad_medida }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
+            <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
+            <input type="hidden" name="_tab" value="kardex">
+            <button type="submit" class="btn-primary">🔍 Filtrar</button>
+            {% if producto_sel %}
+            <a href="{{ url_for('kardex.almacen') }}" class="btn-secondary">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if producto_sel and registros %}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;">
+        {% set ultimo = registros[-1] %}
+        {% set total_ent = registros|selectattr('tipo','equalto','ingreso')|list %}
+        {% set total_sal = registros|selectattr('tipo','equalto','egreso')|list %}
+        <div class="card" style="padding:14px;border-left:4px solid #166534;">
+            <p style="font-size:0.68rem;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px;">Stock actual</p>
+            <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ ultimo.cant_saldo|round(3) }}</p>
+            <p style="font-size:0.72rem;color:#94a3b8;">{{ producto_sel.unidad_medida }}</p>
+        </div>
+        <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
+            <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Precio promedio</p>
+            <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ '%.4f'|format(ultimo.precio_saldo) }}</p>
+        </div>
+        <div class="card" style="padding:14px;border-left:4px solid #10b981;">
+            <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Valor en stock</p>
+            <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(ultimo.total_saldo) }}</p>
+        </div>
+        <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
+            <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Movimientos</p>
+            <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ registros|length }}</p>
+            <p style="font-size:0.72rem;color:#94a3b8;">
+                {{ total_ent|length }} entradas · {{ total_sal|length }} salidas
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if producto_sel %}
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="background:#1e293b;color:white;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <p style="font-size:0.62rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;">KARDEX VALORIZADO · ALMACÉN</p>
+                <p style="font-weight:700;font-size:0.95rem;margin-top:2px;">{{ producto_sel.nombre }}</p>
+            </div>
+            <span style="font-size:0.75rem;background:#0f172a;color:#64748b;padding:4px 10px;border-radius:6px;">Precio Promedio Ponderado</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:860px;">
+            <thead>
+                <tr>
+                    <th class="th" rowspan="2" style="border-right:1px solid #e2e8f0;vertical-align:middle;">Fecha</th>
+                    <th class="th" rowspan="2" style="border-right:1px solid #e2e8f0;vertical-align:middle;">Concepto</th>
+                    <th class="th" colspan="3" style="text-align:center;background:#eff6ff;color:#1e40af;border-right:1px solid #e2e8f0;">ENTRADAS</th>
+                    <th class="th" colspan="3" style="text-align:center;background:#fff1f2;color:#991b1b;border-right:1px solid #e2e8f0;">SALIDAS</th>
+                    <th class="th" colspan="3" style="text-align:center;background:#f0fdf4;color:#166534;">SALDO</th>
+                </tr>
+                <tr>
+                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">Cant.</th>
+                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">P.Unit.</th>
+                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;border-right:1px solid #e2e8f0;">Total</th>
+                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">Cant.</th>
+                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">P.Unit.</th>
+                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;border-right:1px solid #e2e8f0;">Total</th>
+                    <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">Cant.</th>
+                    <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">P.Prom.</th>
+                    <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in registros %}
+            <tr style="{% if loop.index%2==0 %}background:#fafafa;{% endif %}border-bottom:1px solid #f1f5f9;">
+                <td class="td" style="white-space:nowrap;font-size:0.8rem;color:#64748b;">{{ r.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="td" style="font-size:0.82rem;">
+                    <span style="font-weight:700;color:{% if r.tipo=='ingreso' %}#2563eb{% else %}#dc2626{% endif %};">
+                        {% if r.tipo=='ingreso' %}↓{% else %}↑{% endif %}
+                    </span>
+                    {{ r.concepto or r.tipo|capitalize }}
+                    {% if r.referencia %}<br><span style="font-size:0.73rem;color:#94a3b8;">{{ r.referencia }}</span>{% endif %}
+                </td>
+                <td class="td" style="text-align:right;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ r.cant_entrada|round(3) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ 'S/.%.4f'|format(r.precio_entrada) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:600;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.total_entrada) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ r.cant_salida|round(3) if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ 'S/.%.4f'|format(r.precio_salida) if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:600;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.total_salida) if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:700;color:#166534;">{{ r.cant_saldo|round(3) }}</td>
+                <td class="td" style="text-align:right;color:#166534;">S/.{{ '%.4f'|format(r.precio_saldo) }}</td>
+                <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(r.total_saldo) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">No hay movimientos en este período.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card" style="padding:50px;text-align:center;">
+        <p style="font-size:2rem;margin-bottom:8px;">🗃️</p>
+        <p style="font-weight:600;color:#64748b;">Selecciona un producto para ver su kardex detallado.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- TAB 3: Movimientos recientes -->
+<div id="tab-recientes" style="display:none;">
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+            <p style="font-weight:700;color:#1e293b;font-size:0.92rem;">🕐 Últimos movimientos (10 días)</p>
+        </div>
+        {% if movimientos_recientes %}
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:600px;">
+            <thead><tr style="background:#f8fafc;">
+                <th class="th">Fecha</th>
+                <th class="th">Producto</th>
+                <th class="th">Concepto</th>
+                <th class="th" style="text-align:center;">Tipo</th>
+                <th class="th" style="text-align:right;">Cant.</th>
+                <th class="th" style="text-align:right;">P.Unit.</th>
+                <th class="th" style="text-align:right;">Total mov.</th>
+                <th class="th" style="text-align:right;">Saldo</th>
+            </tr></thead>
+            <tbody>
+            {% for r in movimientos_recientes %}
+            <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index%2==0 %}background:#fafafa;{% endif %}">
+                <td class="td" style="font-size:0.8rem;color:#64748b;white-space:nowrap;">{{ r.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="td" style="font-weight:600;font-size:0.875rem;">
+                    <a href="{{ url_for('kardex.almacen', producto_id=r.producto_id) }}"
+                       onclick="showTab('tab-kardex')"
+                       style="color:#1e293b;text-decoration:none;">{{ r.producto.nombre if r.producto else '—' }}</a>
+                </td>
+                <td class="td" style="font-size:0.82rem;color:#64748b;">{{ r.concepto or '—' }}</td>
+                <td class="td" style="text-align:center;">
+                    {% if r.tipo=='ingreso' %}
+                    <span style="background:#eff6ff;color:#1d4ed8;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">↓ Ingreso</span>
+                    {% else %}
+                    <span style="background:#fff1f2;color:#dc2626;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">↑ Salida</span>
+                    {% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-weight:700;color:{% if r.tipo=='ingreso' %}#2563eb{% else %}#dc2626{% endif %};">
+                    {% if r.tipo=='ingreso' %}+{{ r.cant_entrada|round(3) }}{% else %}-{{ r.cant_salida|round(3) }}{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-size:0.82rem;color:#64748b;">
+                    {% if r.tipo=='ingreso' and r.precio_entrada %}S/.{{ '%.4f'|format(r.precio_entrada) }}
+                    {% elif r.precio_salida %}S/.{{ '%.4f'|format(r.precio_salida) }}{% else %}—{% endif %}
+                </td>
+                <td class="td" style="text-align:right;font-weight:600;color:{% if r.tipo=='ingreso' %}#2563eb{% else %}#dc2626{% endif %};">
+                    S/.{{ '%.2f'|format(r.total_entrada if r.tipo=='ingreso' else r.total_salida or 0) }}
+                </td>
+                <td class="td" style="text-align:right;font-weight:700;color:#166534;">{{ r.cant_saldo|round(3) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:#94a3b8;">Sin movimientos en los últimos 10 días.</div>
+        {% endif %}
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function showTab(id) {
+    ['tab-general','tab-kardex','tab-recientes'].forEach(t => {
+        document.getElementById(t).style.display = t===id ? 'block' : 'none';
+    });
+    const labels = {'tab-general':'btn-general','tab-kardex':'btn-kardex','tab-recientes':'btn-recientes'};
+    Object.entries(labels).forEach(([tab,btn]) => {
+        const el = document.getElementById(btn);
+        el.style.background = tab===id ? '#1e293b' : 'transparent';
+        el.style.color = tab===id ? 'white' : '#64748b';
+        el.style.fontWeight = tab===id ? '700' : '600';
+    });
+}
+function filtrarProductos(q) {
+    q = q.toLowerCase();
+    document.querySelectorAll('.prod-row').forEach(row => {
+        const txt = row.textContent.toLowerCase();
+        row.style.display = txt.includes(q) ? '' : 'none';
+    });
+}
+// Si viene con producto_id, ir directo al tab kardex
+{% if producto_sel %}showTab('tab-kardex');{% endif %}
+</script>
+{% endblock %}
+{% endblock %}
