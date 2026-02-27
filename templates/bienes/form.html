@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if bien else 'Nuevo' }} Bien{% endblock %}
+{% block page_title %}{{ 'Editar' if bien else 'Nuevo' }} Bien{% endblock %}
+{% block page_subtitle %}Inventario de equipos, muebles y utensilios{% endblock %}
+
+{% block content %}
+<div style="max-width:600px;">
+<div class="card">
+    <form method="POST" style="display:flex;flex-direction:column;gap:14px;">
+
+        <div>
+            <label class="label">Área *</label>
+            <select name="area" id="sel-area" class="input" required onchange="filtrarCats()">
+                <option value="">— Selecciona —</option>
+                {% for a in areas %}
+                <option value="{{ a }}" {% if (bien and bien.area==a) or area_pre==a %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="label">Categoría *</label>
+            <select name="categoria_id" id="sel-cat" class="input" required>
+                <option value="">— Selecciona área primero —</option>
+                {% for c in cats %}
+                <option value="{{ c.id }}" data-area="{{ c.area }}"
+                    {% if bien and bien.categoria_id == c.id %}selected{% endif %}>
+                    {{ c.nombre }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="label">Descripción del bien *</label>
+            <input type="text" name="nombre" class="input" required
+                value="{{ bien.nombre if bien else '' }}"
+                placeholder="Ej: Tenedores, Sartén grande...">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+            <div>
+                <label class="label">Estado bueno</label>
+                <input type="number" name="estado_bueno" class="input" min="0"
+                    value="{{ bien.estado_bueno if bien else 0 }}"
+                    oninput="calcTotal()">
+            </div>
+            <div>
+                <label class="label">Estado malo</label>
+                <input type="number" name="estado_malo" class="input" min="0"
+                    value="{{ bien.estado_malo if bien else 0 }}"
+                    oninput="calcTotal()">
+            </div>
+            <div>
+                <label class="label">Total</label>
+                <input type="number" name="total" id="inp-total" class="input" min="0"
+                    value="{{ bien.total if bien else 0 }}">
+            </div>
+        </div>
+
+        <div>
+            <label class="label">Observaciones</label>
+            <input type="text" name="observaciones" class="input"
+                value="{{ bien.observaciones if bien else '' }}"
+                placeholder="Notas, detalle de conteo (ej: 3+2+1)...">
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:6px;">
+            <button type="submit" class="btn-primary" style="flex:1;text-align:center;padding:11px;">
+                {{ '💾 Guardar cambios' if bien else '➕ Agregar bien' }}
+            </button>
+            <a href="{{ url_for('bienes.index') }}" class="btn-secondary" style="text-align:center;padding:11px;">Cancelar</a>
+        </div>
+    </form>
+</div>
+</div>
+
+{% block scripts %}
+<script>
+// Todas las categorías como array JS construido desde Jinja2
+var ALL_CATS = [
+{% for c in cats %}
+  {id: {{ c.id }}, nombre: "{{ c.nombre|replace('"', '\\"') }}", area: "{{ c.area }}"},
+{% endfor %}
+];
+
+function filtrarCats() {
+    var area = document.getElementById('sel-area').value;
+    var sel  = document.getElementById('sel-cat');
+    sel.innerHTML = '<option value="">— Selecciona categoría —</option>';
+    ALL_CATS.forEach(function(c) {
+        if (!area || c.area === area) {
+            var o = document.createElement('option');
+            o.value = c.id;
+            o.textContent = c.nombre;
+            sel.appendChild(o);
+        }
+    });
+}
+
+function calcTotal() {
+    var b = parseInt(document.querySelector('[name=estado_bueno]').value) || 0;
+    var m = parseInt(document.querySelector('[name=estado_malo]').value) || 0;
+    document.getElementById('inp-total').value = b + m;
+}
+
+// Al cargar: filtrar cats según área actual y restaurar selección
+(function() {
+    var areaVal = document.getElementById('sel-area').value;
+    if (areaVal) {
+        filtrarCats();
+        {% if bien %}
+        document.getElementById('sel-cat').value = "{{ bien.categoria_id }}";
+        {% endif %}
+    }
+})();
+</script>
+{% endblock %}
+{% endblock %}

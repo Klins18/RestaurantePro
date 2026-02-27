@@ -48,6 +48,8 @@
         }
         .sidebar-link:hover { background: rgba(255,255,255,0.08); color: #f1f5f9; }
         .sidebar-link.active { background: #f59e0b; color: white; font-weight: 700; }
+        .sidebar-link.sidebar-sub { padding-left: 28px; font-size: 0.82rem; opacity: 0.85; }
+        .sidebar-link.sidebar-sub:hover { opacity: 1; }
         .sidebar-section {
             font-size: 0.62rem; font-weight: 700; color: #334155;
             text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 14px 4px;
@@ -138,15 +140,19 @@
         <p class="sidebar-section">Principal</p>
         <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
 
-        <p class="sidebar-section">Almacén</p>
-        <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if request.endpoint == 'almacen.index' %}active{% endif %}" onclick="closeSidebar()"><span>📦</span> Inventario</a>
-        <a href="{{ url_for('almacen.ingreso') }}" class="sidebar-link {% if request.endpoint == 'almacen.ingreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬇️</span> Ingreso</a>
-        <a href="{{ url_for('almacen.egreso') }}" class="sidebar-link {% if request.endpoint == 'almacen.egreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬆️</span> Egreso</a>
-        <a href="{{ url_for('almacen.movimientos') }}" class="sidebar-link {% if request.endpoint == 'almacen.movimientos' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Movimientos</a>
-
-        <p class="sidebar-section">Kardex</p>
-        <a href="{{ url_for('kardex.almacen') }}" class="sidebar-link {% if request.endpoint == 'kardex.almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🗃️</span> Kardex Almacén</a>
-        <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link {% if request.endpoint == 'kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex Comedor</a>
+        <p class="sidebar-section">Inventario</p>
+        <!-- Alimentos -->
+        <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if request.blueprint == 'almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🥦</span> Alimentos</a>
+        <a href="{{ url_for('almacen.ingreso') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.ingreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬇️</span> Ingreso</a>
+        <a href="{{ url_for('almacen.egreso') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.egreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬆️</span> Egreso</a>
+        <a href="{{ url_for('almacen.movimientos') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.movimientos' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Movimientos</a>
+        <a href="{{ url_for('kardex.almacen') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'kardex.almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🗃️</span> Kardex</a>
+        <!-- Bienes -->
+        <a href="{{ url_for('bienes.index') }}" class="sidebar-link {% if request.blueprint == 'bienes' %}active{% endif %}" onclick="closeSidebar()"><span>🪑</span> Bienes y Equipos</a>
+        <a href="{{ url_for('bienes.nuevo') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'bienes.nuevo' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Agregar bien</a>
+        <a href="{{ url_for('bienes.categorias') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'bienes.categorias' %}active{% endif %}" onclick="closeSidebar()"><span>📁</span> Categorías</a>
+        <!-- Kardex comedor aparte -->
+        <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex Comedor</a>
 
         <p class="sidebar-section">Compras</p>
         <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if request.endpoint and 'compras' in request.endpoint and request.endpoint != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro Compras</a>

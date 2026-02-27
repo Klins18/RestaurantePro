@@ -33,6 +33,7 @@ def create_app():
     from routes.compras import compras_bp
     from routes.ventas import ventas_bp
     from routes.empleados import empleados_bp
+    from routes.bienes import bienes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(compras_bp)
     app.register_blueprint(ventas_bp)
     app.register_blueprint(empleados_bp)
+    app.register_blueprint(bienes_bp)
 
     # Context processor: notificaciones no leídas para el sidebar
     @app.context_processor
@@ -148,6 +150,14 @@ def init_db(app):
                 orden_prod += 1
 
         db.session.commit()
+
+        # Seed inventario de bienes físicos
+        try:
+            from routes.bienes import seed_bienes
+            seed_bienes()
+        except Exception as e:
+            print(f"  Aviso seed bienes: {e}")
+
         print("✅ Base de datos inicializada.")
 
 

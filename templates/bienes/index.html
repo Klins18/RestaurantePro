@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}Inventario de Bienes{% endblock %}
+{% block page_title %}Inventario de Bienes{% endblock %}
+{% block page_subtitle %}Equipos, muebles, menajería y utensilios{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('bienes.nuevo') }}" class="btn-primary btn-sm">+ Nuevo bien</a>
+<a href="{{ url_for('bienes.categorias') }}" class="btn-secondary btn-sm">📁 Categorías</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- RESUMEN POR ÁREA -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;" id="cards-area">
+{% set area_icons = {'ALMACÉN':'🏪','COMEDOR':'🍽️','COCINA':'👨‍🍳'} %}
+{% set area_colors = {'ALMACÉN':'#3b82f6','COMEDOR':'#10b981','COCINA':'#f59e0b'} %}
+{% for a in areas %}
+{% set r = resumen[a] %}
+<a href="{{ url_for('bienes.index', area=a) }}"
+   style="text-decoration:none;display:block;border-radius:14px;overflow:hidden;border:2px solid {% if area_sel==a %}{{ area_colors[a] }}{% else %}#e2e8f0{% endif %};background:white;transition:all 0.18s;"
+   onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)'"
+   onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <div style="background:{{ area_colors[a] }};padding:12px 16px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.4rem;">{{ area_icons[a] }}</span>
+        <span style="font-weight:800;color:white;font-size:0.95rem;">{{ a }}</span>
+        {% if area_sel == a %}<span style="margin-left:auto;background:rgba(255,255,255,0.25);color:white;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;">Filtrando</span>{% endif %}
+    </div>
+    <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="text-align:center;">
+            <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">{{ r['items'] }}</p>
+            <p style="font-size:0.65rem;color:#94a3b8;text-transform:uppercase;font-weight:600;">Ítems</p>
+        </div>
+        <div style="text-align:center;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;">
+            <p style="font-size:1.4rem;font-weight:800;color:#166534;">{{ r['unidades'] }}</p>
+            <p style="font-size:0.65rem;color:#94a3b8;text-transform:uppercase;font-weight:600;">Unidades</p>
+        </div>
+        <div style="text-align:center;">
+            <p style="font-size:1.4rem;font-weight:800;color:{% if r['malo'] > 0 %}#dc2626{% else %}#94a3b8{% endif %};">{{ r['malo'] }}</p>
+            <p style="font-size:0.65rem;color:#94a3b8;text-transform:uppercase;font-weight:600;">Mal estado</p>
+        </div>
+    </div>
+</a>
+{% endfor %}
+</div>
+
+<!-- FILTROS -->
+<div class="card" style="padding:12px 16px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        {% if area_sel %}<input type="hidden" name="area" value="{{ area_sel }}">{% endif %}
+        <div style="flex:2;min-width:180px;">
+            <label class="label">🔍 Buscar</label>
+            <input type="text" name="q" value="{{ buscar }}" class="input" placeholder="Nombre del bien...">
+        </div>
+        <div style="min-width:150px;">
+            <label class="label">Área</label>
+            <select name="area" class="input" onchange="this.form.submit()">
+                <option value="">Todas las áreas</option>
+                {% for a in areas %}
+                <option value="{{ a }}" {% if area_sel==a %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="min-width:160px;">
+            <label class="label">Categoría</label>
+            <select name="categoria" class="input">
+                <option value="">Todas</option>
+                {% for c in cats %}
+                {% if not area_sel or c.area == area_sel %}
+                <option value="{{ c.id }}" {% if cat_sel|string == c.id|string %}selected{% endif %}>
+                    {{ c.area }} · {{ c.nombre }}
+                </option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn-primary">Filtrar</button>
+        {% if area_sel or cat_sel or buscar %}
+        <a href="{{ url_for('bienes.index') }}" class="btn-secondary">Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- TABLA DE BIENES -->
+{% if bienes %}
+{% set area_actual = namespace(val='') %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">
+            {{ bienes|length }} bien(es)
+            {% if area_sel %}— {{ area_sel }}{% endif %}
+            {% if buscar %}— "{{ buscar }}"{% endif %}
+        </p>
+        <p style="font-size:0.8rem;color:#64748b;">
+            Total unidades: <strong style="color:#166534;">{{ bienes|sum(attribute='total') }}</strong>
+        </p>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:680px;">
+        <thead><tr style="background:#f8fafc;">
+            <th class="th" style="width:32px;">#</th>
+            <th class="th">Descripción del bien</th>
+            <th class="th">Área</th>
+            <th class="th">Categoría</th>
+            <th class="th" style="text-align:center;">Bueno</th>
+            <th class="th" style="text-align:center;">Malo</th>
+            <th class="th" style="text-align:center;font-weight:800;">Total</th>
+            <th class="th">Observaciones</th>
+            <th class="th" style="text-align:center;">Acciones</th>
+        </tr></thead>
+        <tbody>
+        {% set area_colores = {'ALMACÉN':'#3b82f6','COMEDOR':'#10b981','COCINA':'#f59e0b'} %}
+        {% for b in bienes %}
+        {% if b.area != area_actual.val %}
+        {% set area_actual.val = b.area %}
+        <tr>
+            <td colspan="9" style="background:#1e293b;padding:7px 16px;">
+                <span style="color:white;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;">
+                    {{ {'ALMACÉN':'🏪','COMEDOR':'🍽️','COCINA':'👨‍🍳'}[b.area] }} {{ b.area }}
+                </span>
+            </td>
+        </tr>
+        {% endif %}
+        <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index%2==0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="text-align:center;font-size:0.72rem;color:#cbd5e1;">{{ loop.index }}</td>
+            <td class="td" style="font-weight:600;color:#1e293b;font-size:0.875rem;">{{ b.nombre }}</td>
+            <td class="td">
+                <span style="background:{{ area_colores[b.area] }}20;color:{{ area_colores[b.area] }};font-size:0.7rem;font-weight:700;padding:2px 7px;border-radius:6px;">{{ b.area }}</span>
+            </td>
+            <td class="td">
+                <span style="background:{{ cat_colors.get(b.categoria.nombre,'#f1f5f9') }};color:#374151;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;">
+                    {{ b.categoria.nombre }}
+                </span>
+            </td>
+            <td class="td" style="text-align:center;color:#166534;font-weight:700;">{{ b.estado_bueno or '—' }}</td>
+            <td class="td" style="text-align:center;color:{% if b.estado_malo > 0 %}#dc2626{% else %}#e2e8f0{% endif %};font-weight:700;">
+                {{ b.estado_malo if b.estado_malo > 0 else '—' }}
+            </td>
+            <td class="td" style="text-align:center;font-size:1.05rem;font-weight:800;color:#1e293b;">{{ b.total }}</td>
+            <td class="td" style="font-size:0.75rem;color:#64748b;font-style:italic;">{{ b.observaciones or '—' }}</td>
+            <td class="td" style="text-align:center;">
+                <div style="display:flex;gap:5px;justify-content:center;">
+                    <a href="{{ url_for('bienes.editar', id=b.id) }}"
+                       style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;text-decoration:none;">✏️</a>
+                    <form method="POST" action="{{ url_for('bienes.eliminar', id=b.id) }}" style="margin:0;"
+                          onsubmit="return confirm('¿Eliminar «{{ b.nombre }}»?')">
+                        <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding:60px;text-align:center;">
+    <p style="font-size:2.5rem;margin-bottom:10px;">📦</p>
+    <p style="font-weight:700;color:#64748b;">No hay bienes registrados{% if buscar %} para "{{ buscar }}"{% endif %}.</p>
+    <a href="{{ url_for('bienes.nuevo') }}" class="btn-primary" style="display:inline-block;margin-top:14px;">+ Agregar bien</a>
+</div>
+{% endif %}
+
+<style>
+@media(max-width:768px){ #cards-area{grid-template-columns:1fr!important;} }
+</style>
+{% endblock %}

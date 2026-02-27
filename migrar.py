@@ -221,3 +221,37 @@ else:
     print("\n✅ Migración completada exitosamente.")
     print("   Ahora puedes reiniciar el servidor Flask.")
 print("═"*50)
+
+# ── Bienes y Equipos (agregado en Fix 12) ──
+try:
+    cursor.execute("""CREATE TABLE IF NOT EXISTS categorias_bien (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre VARCHAR(100) NOT NULL,
+        area VARCHAR(50),
+        descripcion VARCHAR(255),
+        activo BOOLEAN DEFAULT 1)""")
+    conn.commit()
+    migraciones.append("+ tabla categorias_bien")
+except Exception as e:
+    if "already exists" not in str(e).lower(): errores.append(f"categorias_bien: {e}")
+
+try:
+    cursor.execute("""CREATE TABLE IF NOT EXISTS bienes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoria_id INTEGER NOT NULL,
+        nombre VARCHAR(200) NOT NULL,
+        area VARCHAR(50),
+        estado_bueno INTEGER DEFAULT 0,
+        estado_malo INTEGER DEFAULT 0,
+        total INTEGER DEFAULT 0,
+        observaciones VARCHAR(255),
+        activo BOOLEAN DEFAULT 1,
+        fecha_registro DATE,
+        creado_en DATETIME,
+        actualizado_en DATETIME,
+        usuario_id INTEGER,
+        FOREIGN KEY(categoria_id) REFERENCES categorias_bien(id))""")
+    conn.commit()
+    migraciones.append("+ tabla bienes")
+except Exception as e:
+    if "already exists" not in str(e).lower(): errores.append(f"bienes: {e}")

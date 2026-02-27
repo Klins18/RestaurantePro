@@ -508,6 +508,39 @@ class FuncionDiaria(db.Model):
     creado_en      = db.Column(db.DateTime, default=now_peru)
 
 
+
+
+# ══════════════════════════════════════════════
+#  INVENTARIO DE BIENES (Equipos, Muebles, etc.)
+# ══════════════════════════════════════════════
+class CategoriaBien(db.Model):
+    __tablename__ = 'categorias_bien'
+    id          = db.Column(db.Integer, primary_key=True)
+    nombre      = db.Column(db.String(100), nullable=False, unique=True)
+    area        = db.Column(db.String(50))   # ALMACÉN | COMEDOR | COCINA
+    descripcion = db.Column(db.String(255))
+    activo      = db.Column(db.Boolean, default=True)
+    bienes      = db.relationship('Bien', backref='categoria', lazy=True)
+
+
+class Bien(db.Model):
+    """Ítem de inventario de bienes (muebles, equipos, menajería, etc.)"""
+    __tablename__ = 'bienes'
+    id              = db.Column(db.Integer, primary_key=True)
+    categoria_id    = db.Column(db.Integer, db.ForeignKey('categorias_bien.id'), nullable=False)
+    nombre          = db.Column(db.String(200), nullable=False)
+    area            = db.Column(db.String(50))      # ALMACÉN | COMEDOR | COCINA
+    estado_bueno    = db.Column(db.Integer, default=0)
+    estado_malo     = db.Column(db.Integer, default=0)
+    total           = db.Column(db.Integer, default=0)
+    observaciones   = db.Column(db.String(255))
+    activo          = db.Column(db.Boolean, default=True)
+    fecha_registro  = db.Column(db.Date)
+    creado_en       = db.Column(db.DateTime, default=now_peru)
+    actualizado_en  = db.Column(db.DateTime, default=now_peru, onupdate=now_peru)
+    usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario         = db.relationship('Usuario')
+
 # ══════════════════════════════════════════════
 #  NOTIFICACIONES / REPORTES DE IRREGULARIDADES
 # ══════════════════════════════════════════════
