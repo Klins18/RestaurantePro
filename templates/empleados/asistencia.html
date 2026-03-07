@@ -1,132 +1,204 @@
 {% extends 'base.html' %}
 {% block title %}Asistencia{% endblock %}
-{% block page_title %}Tomar Asistencia{% endblock %}
-{% block page_subtitle %}{{ fecha.strftime('%A, %d de %B del %Y') }}{% endblock %}
-{% block header_actions %}
-<a href="{{ url_for('empleados.reporte') }}" class="btn-secondary btn-sm">📊 Ver reporte</a>
-{% endblock %}
+{% block page_title %}Asistencia del día{% endblock %}
+{% block page_subtitle %}{{ fecha.strftime('%A %d/%m/%Y') }}{% if cierre %} · 🔒 Cerrada{% endif %}{% endblock %}
 
 {% block content %}
-<!-- Selector de fecha -->
-<div class="card" style="margin-bottom:16px;padding:14px 18px;">
-    <form method="GET" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="label" style="margin:0;">📅 Fecha:</label>
-        <input type="date" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}" class="input" style="width:160px;" onchange="this.form.submit()">
-        <a href="{{ url_for('empleados.asistencia') }}" class="btn-secondary btn-sm">Hoy</a>
-        <div style="margin-left:auto;background:#eff6ff;border-radius:10px;padding:8px 14px;">
-            <span style="font-size:0.82rem;color:#1d4ed8;font-weight:600;">{{ empleados|length }} empleados activos</span>
-        </div>
+
+<!-- Selector fecha + estado cierre -->
+<div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <form method="GET" style="display:flex;align-items:center;gap:8px;">
+        <label class="label">📅 Fecha:</label>
+        <input type="date" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}" class="input" style="max-width:160px;" onchange="this.form.submit()">
     </form>
+    {% if cierre %}
+    <span style="background:#fef3c7;color:#92400e;font-size:0.78rem;font-weight:700;padding:5px 12px;border-radius:8px;">
+        🔒 Cerrada el {{ cierre.cerrado_en.strftime('%d/%m %H:%M') }} por {{ cierre.usuario.username if cierre.usuario else '?' }}
+    </span>
+    {% elif fecha == hoy %}
+    <form method="POST" action="{{ url_for('empleados.asistencia', fecha=fecha.strftime('%Y-%m-%d')) }}" 
+          onsubmit="return confirm('¿Cerrar la asistencia de hoy? Ya no se podrá editar normalmente.')">
+        <input type="hidden" name="accion" value="cerrar">
+        <button type="submit" style="background:#ef4444;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:0.82rem;font-weight:700;cursor:pointer;">🔒 Cerrar asistencia</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('empleados.reporte') }}" class="btn-secondary btn-sm" style="margin-left:auto;">📊 Reporte mensual</a>
 </div>
 
-<form method="POST" action="{{ url_for('empleados.asistencia') }}">
-    <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
-
-    <!-- Botones rápidos -->
-    <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;">
-        <button type="button" onclick="marcarTodos('presente')" class="btn-success btn-sm">✓ Todos presentes</button>
-        <button type="button" onclick="marcarTodos('libre')" class="btn-secondary btn-sm">🏖 Todos libres</button>
+{% if cierre %}
+<!-- MODO SOLO LECTURA con opción edición manual -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+    <div style="padding:10px 16px;background:#fef9c3;border-bottom:1px solid #fde68a;">
+        <p style="font-size:0.82rem;color:#92400e;font-weight:600;">🔒 Asistencia cerrada. Solo se pueden hacer ediciones manuales con justificación.</p>
     </div>
+    {% if asist_map %}
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:600px;">
+        <thead><tr style="background:#f8fafc;">
+            <th class="th">Empleado</th><th class="th" style="text-align:center;">Estado</th>
+            <th class="th">Entrada</th><th class="th">Salida</th>
+            <th class="th">Observación</th><th class="th" style="text-align:center;">Editar</th>
+        </tr></thead>
+        <tbody>
+        {% for emp_id, a in asist_map.items() %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+            <td class="td" style="font-weight:600;font-size:0.85rem;">{{ a.empleado.nombre_completo }}</td>
+            <td class="td" style="text-align:center;">
+                {% set colores = {'presente':'#dcfce7,#166534','falta':'#fee2e2,#dc2626','tardanza':'#fef3c7,#92400e','libre':'#eff6ff,#1d4ed8','feriado':'#f5f3ff,#6d28d9'} %}
+                {% set col = colores.get(a.estado, '#f1f5f9,#64748b').split(',') %}
+                <span style="background:{{ col[0] }};color:{{ col[1] }};font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:capitalize;">{{ a.estado }}</span>
+            </td>
+            <td class="td" style="font-size:0.82rem;">{{ a.hora_entrada or '—' }}</td>
+            <td class="td" style="font-size:0.82rem;">{{ a.hora_salida or '—' }}</td>
+            <td class="td" style="font-size:0.8rem;color:#94a3b8;font-style:italic;">{{ a.observacion or '—' }}</td>
+            <td class="td" style="text-align:center;">
+                <button onclick="abrirEdManual({{ a.id }}, '{{ a.estado }}', '{{ a.hora_entrada or '' }}', '{{ a.hora_salida or '' }}', '{{ (a.observacion or '')|replace("'","\\'") }}')"
+                    style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">✏️ Editar</button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div style="padding:30px;text-align:center;color:#94a3b8;">No hay asistencia registrada para esta fecha.</div>
+    {% endif %}
+</div>
 
-    <div class="card" style="padding:0;overflow:hidden;">
-        <div class="table-wrap">
-        <table style="width:100%;border-collapse:collapse;min-width:620px;">
-            <thead>
-                <tr>
-                    <th class="th">Empleado</th>
-                    <th class="th">Cargo</th>
-                    <th class="th" style="text-align:center;">Estado</th>
-                    <th class="th" style="text-align:center;">Entrada</th>
-                    <th class="th" style="text-align:center;">Salida</th>
-                    <th class="th" style="text-align:right;">H. Extra</th>
-                    <th class="th" style="text-align:right;">Desc. S/.</th>
-                    <th class="th">Obs.</th>
-                </tr>
-            </thead>
+<!-- Historial auditoría -->
+{% if auditoria_dia %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 16px;border-bottom:1px solid #f1f5f9;background:#f8fafc;">
+        <p style="font-weight:700;font-size:0.85rem;color:#1e293b;">📋 Historial de cambios manuales</p>
+    </div>
+    {% for aud in auditoria_dia %}
+    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;gap:12px;align-items:flex-start;">
+        <div style="flex:1;">
+            <p style="font-size:0.82rem;font-weight:600;color:#1e293b;">{{ aud.empleado.nombre_completo }}
+                <span style="font-weight:400;color:#64748b;">· campo: <strong>{{ aud.campo_cambiado }}</strong></span>
+            </p>
+            <p style="font-size:0.78rem;color:#64748b;">
+                <span style="background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:4px;">{{ aud.valor_anterior or '—' }}</span>
+                → <span style="background:#dcfce7;color:#166534;padding:1px 5px;border-radius:4px;">{{ aud.valor_nuevo or '—' }}</span>
+            </p>
+            <p style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-top:2px;">Justif: {{ aud.justificacion }}</p>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+            <p style="font-size:0.75rem;color:#94a3b8;">{{ aud.fecha_hora.strftime('%d/%m %H:%M') }}</p>
+            <p style="font-size:0.75rem;color:#64748b;">por {{ aud.usuario.username if aud.usuario else '?' }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<!-- MODO EDICIÓN NORMAL -->
+<form method="POST" action="{{ url_for('empleados.asistencia', fecha=fecha.strftime('%Y-%m-%d')) }}">
+    <input type="hidden" name="accion" value="guardar">
+    <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:700px;">
+            <thead><tr style="background:#f8fafc;">
+                <th class="th">Empleado</th>
+                <th class="th" style="text-align:center;">Estado</th>
+                <th class="th">Entrada</th>
+                <th class="th">Salida</th>
+                <th class="th" style="text-align:center;">H.Extra</th>
+                <th class="th" style="text-align:center;">Desc.</th>
+                <th class="th">Observación</th>
+            </tr></thead>
             <tbody>
             {% for emp in empleados %}
-            {% set asist = asist_map.get(emp.id) %}
-            <tr id="fila-{{ emp.id }}" style="{% if asist and asist.estado == 'falta' %}background:#fef2f2;{% elif asist and asist.estado == 'presente' %}background:#f0fdf4;{% elif asist and asist.estado == 'libre' %}background:#f8fafc;{% endif %}">
-                <td class="td">
-                    <div style="display:flex;align-items:center;gap:9px;">
-                        <div style="width:30px;height:30px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.82rem;flex-shrink:0;">{{ emp.nombres[0].upper() }}</div>
-                        <div>
-                            <p style="font-weight:600;color:#1e293b;font-size:0.875rem;">{{ emp.nombre_completo }}{% if emp.cumpleanos_hoy %} 🎂{% endif %}</p>
-                            <p style="font-size:0.72rem;color:#94a3b8;">{{ emp.tipo_contrato }}</p>
-                        </div>
-                    </div>
-                </td>
-                <td class="td" style="font-size:0.82rem;color:#64748b;">{{ emp.cargo or '—' }}</td>
+            {% set a = asist_map.get(emp.id) %}
+            <tr style="border-bottom:1px solid #f1f5f9;">
+                <td class="td" style="font-weight:600;color:#1e293b;font-size:0.88rem;">{{ emp.nombre_completo }}</td>
                 <td class="td" style="text-align:center;">
-                    <select name="estado_{{ emp.id }}" class="input" style="width:110px;padding:6px 8px;font-size:0.82rem;" onchange="colorFila({{ emp.id }}, this.value)">
-                        {% for estado in ['presente','falta','tardanza','libre','feriado'] %}
-                        <option value="{{ estado }}" {% if asist and asist.estado == estado %}selected{% elif not asist and estado == 'presente' %}selected{% endif %}>
-                            {{ {'presente':'✓ Presente','falta':'✗ Falta','tardanza':'⏰ Tardanza','libre':'🏖 Libre','feriado':'🎉 Feriado'}[estado] }}
-                        </option>
+                    <select name="estado_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px 6px;min-width:110px;">
+                        {% for est in ['presente','tardanza','falta','libre','feriado'] %}
+                        <option value="{{ est }}" {% if a and a.estado==est %}selected{% endif %}>{{ est|capitalize }}</option>
                         {% endfor %}
                     </select>
                 </td>
-                <td class="td" style="text-align:center;">
-                    <input type="time" name="hora_entrada_{{ emp.id }}" value="{{ asist.hora_entrada if asist and asist.hora_entrada else '08:00' }}"
-                        style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 7px;font-size:0.82rem;width:88px;outline:none;"
-                        onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#e2e8f0'">
-                </td>
-                <td class="td" style="text-align:center;">
-                    <input type="time" name="hora_salida_{{ emp.id }}" value="{{ asist.hora_salida if asist and asist.hora_salida else '18:00' }}"
-                        style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 7px;font-size:0.82rem;width:88px;outline:none;"
-                        onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#e2e8f0'">
-                </td>
-                <td class="td" style="text-align:right;">
-                    <input type="number" name="horas_extra_{{ emp.id }}" value="{{ asist.horas_extra if asist else 0 }}" min="0" step="0.5"
-                        style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 7px;font-size:0.82rem;width:64px;text-align:right;outline:none;"
-                        onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#e2e8f0'">
-                </td>
-                <td class="td" style="text-align:right;">
-                    <input type="number" name="descuento_{{ emp.id }}" value="{{ asist.descuento if asist else 0 }}" min="0" step="0.01"
-                        style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 7px;font-size:0.82rem;width:72px;text-align:right;outline:none;color:#dc2626;"
-                        onfocus="this.style.borderColor='#ef4444'" onfocusout="this.style.borderColor='#e2e8f0'">
-                </td>
-                <td class="td">
-                    <input type="text" name="obs_{{ emp.id }}" value="{{ asist.observacion if asist else '' }}"
-                        style="border:1px solid #e2e8f0;border-radius:8px;padding:5px 8px;font-size:0.78rem;width:100%;min-width:80px;outline:none;"
-                        placeholder="Notas..."
-                        onfocus="this.style.borderColor='#f59e0b'" onfocusout="this.style.borderColor='#e2e8f0'">
-                </td>
+                <td class="td"><input type="time" name="hora_entrada_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px;max-width:90px;" value="{{ a.hora_entrada if a else '' }}"></td>
+                <td class="td"><input type="time" name="hora_salida_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px;max-width:90px;" value="{{ a.hora_salida if a else '' }}"></td>
+                <td class="td" style="text-align:center;"><input type="number" name="horas_extra_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px;max-width:60px;text-align:center;" value="{{ a.horas_extra if a else 0 }}" min="0" step="0.5"></td>
+                <td class="td" style="text-align:center;"><input type="number" name="descuento_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px;max-width:70px;text-align:center;" value="{{ a.descuento if a else 0 }}" min="0" step="0.5"></td>
+                <td class="td"><input type="text" name="obs_{{ emp.id }}" class="input" style="font-size:0.78rem;padding:4px;" value="{{ a.observacion if a else '' }}" placeholder="Nota..."></td>
             </tr>
-            {% else %}
-            <tr><td colspan="8" style="padding:40px;text-align:center;color:#94a3b8;">No hay empleados activos. <a href="{{ url_for('empleados.nuevo') }}" style="color:#f59e0b;font-weight:600;">Agregar →</a></td></tr>
             {% endfor %}
             </tbody>
-        </table>
-        </div>
+        </table></div>
     </div>
-
-    <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;">
-        <a href="{{ url_for('empleados.index') }}" class="btn-secondary">Cancelar</a>
-        <button type="submit" class="btn-primary" style="padding:10px 24px;font-size:1rem;">💾 Guardar Asistencia</button>
-    </div>
+    <button type="submit" class="btn-primary" style="padding:10px 24px;">💾 Guardar asistencia</button>
 </form>
-{% endblock %}
+{% endif %}
+
+<!-- Modal edición manual (post-cierre) -->
+<div id="modal-edman" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;">
+    <div class="card" style="width:420px;max-width:95vw;padding:20px;">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">✏️ Edición manual — post-cierre</h3>
+        <form method="POST" action="{{ url_for('empleados.asistencia', fecha=fecha.strftime('%Y-%m-%d')) }}" style="display:flex;flex-direction:column;gap:10px;">
+            <input type="hidden" name="accion" value="editar_manual">
+            <input type="hidden" name="asist_id" id="em-asist-id">
+            <div>
+                <label class="label">Campo a editar</label>
+                <select name="campo" id="em-campo" class="input" onchange="mostrarCampo(this.value)">
+                    <option value="estado">Estado</option>
+                    <option value="hora_entrada">Hora entrada</option>
+                    <option value="hora_salida">Hora salida</option>
+                    <option value="observacion">Observación</option>
+                </select>
+            </div>
+            <div id="em-val-estado">
+                <label class="label">Nuevo valor — Estado</label>
+                <select name="valor_nuevo" class="input">
+                    {% for est in ['presente','tardanza','falta','libre','feriado'] %}
+                    <option value="{{ est }}">{{ est|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="em-val-hora-e" style="display:none;">
+                <label class="label">Nuevo valor — Hora entrada</label>
+                <input type="time" name="valor_nuevo_hora_e" class="input">
+            </div>
+            <div id="em-val-hora-s" style="display:none;">
+                <label class="label">Nuevo valor — Hora salida</label>
+                <input type="time" name="valor_nuevo_hora_s" class="input">
+            </div>
+            <div id="em-val-obs" style="display:none;">
+                <label class="label">Nuevo valor — Observación</label>
+                <input type="text" name="valor_nuevo_obs" class="input">
+            </div>
+            <div>
+                <label class="label">Justificación del cambio *</label>
+                <textarea name="justificacion" class="input" rows="2" required placeholder="Ej: Error de digitación, empleado confirmó llegada tardía..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">Guardar cambio</button>
+                <button type="button" onclick="cerrarEdMan()" class="btn-secondary">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 {% block scripts %}
 <script>
-const colores = {
-    presente: '#f0fdf4',
-    falta:    '#fef2f2',
-    tardanza: '#fefce8',
-    libre:    '#f8fafc',
-    feriado:  '#f5f3ff'
-};
-function colorFila(empId, estado) {
-    const fila = document.getElementById('fila-' + empId);
-    if (fila) fila.style.background = colores[estado] || '';
+function abrirEdManual(id, estado, entrada, salida, obs) {
+    document.getElementById('em-asist-id').value = id;
+    document.getElementById('modal-edman').style.display = 'flex';
 }
-function marcarTodos(estado) {
-    document.querySelectorAll('select[name^="estado_"]').forEach(sel => {
-        sel.value = estado;
-        const empId = sel.name.replace('estado_', '');
-        colorFila(empId, estado);
+function cerrarEdMan() { document.getElementById('modal-edman').style.display='none'; }
+function mostrarCampo(campo) {
+    ['estado','hora-e','hora-s','obs'].forEach(c => {
+        document.getElementById('em-val-'+c).style.display = 'none';
     });
+    const mapa = {'estado':'estado','hora_entrada':'hora-e','hora_salida':'hora-s','observacion':'obs'};
+    const el = document.getElementById('em-val-'+mapa[campo]);
+    if (el) el.style.display = 'block';
+    // Sincronizar nombre del input para que se envíe con el mismo nombre
+    document.querySelectorAll('[name^="valor_nuevo"]').forEach(i => i.name = 'valor_nuevo_hidden');
+    const visible = document.querySelector('#em-val-'+mapa[campo]+' [name^="valor_nuevo"]');
+    if (visible) visible.name = 'valor_nuevo';
 }
 </script>
+{% endblock %}
 {% endblock %}

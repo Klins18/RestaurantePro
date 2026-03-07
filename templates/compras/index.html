@@ -1,96 +1,172 @@
 {% extends 'base.html' %}
-{% block title %}Compras{% endblock %}
+{% block title %}Compras — Facturas y Boletas{% endblock %}
 {% block page_title %}Registro de Compras{% endblock %}
-{% block page_subtitle %}Historial de compras con comprobantes{% endblock %}
-{% block header_actions %}<a href="{{ url_for('compras.nueva') }}" class="btn-primary">➕ Nueva Compra</a>{% endblock %}
+{% block page_subtitle %}Facturas, boletas y tickets de compra{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('compras.nueva') }}" class="btn-primary btn-sm">+ Nueva compra</a>
+{% endblock %}
 
 {% block content %}
-<!-- Filtros -->
-<div class="card" style="margin-bottom:18px;">
-    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
-        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
+
+<!-- FILTROS -->
+<div class="card" style="padding:14px 16px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+        <div>
+            <label class="label">Desde</label>
+            <input type="date" name="desde" value="{{ desde }}" class="input" style="max-width:150px;">
+        </div>
+        <div>
+            <label class="label">Hasta</label>
+            <input type="date" name="hasta" value="{{ hasta }}" class="input" style="max-width:150px;">
+        </div>
+        <div>
+            <label class="label">Tipo</label>
+            <select name="tipo" class="input" style="max-width:140px;">
+                <option value="">Todos</option>
+                <option value="factura" {% if tipo=='factura' %}selected{% endif %}>Factura</option>
+                <option value="boleta"  {% if tipo=='boleta'  %}selected{% endif %}>Boleta</option>
+                <option value="ticket"  {% if tipo=='ticket'  %}selected{% endif %}>Ticket</option>
+                <option value="ninguno" {% if tipo=='ninguno' %}selected{% endif %}>Sin comprobante</option>
+            </select>
+        </div>
         <div>
             <label class="label">Proveedor</label>
-            <select name="proveedor" class="input" style="width:200px;">
-                <option value="">Todos</option>
-                {% for p in proveedores %}<option value="{{ p.id }}" {% if prov_filtro == p.id|string %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
-            </select>
+            <input type="text" name="q" value="{{ q or '' }}" class="input" style="max-width:180px;" placeholder="Nombre proveedor...">
         </div>
         <div>
-            <label class="label">Estado</label>
-            <select name="estado" class="input" style="width:140px;">
+            <label class="label">Con archivo</label>
+            <select name="con_archivo" class="input" style="max-width:130px;">
                 <option value="">Todos</option>
-                <option value="registrado" {% if estado_filtro == 'registrado' %}selected{% endif %}>Registrado</option>
-                <option value="pagado" {% if estado_filtro == 'pagado' %}selected{% endif %}>Pagado</option>
-                <option value="anulado" {% if estado_filtro == 'anulado' %}selected{% endif %}>Anulado</option>
+                <option value="1" {% if con_archivo=='1' %}selected{% endif %}>Con comprobante</option>
+                <option value="0" {% if con_archivo=='0' %}selected{% endif %}>Sin comprobante</option>
             </select>
         </div>
-        <button type="submit" class="btn-primary">🔍 Filtrar</button>
-        <a href="{{ url_for('compras.index') }}" class="btn-secondary">Limpiar</a>
-        <div style="margin-left:auto;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 16px;">
-            <p style="font-size:0.75rem;color:#166534;">Total período</p>
-            <p style="font-size:1.2rem;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(total_periodo) }}</p>
-        </div>
+        <button type="submit" class="btn-primary" style="height:36px;">Filtrar</button>
+        <a href="{{ url_for('compras.index') }}" class="btn-secondary" style="height:36px;line-height:36px;">Limpiar</a>
     </form>
 </div>
 
+<!-- RESUMEN -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+    <div class="card" style="padding:12px 16px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;">Compras</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|length }}</p>
+    </div>
+    <div class="card" style="padding:12px 16px;border-left:4px solid #fbbf24;">
+        <p style="font-size:0.68rem;font-weight:700;color:#fbbf24;text-transform:uppercase;">Total período</p>
+        <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(total_periodo) }}</p>
+    </div>
+    <div class="card" style="padding:12px 16px;border-left:4px solid #10b981;">
+        <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;">Con comprobante</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|selectattr('archivo_comprobante')|list|length }}</p>
+    </div>
+    <div class="card" style="padding:12px 16px;border-left:4px solid #ef4444;">
+        <p style="font-size:0.68rem;font-weight:700;color:#ef4444;text-transform:uppercase;">Sin comprobante</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|rejectattr('archivo_comprobante')|list|length }}</p>
+    </div>
+</div>
+
+<!-- TABLA -->
 <div class="card" style="padding:0;overflow:hidden;">
-    <table style="width:100%;border-collapse:collapse;">
-        <thead>
-            <tr>
-                <th class="th">#</th>
-                <th class="th">Fecha</th>
-                <th class="th">Proveedor</th>
-                <th class="th">Comprobante</th>
-                <th class="th">Tipo Pago</th>
-                <th class="th" style="text-align:right;">Total</th>
-                <th class="th">Estado</th>
-                <th class="th">Adjunto</th>
-                <th class="th">Acciones</th>
-            </tr>
-        </thead>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:800px;">
+        <thead><tr style="background:#f8fafc;">
+            <th class="th">Fecha</th>
+            <th class="th">Proveedor</th>
+            <th class="th">Comprobante</th>
+            <th class="th" style="text-align:right;">Total</th>
+            <th class="th">Pago</th>
+            <th class="th" style="text-align:center;">Estado</th>
+            <th class="th" style="text-align:center;">Comprobante</th>
+            <th class="th" style="text-align:center;">Acciones</th>
+        </tr></thead>
         <tbody>
-            {% for c in compras %}
-            <tr style="{% if c.estado == 'anulado' %}opacity:0.5;{% endif %}">
-                <td class="td" style="color:#94a3b8;font-size:0.8rem;">{{ c.id }}</td>
-                <td class="td" style="white-space:nowrap;font-size:0.875rem;">{{ c.fecha.strftime('%d/%m/%Y') }}</td>
-                <td class="td">
-                    <p style="font-weight:600;font-size:0.875rem;color:#1e293b;">{{ c.proveedor.nombre if c.proveedor else c.proveedor_nombre or '—' }}</p>
-                    <p style="font-size:0.75rem;color:#94a3b8;">{{ c.creado_en.strftime('%H:%M') }} por {{ c.usuario.nombre_completo }}</p>
-                </td>
-                <td class="td" style="font-size:0.82rem;">
-                    {% if c.tipo_comprobante %}
-                    <span style="font-weight:600;color:#1e293b;">{{ c.tipo_comprobante|upper }}</span>
-                    {% if c.serie_comprobante %}{{ c.serie_comprobante }}-{{ c.numero_comprobante }}{% endif %}
-                    {% else %}<span style="color:#94a3b8;">Sin comprobante</span>{% endif %}
-                </td>
-                <td class="td" style="font-size:0.82rem;text-transform:capitalize;">{{ c.tipo_pago or '—' }}</td>
-                <td class="td" style="text-align:right;font-weight:700;color:#1e293b;">S/.{{ '%.2f'|format(c.total) }}</td>
-                <td class="td">
-                    {% if c.estado == 'pagado' %}<span class="badge-pagado">✓ Pagado</span>
-                    {% elif c.estado == 'anulado' %}<span class="badge-anulado">✗ Anulado</span>
-                    {% else %}<span class="badge-pendiente">⏳ Registrado</span>{% endif %}
-                </td>
-                <td class="td">
-                    {% if c.archivo_comprobante %}
-                    <a href="{{ url_for('compras.archivo', filename=c.archivo_comprobante) }}" target="_blank"
-                       style="color:#f59e0b;font-size:0.82rem;font-weight:600;text-decoration:none;">📎 Ver</a>
-                    {% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
-                </td>
-                <td class="td">
-                    <a href="{{ url_for('compras.ver', id=c.id) }}" style="color:#6366f1;font-weight:600;font-size:0.82rem;text-decoration:none;margin-right:10px;">Ver</a>
-                    {% if current_user.es_admin() and c.estado != 'anulado' %}
-                    <form method="POST" action="{{ url_for('compras.anular', id=c.id) }}" style="display:inline;" onsubmit="return confirm('¿Anular esta compra?')">
-                        <button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.82rem;font-weight:600;">Anular</button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="9" style="padding:50px;text-align:center;color:#94a3b8;">No hay compras registradas con los filtros seleccionados.</td></tr>
-            {% endfor %}
+        {% for c in compras %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+            <td class="td" style="font-size:0.82rem;white-space:nowrap;">{{ c.fecha.strftime('%d/%m/%Y') }}</td>
+            <td class="td">
+                <p style="font-weight:600;font-size:0.85rem;color:#1e293b;">{{ c.proveedor.nombre if c.proveedor else c.proveedor_nombre or '—' }}</p>
+            </td>
+            <td class="td" style="font-size:0.8rem;">
+                {% if c.tipo_comprobante and c.tipo_comprobante != 'ninguno' %}
+                <span style="background:#eff6ff;color:#1d4ed8;font-size:0.7rem;font-weight:700;padding:2px 6px;border-radius:5px;text-transform:capitalize;">{{ c.tipo_comprobante }}</span>
+                {% if c.serie_comprobante %}
+                <span style="color:#64748b;font-size:0.78rem;margin-left:4px;">{{ c.serie_comprobante }}-{{ c.numero_comprobante }}</span>
+                {% endif %}
+                {% else %}
+                <span style="color:#94a3b8;font-size:0.78rem;">Sin comp.</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:700;color:#1e293b;font-size:0.9rem;">S/.{{ '%.2f'|format(c.total) }}</td>
+            <td class="td" style="font-size:0.8rem;color:#64748b;text-transform:capitalize;">{{ c.tipo_pago or '—' }}</td>
+            <td class="td" style="text-align:center;">
+                {% if c.estado == 'pagado' %}
+                <span style="background:#dcfce7;color:#166534;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;">Pagado</span>
+                {% elif c.estado == 'anulado' %}
+                <span style="background:#fee2e2;color:#dc2626;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;">Anulado</span>
+                {% else %}
+                <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;">Registrado</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;">
+                {% if c.archivo_comprobante %}
+                {% set ext = c.archivo_comprobante.split('.')[-1].lower() %}
+                <button onclick="verComprobante('{{ url_for('compras.archivo', filename=c.archivo_comprobante) }}', '{{ ext }}')"
+                    style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">
+                    👁 Ver
+                </button>
+                {% else %}
+                <span style="color:#e2e8f0;font-size:0.75rem;">—</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;">
+                <a href="{{ url_for('compras.ver', id=c.id) }}" 
+                   style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;text-decoration:none;">Detalle</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="padding:40px;text-align:center;color:#94a3b8;">
+            <p style="font-size:1.8rem;margin-bottom:8px;">🧾</p>
+            <p>No hay compras con los filtros seleccionados.</p>
+        </td></tr>
+        {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
+
+<!-- Modal vista previa comprobante -->
+<div id="modal-comp" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:16px;padding:16px;width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+            <p style="font-weight:700;color:#1e293b;">📎 Vista previa del comprobante</p>
+            <div style="display:flex;gap:8px;">
+                <a id="btn-descargar" href="#" target="_blank" style="background:#f1f5f9;color:#1e293b;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-size:0.8rem;font-weight:600;text-decoration:none;">⬇ Descargar</a>
+                <button onclick="cerrarModal()" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:6px 12px;font-size:0.8rem;font-weight:700;cursor:pointer;">✕ Cerrar</button>
+            </div>
+        </div>
+        <div id="comp-container" style="flex:1;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;min-height:400px;max-height:70vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;">
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function verComprobante(url, ext) {
+    const cont = document.getElementById('comp-container');
+    document.getElementById('btn-descargar').href = url;
+    cont.innerHTML = '';
+    if (ext === 'pdf') {
+        cont.innerHTML = '<iframe src="'+url+'" style="width:100%;height:100%;min-height:500px;border:none;border-radius:8px;"></iframe>';
+    } else {
+        cont.innerHTML = '<img src="'+url+'" style="max-width:100%;max-height:65vh;object-fit:contain;border-radius:8px;">';
+    }
+    document.getElementById('modal-comp').style.display = 'flex';
+}
+function cerrarModal() { document.getElementById('modal-comp').style.display='none'; }
+document.getElementById('modal-comp').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModal();
+});
+</script>
+{% endblock %}
 {% endblock %}

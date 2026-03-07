@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% block title %}Reservas{% endblock %}
+{% block page_title %}Reservas{% endblock %}
+{% block page_subtitle %}Grupos y eventos programados{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('pasajeros.index') }}" class="btn-secondary btn-sm">🚌 Pasajeros</a>
+<button onclick="abrirFormNuevo()" class="btn-primary btn-sm">+ Nueva reserva</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ALERTAS activas -->
+{% if alertas %}
+<div style="margin-bottom:14px;">
+    {% for r in alertas %}
+    {% set dias_diff = (r.fecha - hoy).days %}
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;margin-bottom:8px;
+        {% if dias_diff == 0 %}background:#fef3c7;border:1px solid #fde68a;
+        {% elif dias_diff == 1 %}background:#fce7f3;border:1px solid #fbcfe8;
+        {% else %}background:#eff6ff;border:1px solid #bfdbfe;{% endif %}">
+        <span style="font-size:1.4rem;">
+            {% if dias_diff == 0 %}🔔{% elif dias_diff == 1 %}⚠️{% else %}📅{% endif %}
+        </span>
+        <div style="flex:1;">
+            <p style="font-weight:700;color:#1e293b;font-size:0.88rem;">
+                {{ r.nombre_grupo or 'Grupo sin nombre' }}
+                {% if r.empresa %}· {{ r.empresa.nombre }}{% endif %}
+            </p>
+            <p style="font-size:0.78rem;color:#64748b;">
+                {% if dias_diff == 0 %}HOY{% elif dias_diff == 1 %}Mañana{% else %}En {{ dias_diff }} días{% endif %}
+                {{ r.fecha.strftime('%d/%m/%Y') }}
+                {% if r.hora %}a las {{ r.hora }}{% endif %}
+                {% if r.num_pax %} · {{ r.num_pax }} pax{% endif %}
+                {% if r.precio_buffet %} · S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
+            </p>
+        </div>
+        <div style="display:flex;gap:6px;">
+            <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ r.observaciones or '' }}', '{{ r.estado }}')"
+                style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;">✏️</button>
+            {% if r.estado == 'pendiente' %}
+            <form method="POST" style="margin:0;">
+                <input type="hidden" name="accion" value="completar">
+                <input type="hidden" name="reserva_id" value="{{ r.id }}">
+                <button type="submit" style="background:#dcfce7;color:#166534;border:none;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;">✓ Atendido</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="res-grid">
+
+<!-- PRÓXIMAS RESERVAS -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">📅 Próximas reservas</p>
+        <span style="font-size:0.78rem;color:#94a3b8;">{{ proximas|length }}</span>
+    </div>
+    {% for r in proximas %}
+    {% set dias_diff = (r.fecha - hoy).days %}
+    <div style="padding:12px 16px;border-bottom:1px solid #f8fafc;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                    <span style="font-weight:700;color:#1e293b;font-size:0.88rem;">{{ r.nombre_grupo or 'Sin nombre' }}</span>
+                    {% if r.estado == 'confirmada' %}
+                    <span style="background:#dcfce7;color:#166534;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:5px;">Confirmada</span>
+                    {% endif %}
+                </div>
+                <p style="font-size:0.78rem;color:#64748b;">
+                    📅 {{ r.fecha.strftime('%d/%m/%Y') }}
+                    {% if r.hora %}🕐 {{ r.hora }}{% endif %}
+                    {% if r.num_pax %}· 👥 {{ r.num_pax }} pax{% endif %}
+                    {% if r.precio_buffet %}· S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
+                </p>
+                {% if r.empresa %}
+                <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa.nombre }}</p>
+                {% endif %}
+                {% if r.observaciones %}
+                <p style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-top:2px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>
+                {% endif %}
+            </div>
+            <div style="flex-shrink:0;text-align:right;">
+                <p style="font-size:0.7rem;font-weight:700;color:{% if dias_diff==0 %}#f59e0b{% elif dias_diff<=2 %}#6366f1{% else %}#94a3b8{% endif %};">
+                    {% if dias_diff==0 %}HOY{% elif dias_diff==1 %}Mañana{% else %}{{ dias_diff }}d{% endif %}
+                </p>
+                <div style="display:flex;gap:4px;margin-top:4px;">
+                    <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ (r.observaciones or '')|replace("'", "\\'") }}', '{{ r.estado }}')"
+                        style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✏️</button>
+                    <form method="POST" style="margin:0;" onsubmit="return confirm('¿Cancelar esta reserva?')">
+                        <input type="hidden" name="accion" value="cancelar">
+                        <input type="hidden" name="reserva_id" value="{{ r.id }}">
+                        <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94a3b8;">
+        <p style="font-size:1.8rem;margin-bottom:8px;">📅</p>
+        <p>No hay reservas próximas.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- HISTORIAL -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">🗓 Historial reciente</p>
+    </div>
+    {% for r in historial %}
+    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div style="min-width:0;">
+            <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">{{ r.nombre_grupo or 'Sin nombre' }}</p>
+            <p style="font-size:0.75rem;color:#94a3b8;">{{ r.fecha.strftime('%d/%m/%Y') }}
+                {% if r.num_pax %} · {{ r.num_pax }} pax{% endif %}
+            </p>
+        </div>
+        <span style="font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;flex-shrink:0;
+            {% if r.estado=='completada' %}background:#dcfce7;color:#166534;
+            {% elif r.estado=='cancelada' %}background:#fee2e2;color:#dc2626;
+            {% else %}background:#f1f5f9;color:#64748b;{% endif %}">
+            {{ r.estado|capitalize }}
+        </span>
+    </div>
+    {% else %}
+    <div style="padding:30px;text-align:center;color:#94a3b8;font-size:0.85rem;">Sin historial</div>
+    {% endfor %}
+</div>
+</div>
+
+<!-- Modal nueva/editar reserva -->
+<div id="modal-reserva" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center;overflow-y:auto;">
+    <div class="card" style="width:460px;max-width:95vw;padding:22px;margin:20px auto;">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;" id="modal-titulo-res">Nueva Reserva</h3>
+        <form method="POST" action="{{ url_for('pasajeros.reservas') }}" style="display:flex;flex-direction:column;gap:11px;">
+            <input type="hidden" name="accion" id="res-accion" value="nuevo">
+            <input type="hidden" name="reserva_id" id="res-id">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label class="label">Fecha *</label><input type="date" name="fecha" id="res-fecha" class="input" required></div>
+                <div><label class="label">Hora</label><input type="time" name="hora" id="res-hora" class="input"></div>
+            </div>
+            <div><label class="label">Nombre del grupo</label>
+                <input type="text" name="nombre_grupo" id="res-nombre" class="input" placeholder="Ej: Familia Rodríguez, Tour Lima..."></div>
+            <div><label class="label">Empresa turística</label>
+                <select name="empresa_id" id="res-empresa" class="input">
+                    <option value="">Sin empresa / Privado</option>
+                    {% for e in empresas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label class="label">N° Pax</label><input type="number" name="num_pax" id="res-pax" class="input" min="0" value="0"></div>
+                <div><label class="label">Precio buffet S/.</label><input type="number" name="precio_buffet" id="res-precio" class="input" min="0" step="0.5" value="0"></div>
+            </div>
+            <div><label class="label">Estado</label>
+                <select name="estado" id="res-estado" class="input">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="cancelada">Cancelada</option>
+                </select>
+            </div>
+            <div><label class="label">Observaciones</label>
+                <textarea name="observaciones" id="res-obs" class="input" rows="2" placeholder="Notas sobre la reserva..."></textarea></div>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">💾 Guardar reserva</button>
+                <button type="button" onclick="cerrarModalRes()" class="btn-secondary">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>@media(max-width:768px){div[id="res-grid"]{grid-template-columns:1fr!important;}}</style>
+{% block scripts %}
+<script>
+function abrirFormNuevo() {
+    document.getElementById('modal-titulo-res').textContent = 'Nueva Reserva';
+    document.getElementById('res-accion').value = 'nuevo';
+    document.getElementById('res-id').value = '';
+    document.getElementById('res-fecha').value = '';
+    document.getElementById('res-hora').value = '';
+    document.getElementById('res-nombre').value = '';
+    document.getElementById('res-empresa').value = '';
+    document.getElementById('res-pax').value = 0;
+    document.getElementById('res-precio').value = 0;
+    document.getElementById('res-estado').value = 'pendiente';
+    document.getElementById('res-obs').value = '';
+    document.getElementById('modal-reserva').style.display = 'flex';
+}
+function abrirEditar(id, fecha, hora, nombre, pax, precio, empresaId, obs, estado) {
+    document.getElementById('modal-titulo-res').textContent = 'Editar Reserva';
+    document.getElementById('res-accion').value = 'editar';
+    document.getElementById('res-id').value = id;
+    document.getElementById('res-fecha').value = fecha;
+    document.getElementById('res-hora').value = hora;
+    document.getElementById('res-nombre').value = nombre;
+    document.getElementById('res-empresa').value = empresaId;
+    document.getElementById('res-pax').value = pax;
+    document.getElementById('res-precio').value = precio;
+    document.getElementById('res-estado').value = estado;
+    document.getElementById('res-obs').value = obs;
+    document.getElementById('modal-reserva').style.display = 'flex';
+}
+function cerrarModalRes() { document.getElementById('modal-reserva').style.display = 'none'; }
+</script>
+{% endblock %}
+{% endblock %}

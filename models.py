@@ -558,3 +558,117 @@ class Notificacion(db.Model):
     creado_en     = db.Column(db.DateTime, default=now_peru)
     creado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     creado_por    = db.relationship('Usuario', foreign_keys=[creado_por_id])
+
+# ══════════════════════════════════════════════
+#  REGISTRO DE PASAJEROS POR DÍA Y EMPRESA
+# ══════════════════════════════════════════════
+class RegistroPasajeros(db.Model):
+    """Registro diario de pax por empresa, independiente de ventas."""
+    __tablename__ = 'registro_pasajeros'
+    id            = db.Column(db.Integer, primary_key=True)
+    fecha         = db.Column(db.Date, nullable=False)
+    empresa_id    = db.Column(db.Integer, db.ForeignKey('empresas_turisticas.id'), nullable=True)
+    empresa       = db.relationship('EmpresaTuristica')
+    nombre_grupo  = db.Column(db.String(120))   # para privados
+    num_pax       = db.Column(db.Integer, default=0)
+    precio_buffet = db.Column(db.Float, default=0)
+    ruta          = db.Column(db.String(120))
+    observaciones = db.Column(db.String(255))
+    creado_en     = db.Column(db.DateTime, default=now_peru)
+    usuario_id    = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario       = db.relationship('Usuario')
+
+
+# ══════════════════════════════════════════════
+#  BALONES DE GAS
+# ══════════════════════════════════════════════
+class BalonGas(db.Model):
+    """Registro de compra y uso de cada balón de gas."""
+    __tablename__ = 'balones_gas'
+    id              = db.Column(db.Integer, primary_key=True)
+    fecha_compra    = db.Column(db.Date, nullable=False)
+    fecha_inicio    = db.Column(db.Date)        # cuando se puso en uso
+    fecha_fin       = db.Column(db.Date)        # cuando se agotó
+    proveedor       = db.Column(db.String(120))
+    precio          = db.Column(db.Float, default=0)
+    peso_kg         = db.Column(db.Float, default=10)
+    estado          = db.Column(db.String(20), default='disponible')  # disponible|en_uso|agotado
+    observaciones   = db.Column(db.String(255))
+    dias_uso        = db.Column(db.Integer)     # calculado al cerrar
+    creado_en       = db.Column(db.DateTime, default=now_peru)
+    usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario         = db.relationship('Usuario')
+
+
+# ══════════════════════════════════════════════
+#  RESERVAS
+# ══════════════════════════════════════════════
+class Reserva(db.Model):
+    __tablename__ = 'reservas'
+    id            = db.Column(db.Integer, primary_key=True)
+    fecha         = db.Column(db.Date, nullable=False)
+    hora          = db.Column(db.String(5))          # "12:30"
+    nombre_grupo  = db.Column(db.String(150))
+    num_pax       = db.Column(db.Integer, default=0)
+    precio_buffet = db.Column(db.Float, default=0)
+    empresa_id    = db.Column(db.Integer, db.ForeignKey('empresas_turisticas.id'), nullable=True)
+    empresa       = db.relationship('EmpresaTuristica')
+    observaciones = db.Column(db.Text)
+    estado        = db.Column(db.String(20), default='pendiente')  # pendiente|confirmada|cancelada|completada
+    alerta_vista  = db.Column(db.Boolean, default=False)
+    creado_en     = db.Column(db.DateTime, default=now_peru)
+    usuario_id    = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario       = db.relationship('Usuario')
+
+# ══════════════════════════════════════════════
+#  AUDITORÍA DE ASISTENCIA (cambios manuales)
+# ══════════════════════════════════════════════
+class AuditoriaAsistencia(db.Model):
+    __tablename__ = 'auditoria_asistencia'
+    id             = db.Column(db.Integer, primary_key=True)
+    asistencia_id  = db.Column(db.Integer, db.ForeignKey('asistencias.id'), nullable=False)
+    asistencia     = db.relationship('Asistencia')
+    empleado_id    = db.Column(db.Integer, db.ForeignKey('empleados.id'), nullable=False)
+    empleado       = db.relationship('Empleado')
+    campo_cambiado = db.Column(db.String(50))
+    valor_anterior = db.Column(db.String(100))
+    valor_nuevo    = db.Column(db.String(100))
+    justificacion  = db.Column(db.String(255), nullable=False)
+    usuario_id     = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario        = db.relationship('Usuario')
+    fecha_hora     = db.Column(db.DateTime, default=now_peru)
+
+
+# ══════════════════════════════════════════════
+#  CIERRE DE ASISTENCIA DIARIA
+# ══════════════════════════════════════════════
+class CierreAsistencia(db.Model):
+    __tablename__ = 'cierres_asistencia'
+    id         = db.Column(db.Integer, primary_key=True)
+    fecha      = db.Column(db.Date, nullable=False, unique=True)
+    cerrado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario    = db.relationship('Usuario')
+    cerrado_en = db.Column(db.DateTime, default=now_peru)
+
+
+# ══════════════════════════════════════════════
+#  HONORARIOS (pagos a empleados)
+# ══════════════════════════════════════════════
+class Honorario(db.Model):
+    __tablename__ = 'honorarios'
+    id              = db.Column(db.Integer, primary_key=True)
+    empleado_id     = db.Column(db.Integer, db.ForeignKey('empleados.id'), nullable=False)
+    empleado        = db.relationship('Empleado')
+    fecha_pago      = db.Column(db.Date, nullable=False)
+    periodo_desde   = db.Column(db.Date)
+    periodo_hasta   = db.Column(db.Date)
+    monto           = db.Column(db.Float, nullable=False)
+    tipo_pago       = db.Column(db.String(30), default='efectivo')  # efectivo|transferencia|yape
+    concepto        = db.Column(db.String(200))
+    numero_recibo   = db.Column(db.String(50))
+    archivo_recibo  = db.Column(db.String(255))   # PDF/imagen del recibo
+    estado          = db.Column(db.String(20), default='pagado')  # pagado|pendiente|anulado
+    observaciones   = db.Column(db.Text)
+    usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario         = db.relationship('Usuario')
+    creado_en       = db.Column(db.DateTime, default=now_peru)

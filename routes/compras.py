@@ -2,7 +2,7 @@ import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import login_required, current_user
 from models import db, Compra, ItemCompra, Proveedor, Producto, KardexAlmacen, registrar_auditoria
-from datetime import datetime, date
+from datetime import datetime, date, date
 import pytz
 from werkzeug.utils import secure_filename
 
@@ -34,30 +34,37 @@ def guardar_archivo(file):
 @compras_bp.route('/')
 @login_required
 def index():
-    desde = request.args.get('desde', '')
-    hasta = request.args.get('hasta', '')
-    proveedor_id = request.args.get('proveedor', '')
-    estado = request.args.get('estado', '')
+    hoy = date.today()
+    desde_str = request.args.get('desde', date(hoy.year, hoy.month, 1).strftime('%Y-%m-%d'))
+    hasta_str = request.args.get('hasta', hoy.strftime('%Y-%m-%d'))
+    tipo      = request.args.get('tipo', '')
+    q_str     = request.args.get('q', '').strip()
+    con_arch  = request.args.get('con_archivo', '')
 
     q = Compra.query.order_by(Compra.fecha.desc(), Compra.creado_en.desc())
-    if desde:
-        try: q = q.filter(Compra.fecha >= datetime.strptime(desde, '%Y-%m-%d').date())
-        except: pass
-    if hasta:
-        try: q = q.filter(Compra.fecha <= datetime.strptime(hasta, '%Y-%m-%d').date())
-        except: pass
-    if proveedor_id:
-        q = q.filter_by(proveedor_id=int(proveedor_id))
-    if estado:
-        q = q.filter_by(estado=estado)
+    try: q = q.filter(Compra.fecha >= datetime.strptime(desde_str, '%Y-%m-%d').date())
+    except: pass
+    try: q = q.filter(Compra.fecha <= datetime.strptime(hasta_str, '%Y-%m-%d').date())
+    except: pass
+    if tipo:
+        q = q.filter(Compra.tipo_comprobante == tipo)
+    if q_str:
+        q = q.filter(
+            (Compra.proveedor_nombre.ilike(f'%{q_str}%')) |
+            (Compra.serie_comprobante.ilike(f'%{q_str}%')) |
+            (Compra.numero_comprobante.ilike(f'%{q_str}%'))
+        )
+    if con_arch == '1':
+        q = q.filter(Compra.archivo_comprobante.isnot(None), Compra.archivo_comprobante != '')
+    elif con_arch == '0':
+        q = q.filter((Compra.archivo_comprobante == None) | (Compra.archivo_comprobante == ''))
 
     compras = q.all()
-    proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
     total_periodo = sum(c.total for c in compras)
 
     return render_template('compras/index.html', compras=compras,
-        proveedores=proveedores, total_periodo=total_periodo,
-        desde=desde, hasta=hasta, prov_filtro=proveedor_id, estado_filtro=estado)
+        total_periodo=total_periodo, desde=desde_str, hasta=hasta_str,
+        tipo=tipo, q=q_str, con_archivo=con_arch)
 
 
 # ──────────────────────────────────────

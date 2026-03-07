@@ -1,162 +1,135 @@
 {% extends 'base.html' %}
 {% block title %}{{ empleado.nombre_completo }}{% endblock %}
 {% block page_title %}{{ empleado.nombre_completo }}{% endblock %}
-{% block page_subtitle %}{{ empleado.cargo or 'Sin cargo asignado' }}{% endblock %}
+{% block page_subtitle %}{{ empleado.cargo or 'Sin cargo' }} · {{ empleado.tipo_contrato|capitalize }}{% endblock %}
 {% block header_actions %}
-<a href="{{ url_for('empleados.index') }}" class="btn-secondary btn-sm">← Volver</a>
-<a href="{{ url_for('empleados.editar', id=empleado.id) }}" class="btn-primary btn-sm">✏️ Editar</a>
+<a href="{{ url_for('empleados.editar', id=empleado.id) }}" class="btn-secondary btn-sm">✏️ Editar</a>
+<a href="{{ url_for('empleados.index') }}" class="btn-secondary btn-sm">← Personal</a>
 {% endblock %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;" class="ver-emp-grid">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="ver-grid">
 
-    <!-- Ficha lateral -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
-        <!-- Avatar + datos básicos -->
-        <div class="card" style="text-align:center;padding:24px 16px;">
-            <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:2rem;margin:0 auto 12px;">
-                {{ empleado.nombres[0].upper() }}
-            </div>
-            <p style="font-weight:800;color:#1e293b;font-size:1.1rem;">{{ empleado.nombre_completo }}</p>
-            <p style="color:#64748b;font-size:0.875rem;margin-top:4px;">{{ empleado.cargo or '—' }}</p>
-            {% if empleado.cumpleanos_hoy %}
-            <div style="background:#fef3c7;border-radius:10px;padding:8px;margin-top:10px;">
-                <p style="font-size:0.875rem;color:#92400e;font-weight:700;">🎂 ¡Hoy es su cumpleaños!</p>
-            </div>
-            {% endif %}
-            {% if empleado.activo %}
-            <span style="display:inline-block;margin-top:10px;background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:9999px;">Activo</span>
-            {% else %}
-            <span style="display:inline-block;margin-top:10px;background:#f1f5f9;color:#94a3b8;font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:9999px;">Inactivo</span>
-            {% endif %}
+<!-- Info personal -->
+<div>
+    <div class="card" style="padding:18px;margin-bottom:12px;">
+        <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:12px;">Información personal</p>
+        {% set campos = [
+            ('DNI', empleado.dni),
+            ('Teléfono', empleado.telefono),
+            ('Dirección', empleado.direccion),
+            ('Tipo de sangre', empleado.tipo_sangre),
+            ('Fecha de nacimiento', empleado.fecha_nacimiento.strftime('%d/%m/%Y') if empleado.fecha_nacimiento else None),
+            ('Fecha de ingreso', empleado.fecha_ingreso.strftime('%d/%m/%Y') if empleado.fecha_ingreso else None),
+            ('Sueldo base', 'S/. ' ~ '%.2f'|format(empleado.sueldo_base) if empleado.sueldo_base else None),
+        ] %}
+        {% for label, valor in campos %}
+        {% if valor %}
+        <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #f8fafc;">
+            <span style="font-size:0.8rem;color:#94a3b8;min-width:130px;flex-shrink:0;">{{ label }}</span>
+            <span style="font-size:0.85rem;color:#1e293b;font-weight:500;">{{ valor }}</span>
         </div>
-
-        <!-- Datos personales -->
-        <div class="card" style="padding:16px;">
-            <p style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">Datos Personales</p>
-            <div style="display:flex;flex-direction:column;gap:9px;font-size:0.875rem;">
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">DNI</span><span style="font-weight:600;font-family:monospace;">{{ empleado.dni or '—' }}</span></div>
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Teléfono</span><span style="font-weight:600;">{{ empleado.telefono or '—' }}</span></div>
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Nacimiento 🎂</span>
-                    <span style="font-weight:600;">
-                        {{ empleado.fecha_nacimiento.strftime('%d/%m/%Y') if empleado.fecha_nacimiento else '—' }}
-                        {% if empleado.edad %} <span style="color:#64748b;font-weight:400;">({{ empleado.edad }} años)</span>{% endif %}
-                    </span>
-                </div>
-                {% if empleado.dias_para_cumpleanos is not none and empleado.dias_para_cumpleanos > 0 %}
-                <div style="background:#fef9c3;border-radius:8px;padding:6px 10px;">
-                    <span style="font-size:0.78rem;color:#92400e;">🎂 En {{ empleado.dias_para_cumpleanos }} día{{ 's' if empleado.dias_para_cumpleanos != 1 }}</span>
-                </div>
-                {% endif %}
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Tipo de sangre</span><span style="font-weight:700;color:#ef4444;">{{ empleado.tipo_sangre or '—' }}</span></div>
-                {% if empleado.direccion %}
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Dirección</span><span>{{ empleado.direccion }}</span></div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Datos laborales -->
-        <div class="card" style="padding:16px;">
-            <p style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">Datos Laborales</p>
-            <div style="display:flex;flex-direction:column;gap:9px;font-size:0.875rem;">
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Ingreso</span><span style="font-weight:600;">{{ empleado.fecha_ingreso.strftime('%d/%m/%Y') if empleado.fecha_ingreso else '—' }}</span></div>
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Contrato</span>
-                    {% if empleado.tipo_contrato == 'fijo' %}<span style="background:#dbeafe;color:#1e40af;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Fijo mensual</span>
-                    {% else %}<span style="background:#fef9c3;color:#854d0e;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Por día</span>{% endif %}
-                </div>
-                <div><span style="color:#94a3b8;font-size:0.78rem;display:block;">Sueldo base</span>
-                    <span style="font-weight:700;font-size:1.1rem;color:#1e293b;">{% if empleado.sueldo_base %}S/.{{ '%.2f'|format(empleado.sueldo_base) }}{% else %}—{% endif %}</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Acciones rápidas -->
-        <div style="display:flex;flex-direction:column;gap:8px;">
-            <a href="{{ url_for('empleados.asistencia', fecha=hoy.strftime('%Y-%m-%d')) }}" class="btn-primary" style="text-align:center;">📋 Tomar asistencia hoy</a>
-            <a href="{{ url_for('empleados.funciones', fecha=hoy.strftime('%Y-%m-%d')) }}" class="btn-secondary" style="text-align:center;">✅ Registrar funciones</a>
-        </div>
+        {% endif %}
+        {% endfor %}
     </div>
 
-    <!-- Panel derecho -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
-
-        <!-- Resumen del mes -->
-        <div class="grid-3">
-            <div class="card" style="padding:16px;border-left:4px solid #10b981;">
-                <p style="font-size:0.75rem;color:#64748b;">Días trabajados</p>
-                <p style="font-size:2rem;font-weight:800;color:#10b981;">{{ dias_trabajados }}</p>
-                <p style="font-size:0.75rem;color:#94a3b8;">este mes</p>
+    <!-- CUENTA DE USUARIO -->
+    <div class="card" style="padding:18px;margin-bottom:12px;">
+        <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:12px;">🔐 Cuenta de acceso</p>
+        {% if empleado.usuario %}
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f0fdf4;border-radius:8px;margin-bottom:12px;">
+            <span style="font-size:1.2rem;">👤</span>
+            <div>
+                <p style="font-weight:700;color:#166534;">{{ empleado.usuario.username }}</p>
+                <p style="font-size:0.78rem;color:#64748b;">Rol: {{ empleado.usuario.rol }} · {% if empleado.usuario.activo %}Activo{% else %}Inactivo{% endif %}</p>
             </div>
-            <div class="card" style="padding:16px;border-left:4px solid #ef4444;">
-                <p style="font-size:0.75rem;color:#64748b;">Faltas</p>
-                <p style="font-size:2rem;font-weight:800;color:#ef4444;">{{ dias_falta }}</p>
-                <p style="font-size:0.75rem;color:#94a3b8;">este mes</p>
-            </div>
-            <div class="card" style="padding:16px;border-left:4px solid #64748b;">
-                <p style="font-size:0.75rem;color:#64748b;">Días libres</p>
-                <p style="font-size:2rem;font-weight:800;color:#64748b;">{{ dias_libre }}</p>
-                <p style="font-size:0.75rem;color:#94a3b8;">este mes</p>
-            </div>
+            <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="margin-left:auto;" onsubmit="return confirm('¿Desvincular cuenta?')">
+                <input type="hidden" name="accion" value="desvincular">
+                <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">Desvincular</button>
+            </form>
         </div>
-
-        <!-- Funciones de hoy -->
-        <div class="card" style="padding:0;overflow:hidden;">
-            <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
-                <p style="font-weight:700;color:#1e293b;">✅ Funciones de hoy ({{ hoy.strftime('%d/%m/%Y') }})</p>
-                <a href="{{ url_for('empleados.funciones') }}" style="font-size:0.8rem;color:#f59e0b;font-weight:600;text-decoration:none;">+ Agregar</a>
-            </div>
-            {% if funciones_hoy %}
-            {% for f in funciones_hoy %}
-            <div style="padding:10px 18px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;">
-                <span style="font-size:1rem;">{% if f.completado %}✅{% else %}⬜{% endif %}</span>
-                <div style="flex:1;">
-                    <p style="font-size:0.875rem;color:#1e293b;{% if f.completado %}text-decoration:line-through;color:#94a3b8;{% endif %}font-weight:500;">{{ f.funcion }}</p>
-                    {% if f.area %}<p style="font-size:0.72rem;color:#94a3b8;">{{ f.area }}</p>{% endif %}
-                </div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <p style="padding:24px;text-align:center;color:#94a3b8;font-size:0.875rem;">Sin funciones registradas para hoy.</p>
-            {% endif %}
-        </div>
-
-        <!-- Asistencias del mes -->
-        <div class="card" style="padding:0;overflow:hidden;">
-            <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;">
-                <p style="font-weight:700;color:#1e293b;">📋 Asistencia — {{ hoy.strftime('%B %Y') }}</p>
-            </div>
-            <div class="table-wrap">
-            <table style="width:100%;border-collapse:collapse;min-width:380px;">
-                <thead><tr>
-                    <th class="th">Fecha</th>
-                    <th class="th" style="text-align:center;">Estado</th>
-                    <th class="th" style="text-align:center;">Entrada</th>
-                    <th class="th" style="text-align:center;">Salida</th>
-                    <th class="th">Observación</th>
-                </tr></thead>
-                <tbody>
-                {% for a in asistencias_mes %}
-                <tr style="{% if a.estado == 'falta' %}background:#fef2f2;{% elif a.estado == 'presente' %}background:#f0fdf4;{% endif %}">
-                    <td class="td" style="white-space:nowrap;font-size:0.82rem;color:#64748b;">{{ a.fecha.strftime('%d/%m/%Y') }}</td>
-                    <td class="td" style="text-align:center;">
-                        {% if a.estado == 'presente' %}<span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:9999px;">✓ Presente</span>
-                        {% elif a.estado == 'falta' %}<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:9999px;">✗ Falta</span>
-                        {% elif a.estado == 'tardanza' %}<span style="background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:9999px;">⏰ Tardanza</span>
-                        {% elif a.estado == 'libre' %}<span style="background:#f1f5f9;color:#64748b;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:9999px;">🏖 Libre</span>
-                        {% elif a.estado == 'feriado' %}<span style="background:#ede9fe;color:#5b21b6;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:9999px;">🎉 Feriado</span>{% endif %}
-                    </td>
-                    <td class="td" style="text-align:center;font-size:0.82rem;color:#64748b;">{{ a.hora_entrada or '—' }}</td>
-                    <td class="td" style="text-align:center;font-size:0.82rem;color:#64748b;">{{ a.hora_salida or '—' }}</td>
-                    <td class="td" style="font-size:0.78rem;color:#94a3b8;">{{ a.observacion or '' }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" style="padding:24px;text-align:center;color:#94a3b8;">Sin asistencias registradas este mes.</td></tr>
+        <!-- Cambiar contraseña (admin) -->
+        {% if current_user.rol in ['admin','supervisor'] %}
+        <p style="font-size:0.78rem;font-weight:600;color:#64748b;margin-bottom:6px;">Cambiar contraseña del empleado:</p>
+        <form method="POST" action="{{ url_for('empleados.cambiar_password', id=empleado.id) }}" style="display:flex;gap:8px;">
+            <input type="password" name="nueva_password" class="input" placeholder="Nueva contraseña..." minlength="3" style="flex:1;">
+            <button type="submit" style="background:#1e293b;color:white;border:none;border-radius:9px;padding:8px 14px;font-size:0.8rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔑 Cambiar</button>
+        </form>
+        {% endif %}
+        {% else %}
+        <p style="font-size:0.82rem;color:#94a3b8;margin-bottom:12px;">Sin cuenta vinculada.</p>
+        <!-- Vincular existente -->
+        <p style="font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:6px;">Vincular cuenta existente:</p>
+        <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="display:flex;gap:8px;margin-bottom:14px;">
+            <input type="hidden" name="accion" value="vincular">
+            <select name="usuario_id" class="input" style="flex:1;">
+                <option value="">— Selecciona usuario —</option>
+                {% for u in usuarios_disponibles %}
+                <option value="{{ u.id }}">{{ u.username }} ({{ u.rol }})</option>
                 {% endfor %}
-                </tbody>
-            </table>
-            </div>
-        </div>
+            </select>
+            <button type="submit" class="btn-primary" style="white-space:nowrap;">Vincular</button>
+        </form>
+        <!-- Crear nueva cuenta -->
+        <p style="font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:6px;">O crear cuenta nueva:</p>
+        <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="display:flex;flex-direction:column;gap:8px;">
+            <input type="hidden" name="accion" value="crear">
+            <input type="text" name="username" class="input" placeholder="Nombre de usuario..." required>
+            <input type="password" name="password" class="input" placeholder="Contraseña..." required minlength="3">
+            <select name="rol" class="input">
+                <option value="empleado">Empleado</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="admin">Administrador</option>
+            </select>
+            <button type="submit" class="btn-primary" style="text-align:center;">Crear y vincular</button>
+        </form>
+        {% endif %}
     </div>
 </div>
-<style>@media(max-width:768px).ver-emp-grid{grid-template-columns:1fr!important;}}</style>
+
+<!-- Honorarios recientes -->
+<div>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+            <p style="font-weight:700;font-size:0.9rem;">💼 Honorarios recientes</p>
+            <a href="{{ url_for('empleados.honorarios', empleado_id=empleado.id) }}" style="font-size:0.78rem;color:#6366f1;">Ver todos →</a>
+        </div>
+        {% if honorarios %}
+        {% for h in honorarios %}
+        <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">S/.{{ '%.2f'|format(h.monto) }}</p>
+                <p style="font-size:0.75rem;color:#94a3b8;">{{ h.fecha_pago.strftime('%d/%m/%Y') }}
+                    {% if h.concepto %}· {{ h.concepto[:30] }}{% endif %}
+                </p>
+            </div>
+            <span style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#166534;text-transform:capitalize;">{{ h.tipo_pago }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:24px;text-align:center;color:#94a3b8;font-size:0.82rem;">Sin pagos registrados.</div>
+        {% endif %}
+    </div>
+
+    <!-- Asistencia mes actual -->
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+            <p style="font-weight:700;font-size:0.9rem;">📋 Asistencia este mes</p>
+        </div>
+        {% if asistencias_mes %}
+        {% for a in asistencias_mes[:10] %}
+        <div style="padding:8px 16px;border-bottom:1px solid #f8fafc;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:0.82rem;color:#64748b;">{{ a.fecha.strftime('%d/%m/%Y') }}</span>
+            {% set colores = {'presente':'#dcfce7,#166534','falta':'#fee2e2,#dc2626','tardanza':'#fef3c7,#92400e','libre':'#eff6ff,#1d4ed8','feriado':'#f5f3ff,#6d28d9'} %}
+            {% set col = colores.get(a.estado, '#f1f5f9,#64748b').split(',') %}
+            <span style="background:{{ col[0] }};color:{{ col[1] }};font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:capitalize;">{{ a.estado }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:24px;text-align:center;color:#94a3b8;font-size:0.82rem;">Sin asistencias este mes.</div>
+        {% endif %}
+    </div>
+</div>
+</div>
+<style>@media(max-width:768px){#ver-grid{grid-template-columns:1fr!important;}}</style>
 {% endblock %}

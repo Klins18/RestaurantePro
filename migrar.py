@@ -222,36 +222,92 @@ else:
     print("   Ahora puedes reiniciar el servidor Flask.")
 print("═"*50)
 
-# ── Bienes y Equipos (agregado en Fix 12) ──
-try:
-    cursor.execute("""CREATE TABLE IF NOT EXISTS categorias_bien (
+# ── Registro de Pasajeros, Balones de Gas y Reservas ──
+for sql, nombre in [
+    ("""CREATE TABLE IF NOT EXISTS registro_pasajeros (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre VARCHAR(100) NOT NULL,
-        area VARCHAR(50),
-        descripcion VARCHAR(255),
-        activo BOOLEAN DEFAULT 1)""")
-    conn.commit()
-    migraciones.append("+ tabla categorias_bien")
-except Exception as e:
-    if "already exists" not in str(e).lower(): errores.append(f"categorias_bien: {e}")
-
-try:
-    cursor.execute("""CREATE TABLE IF NOT EXISTS bienes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        categoria_id INTEGER NOT NULL,
-        nombre VARCHAR(200) NOT NULL,
-        area VARCHAR(50),
-        estado_bueno INTEGER DEFAULT 0,
-        estado_malo INTEGER DEFAULT 0,
-        total INTEGER DEFAULT 0,
+        fecha DATE NOT NULL,
+        empresa_id INTEGER,
+        nombre_grupo VARCHAR(120),
+        num_pax INTEGER DEFAULT 0,
+        precio_buffet FLOAT DEFAULT 0,
+        ruta VARCHAR(120),
         observaciones VARCHAR(255),
-        activo BOOLEAN DEFAULT 1,
-        fecha_registro DATE,
         creado_en DATETIME,
-        actualizado_en DATETIME,
         usuario_id INTEGER,
-        FOREIGN KEY(categoria_id) REFERENCES categorias_bien(id))""")
-    conn.commit()
-    migraciones.append("+ tabla bienes")
-except Exception as e:
-    if "already exists" not in str(e).lower(): errores.append(f"bienes: {e}")
+        FOREIGN KEY(empresa_id) REFERENCES empresas_turisticas(id))""", "registro_pasajeros"),
+    ("""CREATE TABLE IF NOT EXISTS balones_gas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha_compra DATE NOT NULL,
+        fecha_inicio DATE,
+        fecha_fin DATE,
+        proveedor VARCHAR(120),
+        precio FLOAT DEFAULT 0,
+        peso_kg FLOAT DEFAULT 10,
+        estado VARCHAR(20) DEFAULT 'disponible',
+        observaciones VARCHAR(255),
+        dias_uso INTEGER,
+        creado_en DATETIME,
+        usuario_id INTEGER)""", "balones_gas"),
+    ("""CREATE TABLE IF NOT EXISTS reservas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha DATE NOT NULL,
+        hora VARCHAR(5),
+        nombre_grupo VARCHAR(150),
+        num_pax INTEGER DEFAULT 0,
+        precio_buffet FLOAT DEFAULT 0,
+        empresa_id INTEGER,
+        observaciones TEXT,
+        estado VARCHAR(20) DEFAULT 'pendiente',
+        alerta_vista BOOLEAN DEFAULT 0,
+        creado_en DATETIME,
+        usuario_id INTEGER,
+        FOREIGN KEY(empresa_id) REFERENCES empresas_turisticas(id))""", "reservas"),
+]:
+    try:
+        cursor.execute(sql); conn.commit()
+        migraciones.append(f"+ tabla {nombre}")
+    except Exception as e:
+        if "already exists" not in str(e).lower(): errores.append(f"{nombre}: {e}")
+
+# ── Auditoría Asistencia, Cierre Asistencia y Honorarios ──
+for sql, nombre in [
+    ("""CREATE TABLE IF NOT EXISTS auditoria_asistencia (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asistencia_id INTEGER NOT NULL,
+        empleado_id INTEGER NOT NULL,
+        campo_cambiado VARCHAR(50),
+        valor_anterior VARCHAR(100),
+        valor_nuevo VARCHAR(100),
+        justificacion VARCHAR(255) NOT NULL,
+        usuario_id INTEGER,
+        fecha_hora DATETIME,
+        FOREIGN KEY(asistencia_id) REFERENCES asistencias(id),
+        FOREIGN KEY(empleado_id) REFERENCES empleados(id))""", "auditoria_asistencia"),
+    ("""CREATE TABLE IF NOT EXISTS cierres_asistencia (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha DATE NOT NULL UNIQUE,
+        cerrado_por INTEGER,
+        cerrado_en DATETIME)""", "cierres_asistencia"),
+    ("""CREATE TABLE IF NOT EXISTS honorarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empleado_id INTEGER NOT NULL,
+        fecha_pago DATE NOT NULL,
+        periodo_desde DATE,
+        periodo_hasta DATE,
+        monto FLOAT NOT NULL,
+        tipo_pago VARCHAR(30) DEFAULT 'efectivo',
+        concepto VARCHAR(200),
+        numero_recibo VARCHAR(50),
+        archivo_recibo VARCHAR(255),
+        estado VARCHAR(20) DEFAULT 'pagado',
+        observaciones TEXT,
+        usuario_id INTEGER,
+        creado_en DATETIME,
+        FOREIGN KEY(empleado_id) REFERENCES empleados(id))""", "honorarios"),
+]:
+    try:
+        cursor.execute(sql); conn.commit()
+        migraciones.append(f"+ tabla {nombre}")
+    except Exception as e:
+        if "already exists" not in str(e).lower(): errores.append(f"{nombre}: {e}")

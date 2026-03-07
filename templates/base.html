@@ -50,6 +50,19 @@
         .sidebar-link.active { background: #f59e0b; color: white; font-weight: 700; }
         .sidebar-link.sidebar-sub { padding-left: 28px; font-size: 0.82rem; opacity: 0.85; }
         .sidebar-link.sidebar-sub:hover { opacity: 1; }
+        .nav-group-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 7px 10px; border-radius: 8px; cursor: pointer;
+            color: #94a3b8; font-size: 0.68rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.09em;
+            user-select: none; transition: color 0.15s;
+            margin-top: 6px;
+        }
+        .nav-group-header:hover { color: #cbd5e1; }
+        .nav-group-header .chevron { transition: transform 0.2s; font-size: 0.6rem; }
+        .nav-group-header.open .chevron { transform: rotate(90deg); }
+        .nav-group-body { overflow: hidden; transition: max-height 0.25s ease; max-height: 0; }
+        .nav-group-body.open { max-height: 400px; }
         .sidebar-section {
             font-size: 0.62rem; font-weight: 700; color: #334155;
             text-transform: uppercase; letter-spacing: 0.1em; padding: 14px 14px 4px;
@@ -137,54 +150,73 @@
 
     <!-- Nav -->
     <nav style="flex:1; padding:6px 8px; overflow-y:auto;">
-        <p class="sidebar-section">Principal</p>
-        <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
+        {# Detectar sección activa para acordeones #}
+        {% set bp = request.blueprint or '' %}
+        {% set ep = request.endpoint or '' %}
+        {% set grp_inv = bp in ['almacen','bienes','kardex'] %}
+        {% set grp_ventas = bp == 'ventas' %}
+        {% set grp_abast = bp in ['pedidos','compras'] %}
+        {% set grp_emp = bp == 'empleados' %}
 
-        <p class="sidebar-section">Inventario</p>
-        <!-- Alimentos -->
-        <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if request.blueprint == 'almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🥦</span> Alimentos</a>
-        <a href="{{ url_for('almacen.ingreso') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.ingreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬇️</span> Ingreso</a>
-        <a href="{{ url_for('almacen.egreso') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.egreso' %}active{% endif %}" onclick="closeSidebar()"><span>⬆️</span> Egreso</a>
-        <a href="{{ url_for('almacen.movimientos') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'almacen.movimientos' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Movimientos</a>
-        <a href="{{ url_for('kardex.almacen') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'kardex.almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🗃️</span> Kardex</a>
-        <!-- Bienes -->
-        <a href="{{ url_for('bienes.index') }}" class="sidebar-link {% if request.blueprint == 'bienes' %}active{% endif %}" onclick="closeSidebar()"><span>🪑</span> Bienes y Equipos</a>
-        <a href="{{ url_for('bienes.nuevo') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'bienes.nuevo' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Agregar bien</a>
-        <a href="{{ url_for('bienes.categorias') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'bienes.categorias' %}active{% endif %}" onclick="closeSidebar()"><span>📁</span> Categorías</a>
-        <!-- Kardex comedor aparte -->
-        <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link sidebar-sub {% if request.endpoint == 'kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex Comedor</a>
+        <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if ep == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
 
-        <p class="sidebar-section">Compras</p>
-        <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if request.endpoint and 'compras' in request.endpoint and request.endpoint != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro Compras</a>
-        <a href="{{ url_for('compras.nueva') }}" class="sidebar-link {% if request.endpoint == 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Nueva Compra</a>
+        <!-- INVENTARIO -->
+        <div class="nav-group-header {% if grp_inv %}open{% endif %}" onclick="toggleGroup(this)">
+            <span>📦 Inventario</span><span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-body {% if grp_inv %}open{% endif %}">
+            <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if bp=='almacen' and ep not in ['almacen.ingreso','almacen.egreso','almacen.movimientos'] %}active{% endif %}" onclick="closeSidebar()"><span>🥦</span> Alimentos</a>
+            <a href="{{ url_for('kardex.almacen') }}" class="sidebar-link sidebar-sub {% if ep=='kardex.almacen' %}active{% endif %}" onclick="closeSidebar()"><span>🗃️</span> Kardex alimentos</a>
+            <a href="{{ url_for('bienes.index') }}" class="sidebar-link {% if bp=='bienes' %}active{% endif %}" onclick="closeSidebar()"><span>🪑</span> Bienes y equipos</a>
+            <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link sidebar-sub {% if ep=='kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex comedor</a>
+        </div>
 
-        <p class="sidebar-section">Pedidos</p>
-        <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if request.endpoint and 'pedidos' in request.endpoint and request.endpoint != 'pedidos.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛒</span> Listas de Pedido</a>
-        <a href="{{ url_for('pedidos.nueva') }}" class="sidebar-link {% if request.endpoint == 'pedidos.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>📝</span> Nueva Lista</a>
+        <!-- VENTAS -->
+        {% set grp_ventas2 = grp_ventas or bp == 'pasajeros' %}
+        <div class="nav-group-header {% if grp_ventas2 %}open{% endif %}" onclick="toggleGroup(this)">
+            <span>💰 Ventas</span><span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-body {% if grp_ventas2 %}open{% endif %}">
+            <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if ep=='ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Resumen ventas</a>
+            <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if ep=='ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Registrar venta</a>
+            <a href="{{ url_for('pasajeros.index') }}" class="sidebar-link {% if bp=='pasajeros' and ep=='pasajeros.index' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del día</a>
+            <a href="{{ url_for('pasajeros.reservas') }}" class="sidebar-link {% if ep=='pasajeros.reservas' %}active{% endif %}" onclick="closeSidebar()"><span>📅</span> Reservas</a>
+            <a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if ep=='ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de caja</a>
+        </div>
 
-        <p class="sidebar-section">Empleados</p>
-        <a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if request.endpoint and 'empleados' in request.endpoint and request.endpoint not in ['empleados.nuevo','empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Personal</a>
-        <a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if request.endpoint == 'empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
-        <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if request.endpoint == 'empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte Mensual</a>
-        <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if request.endpoint == 'empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
+        <!-- ABASTECIMIENTO (Pedidos + Compras unificados) -->
+        <div class="nav-group-header {% if grp_abast %}open{% endif %}" onclick="toggleGroup(this)">
+            <span>🛒 Abastecimiento</span><span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-body {% if grp_abast %}open{% endif %}">
+            <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if bp=='pedidos' and ep not in ['pedidos.nueva','pedidos.notificaciones'] %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Listas de pedido</a>
+            <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if bp=='compras' and ep != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro compras</a>
+            <a href="{{ url_for('pasajeros.gas') }}" class="sidebar-link {% if ep=='pasajeros.gas' %}active{% endif %}" onclick="closeSidebar()"><span>🔴</span> Balones de gas</a>
+        </div>
 
-        <p class="sidebar-section">Ventas</p>
-        <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if request.endpoint == 'ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Dashboard Ventas</a>
-        <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if request.endpoint == 'ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>💰</span> Registrar Venta</a>
-        <a href="{{ url_for('ventas.pasajeros') }}" class="sidebar-link {% if request.endpoint == 'ventas.pasajeros' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del Día</a>
-        <a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if request.endpoint == 'ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de Caja</a>
+        <!-- EMPLEADOS -->
+        <div class="nav-group-header {% if grp_emp %}open{% endif %}" onclick="toggleGroup(this)">
+            <span>👥 Empleados</span><span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-body {% if grp_emp %}open{% endif %}">
+            <a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if ep and 'empleados' in ep and ep not in ['empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👤</span> Personal</a>
+            <a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if ep=='empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
+            <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if ep=='empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
+            <a href="{{ url_for('empleados.honorarios') }}" class="sidebar-link {% if ep=='empleados.honorarios' %}active{% endif %}" onclick="closeSidebar()"><span>💼</span> Honorarios</a>
+            <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if ep=='empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte mensual</a>
+        </div>
 
-        <p class="sidebar-section">Notificaciones</p>
-        <a href="{{ url_for('pedidos.notificaciones') }}" class="sidebar-link {% if request.endpoint == 'pedidos.notificaciones' %}active{% endif %}" onclick="closeSidebar()" style="position:relative;">
-            <span>🔔</span> Mis notificaciones
-            {%- set n_count = notif_no_leidas|default(0) -%}
-            {%- if n_count > 0 %}<span style="background:#ef4444;color:white;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:9999px;position:absolute;right:10px;top:50%;transform:translateY(-50%);">{{ n_count }}</span>{% endif %}
-        </a>
-
-        {% if current_user.es_admin() %}
-        <p class="sidebar-section">Administración</p>
-        <a href="{{ url_for('admin.index') }}" class="sidebar-link {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}" onclick="closeSidebar()"><span>⚙️</span> Panel Admin</a>
-        {% endif %}
+        <!-- Notificaciones + Admin -->
+        <div style="margin-top:4px;">
+            <a href="{{ url_for('pedidos.notificaciones') }}" class="sidebar-link {% if ep=='pedidos.notificaciones' %}active{% endif %}" onclick="closeSidebar()" style="position:relative;">
+                <span>🔔</span> Notificaciones
+                {%- set n_count = notif_no_leidas|default(0) -%}
+                {%- if n_count > 0 %}<span style="background:#ef4444;color:white;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:9999px;position:absolute;right:10px;top:50%;transform:translateY(-50%);">{{ n_count }}</span>{% endif %}
+            </a>
+            {% if current_user.es_admin() %}
+            <a href="{{ url_for('admin.index') }}" class="sidebar-link {% if 'admin' in ep %}active{% endif %}" onclick="closeSidebar()"><span>⚙️</span> Administración</a>
+            {% endif %}
+        </div>
     </nav>
 
     <!-- User -->
@@ -196,6 +228,7 @@
                 <p style="color:#475569;font-size:0.7rem;margin:0;text-transform:capitalize;">{{ current_user.rol }}</p>
             </div>
         </div>
+        <a href="{{ url_for('empleados.mi_password') }}" style="font-size:0.78rem;color:#94a3b8;text-decoration:none;">🔑 Cambiar contraseña</a>
         <a href="{{ url_for('auth.logout') }}" style="display:flex;align-items:center;gap:7px;color:#475569;font-size:0.8rem;text-decoration:none;padding:6px 0;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
             <span>🚪</span> Cerrar sesión
         </a>
@@ -255,6 +288,11 @@
         if (main) main.style.overflow = 'hidden';
         // Enfocar el sidebar para que el scroll funcione en mobile
         sidebar.focus();
+    }
+    function toggleGroup(header) {
+        header.classList.toggle('open');
+        var body = header.nextElementSibling;
+        body.classList.toggle('open');
     }
     function closeSidebar() {
         document.getElementById('sidebar').classList.remove('open');

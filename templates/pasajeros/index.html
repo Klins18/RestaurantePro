@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}Pasajeros del Día{% endblock %}
+{% block page_title %}Pasajeros del Día{% endblock %}
+{% block page_subtitle %}Registro por empresa y ruta · {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('pasajeros.reservas') }}" class="btn-secondary btn-sm">📅 Reservas</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Selector de fecha -->
+<div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <form method="GET" style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:0.82rem;font-weight:600;color:#64748b;">📅 Fecha:</label>
+        <input type="date" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}"
+            class="input" style="max-width:160px;" onchange="this.form.submit()">
+    </form>
+    {% if fecha != hoy %}
+    <a href="{{ url_for('pasajeros.index') }}" class="btn-secondary btn-sm">Ver hoy</a>
+    {% endif %}
+    <span style="margin-left:auto;font-size:0.82rem;color:#94a3b8;">
+        Total: <strong style="color:#1e293b;font-size:1rem;">{{ total_pax }}</strong> pax
+    </span>
+</div>
+
+<!-- Resumen por empresa -->
+{% if resumen %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px;">
+{% for nombre, datos in resumen.items() %}
+<div class="card" style="padding:12px 16px;border-left:4px solid {{ datos.color }};">
+    <p style="font-size:0.7rem;font-weight:700;color:{{ datos.color }};text-transform:uppercase;margin-bottom:2px;">{{ nombre }}</p>
+    <p style="font-size:1.6rem;font-weight:800;color:#1e293b;line-height:1;">{{ datos.pax }}</p>
+    <p style="font-size:0.72rem;color:#94a3b8;">pax
+        {% if datos.ingresos > 0 %}· S/.{{ '%.0f'|format(datos.ingresos) }}{% endif %}
+    </p>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:340px 1fr;gap:14px;" id="pas-grid">
+
+<!-- FORMULARIO NUEVO REGISTRO -->
+<div class="card" style="padding:16px;">
+    <h3 style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:14px;">➕ Nuevo registro</h3>
+    <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="display:flex;flex-direction:column;gap:10px;">
+        <input type="hidden" name="accion" value="nuevo">
+        <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
+
+        <div>
+            <label class="label">Empresa / Grupo</label>
+            <select name="empresa_id" class="input" id="sel-empresa-pax" onchange="togglePrivado(this)">
+                <option value="">👤 Grupo Privado</option>
+                {% for e in empresas %}
+                <option value="{{ e.id }}">{{ e.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="row-nombre-grupo">
+            <label class="label">Nombre del grupo</label>
+            <input type="text" name="nombre_grupo" class="input" placeholder="Ej: Familia López...">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+                <label class="label">N° Pax *</label>
+                <input type="number" name="num_pax" class="input" min="1" value="1" required>
+            </div>
+            <div>
+                <label class="label">Precio buffet S/.</label>
+                <input type="number" name="precio_buffet" class="input" min="0" step="0.5" value="0">
+            </div>
+        </div>
+
+        <div>
+            <label class="label">Ruta</label>
+            <input type="text" name="ruta" class="input" placeholder="Ej: Cusco → Puno">
+        </div>
+
+        <div>
+            <label class="label">Observaciones</label>
+            <textarea name="observaciones" class="input" rows="2" placeholder="Notas..."></textarea>
+        </div>
+
+        <button type="submit" class="btn-primary" style="text-align:center;">Registrar</button>
+    </form>
+</div>
+
+<!-- TABLA DE REGISTROS DEL DÍA -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">Registros — {{ fecha.strftime('%d/%m/%Y') }}</p>
+        <span style="font-size:0.8rem;color:#94a3b8;">{{ registros|length }} entrada(s)</span>
+    </div>
+    {% if registros %}
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:500px;">
+        <thead><tr style="background:#f8fafc;">
+            <th class="th">Empresa / Grupo</th>
+            <th class="th" style="text-align:center;">Pax</th>
+            <th class="th">Precio buffet</th>
+            <th class="th">Ruta</th>
+            <th class="th">Obs.</th>
+            <th class="th" style="text-align:center;">Acciones</th>
+        </tr></thead>
+        <tbody>
+        {% for r in registros %}
+        <tr style="border-bottom:1px solid #f1f5f9;" id="fila-{{ r.id }}">
+            <td class="td">
+                {% if r.empresa %}
+                <span style="display:flex;align-items:center;gap:6px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ r.empresa.color }};flex-shrink:0;"></span>
+                    <span style="font-weight:600;color:#1e293b;font-size:0.85rem;">{{ r.empresa.nombre }}</span>
+                </span>
+                {% else %}
+                <span style="color:#64748b;font-size:0.85rem;">👤 {{ r.nombre_grupo or 'Privado' }}</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;font-weight:800;font-size:1rem;color:#1e293b;">{{ r.num_pax }}</td>
+            <td class="td" style="font-size:0.82rem;">{% if r.precio_buffet %}S/.{{ '%.2f'|format(r.precio_buffet) }}{% else %}—{% endif %}</td>
+            <td class="td" style="font-size:0.8rem;color:#64748b;">{{ r.ruta or '—' }}</td>
+            <td class="td" style="font-size:0.78rem;color:#94a3b8;font-style:italic;">{{ r.observaciones or '—' }}</td>
+            <td class="td" style="text-align:center;">
+                <div style="display:flex;gap:5px;justify-content:center;">
+                    <button onclick="abrirEditar({{ r.id }}, '{{ r.empresa_id or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax }}, {{ r.precio_buffet or 0 }}, '{{ r.ruta or '' }}', '{{ r.observaciones or '' }}')"
+                        style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">✏️</button>
+                    <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="margin:0;"
+                          onsubmit="return confirm('¿Eliminar este registro?')">
+                        <input type="hidden" name="accion" value="eliminar">
+                        <input type="hidden" name="reg_id" value="{{ r.id }}">
+                        <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;">
+        <p style="font-size:1.8rem;margin-bottom:8px;">🚌</p>
+        <p style="color:#94a3b8;">No hay pasajeros registrados para esta fecha.</p>
+    </div>
+    {% endif %}
+</div>
+</div>
+
+<!-- Modal editar -->
+<div id="modal-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center;">
+    <div class="card" style="width:400px;max-width:95vw;padding:20px;">
+        <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">✏️ Editar registro</h3>
+        <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="display:flex;flex-direction:column;gap:10px;">
+            <input type="hidden" name="accion" value="editar">
+            <input type="hidden" name="reg_id" id="edit-reg-id">
+            <div>
+                <label class="label">Empresa</label>
+                <select name="empresa_id" id="edit-empresa" class="input">
+                    <option value="">👤 Grupo Privado</option>
+                    {% for e in empresas %}
+                    <option value="{{ e.id }}">{{ e.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="label">Nombre del grupo</label>
+                <input type="text" name="nombre_grupo" id="edit-nombre-grupo" class="input">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label class="label">Pax</label><input type="number" name="num_pax" id="edit-pax" class="input" min="1"></div>
+                <div><label class="label">Precio buffet</label><input type="number" name="precio_buffet" id="edit-precio" class="input" min="0" step="0.5"></div>
+            </div>
+            <div><label class="label">Ruta</label><input type="text" name="ruta" id="edit-ruta" class="input"></div>
+            <div><label class="label">Observaciones</label><textarea name="observaciones" id="edit-obs" class="input" rows="2"></textarea></div>
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">💾 Guardar</button>
+                <button type="button" onclick="cerrarModal()" class="btn-secondary" style="text-align:center;">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>@media(max-width:768px){div[id="pas-grid"]{grid-template-columns:1fr!important;}}</style>
+{% block scripts %}
+<script>
+function togglePrivado(sel) {
+    document.getElementById('row-nombre-grupo').style.display = sel.value ? 'none' : 'block';
+}
+function abrirEditar(id, empId, nombre, pax, precio, ruta, obs) {
+    document.getElementById('edit-reg-id').value = id;
+    document.getElementById('edit-empresa').value = empId;
+    document.getElementById('edit-nombre-grupo').value = nombre;
+    document.getElementById('edit-pax').value = pax;
+    document.getElementById('edit-precio').value = precio;
+    document.getElementById('edit-ruta').value = ruta;
+    document.getElementById('edit-obs').value = obs;
+    document.getElementById('modal-editar').style.display = 'flex';
+}
+function cerrarModal() { document.getElementById('modal-editar').style.display = 'none'; }
+togglePrivado(document.getElementById('sel-empresa-pax'));
+</script>
+{% endblock %}
+{% endblock %}

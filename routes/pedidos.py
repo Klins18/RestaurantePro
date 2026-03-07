@@ -305,11 +305,12 @@ def verificar(id):
                     item.producto_id = prod.id
 
                 if prod:
-                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
+                    cant_rec = item.cantidad_recibida or 0
+                    prod.stock_actual = (prod.stock_actual or 0) + cant_rec
                     mov = MovimientoAlmacen(
                         tipo='ingreso',
                         producto_id=prod.id,
-                        cantidad=item.cantidad_recibida,
+                        cantidad=cant_rec,
                         motivo=f'Verificación pedido #{lista.id}: {lista.titulo}',
                         referencia=f'PEDIDO-{lista.id}',
                         usuario_id=current_user.id,
@@ -431,11 +432,12 @@ def aprobar(id):
                         Producto.nombre.ilike(f'%{item.producto_nombre.strip()}%')
                     ).first()
                 if prod:
-                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
+                    cant_rec = item.cantidad_recibida or 0
+                    prod.stock_actual = (prod.stock_actual or 0) + cant_rec
                     mov = MovimientoAlmacen(
                         tipo='ingreso',
                         producto_id=prod.id,
-                        cantidad=item.cantidad_recibida,
+                        cantidad=cant_rec,
                         motivo=f'Aprobación pedido #{lista.id}: {lista.titulo}',
                         referencia=f'PEDIDO-{lista.id}',
                         usuario_id=current_user.id,

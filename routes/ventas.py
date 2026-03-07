@@ -76,118 +76,103 @@ def index():
 @ventas_bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva():
+    """Pantalla de servicio: tabs por empresa, pedidos independientes, cierre conjunto."""
     if request.method == 'POST':
-        fecha_str  = request.form.get('fecha', '')
+        fecha_str = request.form.get('fecha', '')
         try:
             fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         except:
             fecha = date.today()
 
-        empresa_id = request.form.get('empresa_id') or None
-        es_privado = request.form.get('es_privado') == '1'
-        num_pax    = int(request.form.get('num_pax', 0) or 0)
-        ruta       = request.form.get('ruta', '').strip()
-        nombre_grupo = request.form.get('nombre_grupo', '').strip()
+        # Recibimos JSON con todas las tabs: [{empresa_id, es_privado, nombre_grupo, tipo_pago, items:[...]}]
+        import json
+        tabs_json = request.form.get('tabs_json', '[]')
+        try:
+            tabs = json.loads(tabs_json)
+        except:
+            tabs = []
 
-        # Precio buffet por empresa
-        precio_buffet = 0.0
-        if empresa_id:
-            emp = EmpresaTuristica.query.get(empresa_id)
-            if emp and emp.nombre == 'Peru Hop':
-                precio_buffet = PRECIO_PERUHOP
-            elif request.form.get('precio_buffet'):
-                try:
-                    precio_buffet = float(request.form.get('precio_buffet'))
-                except:
-                    precio_buffet = 0.0
+        if not tabs:
+            flash('No hay pedidos para registrar.', 'error')
+            return redirect(url_for('ventas.nueva'))
 
-        total_buffet = round(num_pax * precio_buffet, 2)
-        total_items  = float(request.form.get('total_items', 0) or 0)
-        descuento    = float(request.form.get('descuento', 0) or 0)
-        subtotal     = round(total_buffet + total_items, 2)
-        total        = round(subtotal - descuento, 2)
-
-        venta = VentaDiaria(
-            fecha=fecha,
-            empresa_id=empresa_id,
-            tipo_cliente='privado' if es_privado else 'empresa',
-            nombre_grupo=nombre_grupo if es_privado else '',
-            num_pax=num_pax,
-            ruta=ruta,
-            precio_buffet=precio_buffet,
-            es_privado=es_privado,
-            subtotal=subtotal,
-            descuento=descuento,
-            total=total,
-            tipo_pago=request.form.get('tipo_pago', '') if es_privado else '',
-            estado_pago='pagado' if es_privado else 'pendiente',
-            observaciones=request.form.get('observaciones', ''),
-            usuario_id=current_user.id,
-            creado_en=now_peru()
-        )
-        db.session.add(venta)
-        db.session.flush()
-
-        # Items de bebidas
-        prod_ids = request.form.getlist('item_producto_id[]')
-        var_ids  = request.form.getlist('item_variante_id[]')
-        descs    = request.form.getlist('item_desc[]')
-        cants    = request.form.getlist('item_cant[]')
-        precios  = request.form.getlist('item_precio[]')
-
-        for i, desc in enumerate(descs):
-            desc = desc.strip()
-            if not desc:
+        ventas_creadas = []
+        for tab in tabs:
+            if not tab.get('items'):
                 continue
-            try:
-                cant   = int(cants[i])   if cants[i]   else 1
-                precio = float(precios[i]) if precios[i] else 0
-            except:
-                cant, precio = 1, 0
-            subtotal_item = round(cant * precio, 2)
-            p_carta_id    = int(prod_ids[i]) if i < len(prod_ids) and prod_ids[i] else None
-            v_id          = int(var_ids[i])  if i < len(var_ids)  and var_ids[i]  else None
+            empresa_id = tab.get('empresa_id') or None
+            if empresa_id:
+                empresa_id = int(empresa_id)
+            es_privado = bool(tab.get('es_privado', False))
+            nombre_grupo = tab.get('nombre_grupo', '').strip()
+            tipo_pago    = tab.get('tipo_pago', '')
+            observaciones = tab.get('observaciones', '')
 
-            item = ItemVenta(
-                venta_id=venta.id,
-                producto_carta_id=p_carta_id,
-                variante_id=v_id,
-                descripcion=desc,
-                cantidad=cant,
-                precio_unitario=precio,
-                subtotal=subtotal_item
+            total_items = sum(float(i['precio']) * int(i['cant']) for i in tab['items'])
+            total = round(total_items, 2)
+
+            venta = VentaDiaria(
+                fecha=fecha,
+                empresa_id=empresa_id,
+                tipo_cliente='privado' if es_privado else 'empresa',
+                nombre_grupo=nombre_grupo if es_privado else '',
+                num_pax=0, ruta='', precio_buffet=0,
+                es_privado=es_privado,
+                subtotal=total, descuento=0, total=total,
+                tipo_pago=tipo_pago if es_privado else '',
+                estado_pago='pagado' if es_privado else 'pendiente',
+                observaciones=observaciones,
+                usuario_id=current_user.id,
+                creado_en=now_peru()
             )
-            db.session.add(item)
+            db.session.add(venta)
+            db.session.flush()
 
-            # ── Descontar del inventario almacén si el producto lo tiene configurado ──
-            if p_carta_id:
-                prod_carta = ProductoCarta.query.get(p_carta_id)
-                if prod_carta and prod_carta.descuenta_inventario and prod_carta.producto_almacen_id:
-                    prod_alm = Producto.query.get(prod_carta.producto_almacen_id)
-                    if prod_alm:
-                        prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - cant)
-                        mov = MovimientoAlmacen(
-                            tipo='egreso',
-                            producto_id=prod_alm.id,
-                            cantidad=cant,
-                            motivo=f'Venta #{venta.id} — {desc}',
-                            referencia=f'VENTA-{venta.id}',
-                            usuario_id=current_user.id,
-                            fecha_hora=now_peru()
-                        )
-                        db.session.add(mov)
+            for it in tab['items']:
+                cant   = int(it.get('cant', 1))
+                precio = float(it.get('precio', 0))
+                p_carta_id = int(it['prod_id']) if it.get('prod_id') else None
+                v_id       = int(it['var_id'])  if it.get('var_id')  else None
+                db.session.add(ItemVenta(
+                    venta_id=venta.id,
+                    producto_carta_id=p_carta_id,
+                    variante_id=v_id,
+                    descripcion=it.get('nombre', ''),
+                    cantidad=cant,
+                    precio_unitario=precio,
+                    subtotal=round(cant * precio, 2)
+                ))
+                if p_carta_id:
+                    prod_carta = ProductoCarta.query.get(p_carta_id)
+                    if prod_carta and prod_carta.descuenta_inventario and prod_carta.producto_almacen_id:
+                        prod_alm = Producto.query.get(prod_carta.producto_almacen_id)
+                        if prod_alm:
+                            prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - cant)
+                            db.session.add(MovimientoAlmacen(
+                                tipo='egreso', producto_id=prod_alm.id, cantidad=cant,
+                                motivo=f'Venta #{venta.id} — {it.get("nombre","")}',
+                                referencia=f'VENTA-{venta.id}',
+                                usuario_id=current_user.id, fecha_hora=now_peru()
+                            ))
+            registrar_auditoria(current_user.id, 'NUEVA_VENTA', 'ventas_diarias', venta.id,
+                f'Total: S/.{total:.2f}', ip=request.remote_addr)
+            ventas_creadas.append(venta)
 
-        registrar_auditoria(current_user.id, 'NUEVA_VENTA', 'ventas_diarias', venta.id,
-            f'Total: S/.{total:.2f} · Pax: {num_pax}', ip=request.remote_addr)
         db.session.commit()
-        flash(f'Venta registrada. Total: S/.{total:.2f}', 'success')
-        return redirect(url_for('ventas.ver', id=venta.id))
+        n = len(ventas_creadas)
+        if n == 1:
+            flash(f'Venta registrada — S/.{ventas_creadas[0].total:.2f}', 'success')
+            return redirect(url_for('ventas.ver', id=ventas_creadas[0].id))
+        else:
+            flash(f'{n} ventas registradas correctamente.', 'success')
+            return redirect(url_for('ventas.index'))
 
     from models import CategoriaCarta
+    hoy = date.today()
     empresas   = EmpresaTuristica.query.filter_by(activo=True).order_by(EmpresaTuristica.nombre).all()
     categorias = CategoriaCarta.query.filter_by(activo=True).order_by(CategoriaCarta.orden).all()
     return render_template('ventas/nueva.html',
-        empresas=empresas, categorias=categorias, hoy=date.today(),
+        empresas=empresas, categorias=categorias, hoy=hoy,
         precio_peruhop=PRECIO_PERUHOP)
 
 
