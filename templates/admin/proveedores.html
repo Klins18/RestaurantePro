@@ -3,7 +3,7 @@
 {% block page_title %}Proveedores{% endblock %}
 {% block page_subtitle %}Base de datos de proveedores{% endblock %}
 {% block content %}
-<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" class="prov-grid">
+<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" id="prov-grid">
 <div class="card" style="padding:0;overflow:hidden;">
     <div class="table-wrap">
     <table style="width:100%;border-collapse:collapse;min-width:420px;">
@@ -30,5 +30,5 @@
     </form>
 </div>
 </div>
-<style>@media(max-width:768px).prov-grid{grid-template-columns:1fr!important;}}</style>
+<style>@media(max-width:768px){div[id="prov-grid"]{grid-template-columns:1fr!important;}}</style>
 {% endblock %}

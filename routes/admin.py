@@ -251,3 +251,47 @@ def nuevo_proveedor():
 def auditoria():
     registros = Auditoria.query.order_by(Auditoria.fecha_hora.desc()).limit(300).all()
     return render_template('admin/auditoria.html', registros=registros)
+
+
+# ──────────────────────────────────────────────
+#  GESTIÓN DE PERMISOS POR USUARIO
+# ──────────────────────────────────────────────
+@admin_bp.route('/permisos')
+@login_required
+@admin_required
+def permisos():
+    from routes.decorators import PERMISOS_LABELS, get_permisos_usuario
+    usuarios = Usuario.query.filter(Usuario.rol == 'empleado').order_by(Usuario.nombre_completo).all()
+    permisos_map = {u.id: get_permisos_usuario(u) for u in usuarios}
+    return render_template('admin/permisos.html',
+                           usuarios=usuarios,
+                           permisos_map=permisos_map,
+                           permisos_labels=PERMISOS_LABELS)
+
+
+@admin_bp.route('/permisos/<int:usuario_id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def toggle_permiso(usuario_id):
+    from models import PermisoUsuario
+    from routes.decorators import PERMISOS_LABELS
+    permiso = request.form.get('permiso')
+    if permiso not in PERMISOS_LABELS:
+        flash('Permiso inválido.', 'error')
+        return redirect(url_for('admin.permisos'))
+
+    usuario = Usuario.query.get_or_404(usuario_id)
+    existente = PermisoUsuario.query.filter_by(usuario_id=usuario_id, permiso=permiso).first()
+
+    if existente:
+        db.session.delete(existente)
+        flash(f'Permiso "{PERMISOS_LABELS[permiso][1]}" removido de {usuario.username}.', 'success')
+    else:
+        db.session.add(PermisoUsuario(
+            usuario_id=usuario_id, permiso=permiso,
+            otorgado_por=current_user.id
+        ))
+        flash(f'Permiso "{PERMISOS_LABELS[permiso][1]}" asignado a {usuario.username}.', 'success')
+
+    db.session.commit()
+    return redirect(url_for('admin.permisos'))

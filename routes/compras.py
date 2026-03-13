@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import login_required, current_user
+from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Compra, ItemCompra, Proveedor, Producto, KardexAlmacen, registrar_auditoria
 from datetime import datetime, date, date
 import pytz
@@ -33,6 +34,7 @@ def guardar_archivo(file):
 # ──────────────────────────────────────
 @compras_bp.route('/')
 @login_required
+@permiso_required('compras')
 def index():
     hoy = date.today()
     desde_str = request.args.get('desde', date(hoy.year, hoy.month, 1).strftime('%Y-%m-%d'))
@@ -72,6 +74,7 @@ def index():
 # ──────────────────────────────────────
 @compras_bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@permiso_required('compras')
 def nueva():
     if request.method == 'POST':
         # Guardar archivo adjunto
@@ -194,6 +197,7 @@ def nueva():
 # ──────────────────────────────────────
 @compras_bp.route('/<int:id>')
 @login_required
+@permiso_required('compras')
 def ver(id):
     compra = Compra.query.get_or_404(id)
     return render_template('compras/ver.html', compra=compra)
@@ -213,6 +217,7 @@ def archivo(filename):
 # ──────────────────────────────────────
 @compras_bp.route('/<int:id>/anular', methods=['POST'])
 @login_required
+@admin_required
 def anular(id):
     if not current_user.es_admin():
         flash('Solo el administrador puede anular compras.', 'error')

@@ -3,7 +3,7 @@
 {% block page_title %}Productos de Almacén{% endblock %}
 {% block page_subtitle %}Insumos y materias primas{% endblock %}
 {% block content %}
-<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" class="prod-grid">
+<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" id="prod-grid">
 <div class="card" style="padding:0;overflow:hidden;">
     <div class="table-wrap">
     <table style="width:100%;border-collapse:collapse;min-width:480px;">
@@ -43,5 +43,5 @@
     </form>
 </div>
 </div>
-<style>@media(max-width:768px).prod-grid{grid-template-columns:1fr!important;}}</style>
+<style>@media(max-width:768px){div[id="prod-grid"]{grid-template-columns:1fr!important;}}</style>
 {% endblock %}

@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
+from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, ListaPedido, ItemPedido, Usuario, Producto, MovimientoAlmacen, KardexAlmacen, Notificacion, registrar_auditoria
 from datetime import datetime, date
 import pytz
@@ -65,6 +66,7 @@ TIPOS_REQUERIMIENTO = list(LISTAS_PREDEFINIDAS.keys()) + ['LÁCTEOS Y DERIVADOS'
 # ──────────────────────────────────────
 @pedidos_bp.route('/')
 @login_required
+@permiso_required('pedidos')
 def index():
     estado = request.args.get('estado', '')
     tipo = request.args.get('tipo', '')
@@ -81,6 +83,7 @@ def index():
 # ──────────────────────────────────────
 @pedidos_bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@permiso_required('pedidos')
 def nueva():
     if request.method == 'POST':
         titulo = request.form.get('titulo', '').strip()
@@ -168,6 +171,7 @@ def api_lista_predefinida(tipo):
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>')
 @login_required
+@permiso_required('pedidos')
 def ver(id):
     lista = ListaPedido.query.get_or_404(id)
     # Solo items que tienen cantidad o nombre no vacío
@@ -179,6 +183,7 @@ def ver(id):
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>/verificar', methods=['GET', 'POST'])
 @login_required
+@permiso_required('pedidos')
 def verificar(id):
     lista = ListaPedido.query.get_or_404(id)
 
@@ -258,36 +263,15 @@ def verificar(id):
                 # ── Si el producto NO existe en el inventario, CREARLO automáticamente ──
                 if not prod and item.producto_nombre.strip():
                     from models import Categoria
-
-                    # Determinar categoría correcta según el tipo de pedido de la lista
-                    # Mapeo de tipo_requerimiento a nombre de categoría en el inventario
-                    MAPA_CATEGORIAS = {
-                        'VERDURA FRESCA':                 'Verduras',
-                        'FRUTAS/BOMBONERA':               'Frutas',
-                        'CARNES':                         'Carnes',
-                        'ABARROTES E INSUMOS DE LIMPIEZA':'Abarrotes',
-                        'LÁCTEOS Y DERIVADOS':            'Lácteos',
-                        'BEBIDAS':                        'Bebidas',
-                        'OTROS':                          'General',
-                    }
-                    cat_nombre = MAPA_CATEGORIAS.get(lista.tipo_requerimiento, lista.tipo_requerimiento or 'General')
-
-                    # Buscar la categoría (case-insensitive), si no existe crearla UNA sola vez
+                    # Buscar o crear categoría basada en el tipo de pedido
+                    cat_nombre = lista.tipo_requerimiento or 'General'
                     cat = Categoria.query.filter(
                         db.func.lower(Categoria.nombre) == cat_nombre.lower()
                     ).first()
                     if not cat:
-                        # Verificar que no fue ya agregada en este mismo commit (flush pendiente)
                         cat = Categoria(nombre=cat_nombre, activo=True)
                         db.session.add(cat)
-                        try:
-                            db.session.flush()
-                        except Exception:
-                            db.session.rollback()
-                            # Puede que otro ítem del mismo loop ya la creó — buscarla de nuevo
-                            cat = Categoria.query.filter(
-                                db.func.lower(Categoria.nombre) == cat_nombre.lower()
-                            ).first() or Categoria.query.first()
+                        db.session.flush()  # Para obtener el ID
 
                     unidad = item.unidad_medida or 'unid'
                     prod = Producto(
@@ -305,12 +289,11 @@ def verificar(id):
                     item.producto_id = prod.id
 
                 if prod:
-                    cant_rec = item.cantidad_recibida or 0
-                    prod.stock_actual = (prod.stock_actual or 0) + cant_rec
+                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
                     mov = MovimientoAlmacen(
                         tipo='ingreso',
                         producto_id=prod.id,
-                        cantidad=cant_rec,
+                        cantidad=item.cantidad_recibida,
                         motivo=f'Verificación pedido #{lista.id}: {lista.titulo}',
                         referencia=f'PEDIDO-{lista.id}',
                         usuario_id=current_user.id,
@@ -403,6 +386,7 @@ def verificar(id):
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>/aprobar', methods=['POST'])
 @login_required
+@permiso_required('pedidos')
 def aprobar(id):
     # Empleados Y administradores pueden aprobar
     lista = ListaPedido.query.get_or_404(id)
@@ -432,12 +416,11 @@ def aprobar(id):
                         Producto.nombre.ilike(f'%{item.producto_nombre.strip()}%')
                     ).first()
                 if prod:
-                    cant_rec = item.cantidad_recibida or 0
-                    prod.stock_actual = (prod.stock_actual or 0) + cant_rec
+                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
                     mov = MovimientoAlmacen(
                         tipo='ingreso',
                         producto_id=prod.id,
-                        cantidad=cant_rec,
+                        cantidad=item.cantidad_recibida,
                         motivo=f'Aprobación pedido #{lista.id}: {lista.titulo}',
                         referencia=f'PEDIDO-{lista.id}',
                         usuario_id=current_user.id,
@@ -483,6 +466,7 @@ def aprobar(id):
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
+@admin_required
 def eliminar(id):
     if not current_user.es_admin():
         flash('No tienes permisos para eliminar.', 'error')

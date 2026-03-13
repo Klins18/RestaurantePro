@@ -1,294 +1,98 @@
 {% extends 'base.html' %}
 {% block title %}Kardex Comedor{% endblock %}
-{% block page_title %}Kardex Comedor{% endblock %}
-{% block page_subtitle %}Ventas de carta y movimientos del período{% endblock %}
+{% block page_title %}Kardex Valorizado — Comedor{% endblock %}
+{% block page_subtitle %}Precio Promedio Ponderado · Productos de Carta{% endblock %}
 
 {% block content %}
-
-<!-- Selector de período -->
-<div class="card" style="padding:12px 16px;margin-bottom:14px;">
-    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+<div class="card" style="margin-bottom:18px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div style="flex:2;min-width:200px;">
+            <label class="label">Producto de Carta</label>
+            <select name="producto_id" class="input" onchange="this.form.submit()">
+                <option value="">— Seleccionar producto —</option>
+                {% for p in productos %}
+                <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>{{ p.nombre }} — S/.{{ '%.2f'|format(p.precio) }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
         <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
         <button type="submit" class="btn-primary">🔍 Filtrar</button>
-        <a href="{{ url_for('kardex.comedor') }}" class="btn-secondary">Este mes</a>
+        {% if producto_sel %}<a href="{{ url_for('kardex.comedor', producto_id=producto_sel.id) }}" class="btn-secondary">Limpiar</a>{% endif %}
     </form>
 </div>
 
-<!-- MÉTRICAS GENERALES -->
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px;">
-    <div class="card" style="padding:14px;border-left:4px solid #10b981;">
-        <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Ingresos del período</p>
-        <p style="font-size:1.5rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(total_ingresos_mes) }}</p>
-    </div>
-    {% set total_unid = resumen_carta|sum(attribute='und_vendidas') %}
-    <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
-        <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Unidades vendidas</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total_unid }}</p>
-    </div>
-    {% set prods_activos = resumen_carta|selectattr('und_vendidas','gt',0)|list %}
-    <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
-        <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Productos vendidos</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ prods_activos|length }}</p>
-        <p style="font-size:0.72rem;color:#94a3b8;">de {{ resumen_carta|length }} en carta</p>
-    </div>
-    <div class="card" style="padding:14px;border-left:4px solid #0891b2;">
-        <p style="font-size:0.68rem;font-weight:700;color:#0891b2;text-transform:uppercase;margin-bottom:4px;">Más vendido</p>
-        {% if resumen_carta and resumen_carta[0].und_vendidas > 0 %}
-        <p style="font-size:1rem;font-weight:800;color:#1e293b;line-height:1.2;">{{ resumen_carta[0].nombre }}</p>
-        <p style="font-size:0.78rem;color:#94a3b8;margin-top:3px;">{{ resumen_carta[0].und_vendidas }} unidades</p>
-        {% else %}
-        <p style="font-size:0.9rem;color:#94a3b8;">Sin ventas</p>
-        {% endif %}
-    </div>
+{% if producto_sel and registros %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+    {% set ultimo = registros[-1] %}
+    {% set total_ingresos = registros|selectattr('tipo','equalto','ingreso')|list %}
+    {% set total_ventas = registros|selectattr('tipo','equalto','venta')|list %}
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Unidades en Stock</p><p style="font-size:1.8rem;font-weight:700;color:#1e293b;">{{ ultimo.cant_saldo|round(1) }}</p><p style="font-size:0.78rem;color:#94a3b8;">unidades</p></div>
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Precio de Venta</p><p style="font-size:1.8rem;font-weight:700;color:#f59e0b;">S/.{{ '%.2f'|format(producto_sel.precio) }}</p><p style="font-size:0.78rem;color:#94a3b8;">precio carta</p></div>
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Total Vendido (período)</p><p style="font-size:1.8rem;font-weight:700;color:#10b981;">S/.{{ '%.2f'|format(total_ventas|sum(attribute='total_salida')) }}</p><p style="font-size:0.78rem;color:#94a3b8;">{{ total_ventas|sum(attribute='cant_salida')|int }} unidades</p></div>
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Movimientos</p><p style="font-size:1.8rem;font-weight:700;color:#6366f1;">{{ registros|length }}</p><p style="font-size:0.78rem;color:#94a3b8;">en el período</p></div>
 </div>
+{% endif %}
 
-<!-- TABS -->
-<div style="display:flex;gap:4px;margin-bottom:14px;background:#f1f5f9;padding:4px;border-radius:12px;width:fit-content;">
-    <button onclick="showTab('tab-ranking')" id="btn-ranking"
-        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:700;cursor:pointer;background:#1e293b;color:white;">
-        🏆 Ranking ventas
-    </button>
-    <button onclick="showTab('tab-kardex')" id="btn-kardex"
-        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:#64748b;">
-        📋 Kardex por producto
-    </button>
-    <button onclick="showTab('tab-recientes')" id="btn-recientes"
-        style="padding:7px 16px;border-radius:9px;border:none;font-size:0.82rem;font-weight:600;cursor:pointer;background:transparent;color:#64748b;">
-        🕐 Ventas recientes
-    </button>
-</div>
-
-<!-- TAB 1: RANKING de todos los productos -->
-<div id="tab-ranking">
-    {% set max_ventas = resumen_carta[0].und_vendidas if (resumen_carta and resumen_carta[0].und_vendidas > 0) else 1 %}
-    <div class="card" style="padding:0;overflow:hidden;">
-        <div style="padding:11px 16px;border-bottom:1px solid #f1f5f9;">
-            <p style="font-weight:700;color:#1e293b;font-size:0.92rem;">🏆 Todos los productos — ordenados por ventas</p>
+{% if producto_sel %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="background:#1e293b;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <p style="font-size:0.68rem;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;">KARDEX VALORIZADO · COMEDOR</p>
+            <p style="font-weight:700;font-size:1rem;margin-top:2px;">{{ producto_sel.nombre }}</p>
         </div>
-        <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;min-width:600px;">
-            <thead><tr style="background:#f8fafc;">
-                <th class="th" style="width:36px;">#</th>
-                <th class="th">Producto</th>
-                <th class="th">Categoría</th>
-                <th class="th" style="text-align:center;">Unid. vendidas</th>
-                <th class="th" style="text-align:right;">P. venta</th>
-                <th class="th" style="text-align:right;">Ingreso total</th>
-                <th class="th" style="text-align:center;">Participación</th>
-                <th class="th" style="text-align:center;">Kardex</th>
-            </tr></thead>
-            <tbody>
-            {% for p in resumen_carta %}
-            <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index%2==0 %}background:#fafafa;{% endif %}{% if p.und_vendidas==0 %}opacity:0.5;{% endif %}">
-                <td class="td" style="text-align:center;font-size:0.75rem;color:#94a3b8;font-weight:700;">{{ loop.index }}</td>
-                <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
-                <td class="td" style="font-size:0.78rem;color:#64748b;">{{ p.categoria }}</td>
-                <td class="td" style="text-align:center;">
-                    <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
-                        <div style="width:80px;background:#f1f5f9;border-radius:9999px;height:6px;overflow:hidden;">
-                            <div style="height:100%;background:#6366f1;border-radius:9999px;width:{{ ((p.und_vendidas / max_ventas) * 100)|round }}%;"></div>
-                        </div>
-                        <span style="font-size:1rem;font-weight:800;color:{% if p.und_vendidas > 0 %}#1e293b{% else %}#94a3b8{% endif %};">
-                            {{ p.und_vendidas }}
-                        </span>
-                    </div>
-                </td>
-                <td class="td" style="text-align:right;font-size:0.85rem;color:#64748b;">S/.{{ '%.2f'|format(p.precio) }}</td>
-                <td class="td" style="text-align:right;font-weight:700;color:#166534;">
-                    {% if p.ingreso_total > 0 %}S/.{{ '%.2f'|format(p.ingreso_total) }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
-                </td>
-                <td class="td" style="text-align:center;font-size:0.78rem;color:#6366f1;font-weight:700;">
-                    {% if total_ingresos_mes > 0 and p.ingreso_total > 0 %}
-                    {{ ((p.ingreso_total / total_ingresos_mes) * 100)|round(1) }}%
-                    {% else %}—{% endif %}
-                </td>
-                <td class="td" style="text-align:center;">
-                    <a href="{{ url_for('kardex.comedor', producto_id=p.id, desde=desde, hasta=hasta) }}"
-                       onclick="showTab('tab-kardex')"
-                       style="background:#eff6ff;color:#1d4ed8;font-size:0.75rem;font-weight:700;padding:4px 10px;border-radius:7px;text-decoration:none;">
-                        Ver →
-                    </a>
-                </td>
+        <span style="font-size:0.78rem;color:#64748b;background:#0f172a;padding:4px 10px;border-radius:6px;">Precio Venta: S/.{{ '%.2f'|format(producto_sel.precio) }}</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:860px;">
+        <thead>
+            <tr>
+                <th class="th" rowspan="2" style="vertical-align:middle;">Fecha</th>
+                <th class="th" rowspan="2" style="vertical-align:middle;">Concepto</th>
+                <th class="th" colspan="3" style="text-align:center;background:#eff6ff;color:#1e40af;">ENTRADAS</th>
+                <th class="th" colspan="3" style="text-align:center;background:#fff1f2;color:#991b1b;">VENTAS/SALIDAS</th>
+                <th class="th" colspan="3" style="text-align:center;background:#f0fdf4;color:#166534;">SALDO</th>
             </tr>
-            {% else %}
-            <tr><td colspan="8" style="padding:40px;text-align:center;color:#94a3b8;">Sin datos en este período.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-</div>
-
-<!-- TAB 2: KARDEX por producto -->
-<div id="tab-kardex" style="display:none;">
-    <div class="card" style="margin-bottom:14px;">
-        <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-            <div style="flex:2;min-width:200px;">
-                <label class="label">Producto de Carta</label>
-                <select name="producto_id" class="input" onchange="this.form.submit()">
-                    <option value="">— Seleccionar —</option>
-                    {% for p in productos %}
-                    <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>
-                        {{ p.nombre }} — S/.{{ '%.2f'|format(p.precio) }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
-            <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
-            <button type="submit" class="btn-primary">🔍 Ver</button>
-        </form>
-    </div>
-
-    {% if producto_sel and registros %}
-    {% set ventas_list = registros|selectattr('tipo','equalto','venta')|list %}
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;">
-        {% set ultimo = registros[-1] %}
-        <div class="card" style="padding:14px;border-left:4px solid #1e293b;">
-            <p style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:4px;">Stock en kardex</p>
-            <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ ultimo.cant_saldo|round(1) }}</p>
-        </div>
-        <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
-            <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Precio carta</p>
-            <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(producto_sel.precio) }}</p>
-        </div>
-        <div class="card" style="padding:14px;border-left:4px solid #10b981;">
-            <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Total vendido</p>
-            <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(ventas_list|sum(attribute='total_salida')) }}</p>
-            <p style="font-size:0.72rem;color:#94a3b8;">{{ ventas_list|sum(attribute='cant_salida')|int }} unidades</p>
-        </div>
-        <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
-            <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Movimientos</p>
-            <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ registros|length }}</p>
-        </div>
-    </div>
-
-    <div class="card" style="padding:0;overflow:hidden;">
-        <div style="background:#1e293b;color:white;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;">
-            <div>
-                <p style="font-size:0.62rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;">KARDEX · COMEDOR</p>
-                <p style="font-weight:700;font-size:0.95rem;margin-top:2px;">{{ producto_sel.nombre }}</p>
-            </div>
-            <span style="font-size:0.75rem;background:#0f172a;color:#64748b;padding:4px 10px;border-radius:6px;">S/.{{ '%.2f'|format(producto_sel.precio) }} / unidad</span>
-        </div>
-        <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;min-width:820px;">
-            <thead>
-                <tr>
-                    <th class="th" rowspan="2" style="vertical-align:middle;">Fecha</th>
-                    <th class="th" rowspan="2" style="vertical-align:middle;">Concepto</th>
-                    <th class="th" colspan="3" style="text-align:center;background:#eff6ff;color:#1e40af;">ENTRADAS</th>
-                    <th class="th" colspan="3" style="text-align:center;background:#fff1f2;color:#991b1b;">VENTAS / SALIDAS</th>
-                    <th class="th" colspan="3" style="text-align:center;background:#f0fdf4;color:#166534;">SALDO</th>
-                </tr>
-                <tr>
-                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">Cant.</th>
-                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">P.Unit.</th>
-                    <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">Total</th>
-                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">Cant.</th>
-                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">P.Unit.</th>
-                    <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">Total</th>
-                    <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">Cant.</th>
-                    <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">P.Prom.</th>
-                    <th class="th" style="background:#f0fdf4;color:#166634;text-align:right;">Total</th>
-                </tr>
-            </thead>
-            <tbody>
+            <tr>
+                <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">Cant.</th>
+                <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">P.Unit.</th>
+                <th class="th" style="background:#eff6ff;color:#1e40af;text-align:right;">Total</th>
+                <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">Cant.</th>
+                <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">P.Unit.</th>
+                <th class="th" style="background:#fff1f2;color:#991b1b;text-align:right;">Total</th>
+                <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">Cant.</th>
+                <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">P.Prom.</th>
+                <th class="th" style="background:#f0fdf4;color:#166534;text-align:right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
             {% for r in registros %}
-            <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index%2==0 %}background:#fafafa;{% endif %}">
+            <tr style="{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
                 <td class="td" style="white-space:nowrap;font-size:0.8rem;color:#64748b;">{{ r.fecha.strftime('%d/%m/%Y') }}</td>
                 <td class="td" style="font-size:0.82rem;">
-                    <span style="font-weight:700;color:{% if r.tipo=='ingreso' %}#2563eb{% elif r.tipo=='venta' %}#dc2626{% else %}#f59e0b{% endif %};">
-                        {% if r.tipo=='ingreso' %}↓ Ingreso{% elif r.tipo=='venta' %}💰 Venta{% else %}{{ r.tipo }}{% endif %}
+                    <span style="font-weight:700;margin-right:4px;color:{% if r.tipo == 'ingreso' %}#2563eb{% elif r.tipo == 'venta' %}#dc2626{% else %}#f59e0b{% endif %}">
+                        {% if r.tipo == 'ingreso' %}↓ Ingreso{% elif r.tipo == 'venta' %}💰 Venta{% else %}↑ {{ r.tipo|capitalize }}{% endif %}
                     </span>
                     {{ r.concepto or '' }}
                 </td>
-                <td class="td" style="text-align:right;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ r.cant_entrada if r.cant_entrada else '—' }}</td>
-                <td class="td" style="text-align:right;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.precio_entrada) if r.cant_entrada else '—' }}</td>
-                <td class="td" style="text-align:right;font-weight:600;color:{% if r.cant_entrada %}#2563eb{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.total_entrada) if r.cant_entrada else '—' }}</td>
-                <td class="td" style="text-align:right;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ r.cant_salida if r.cant_salida else '—' }}</td>
-                <td class="td" style="text-align:right;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.precio_salida) if r.cant_salida else '—' }}</td>
-                <td class="td" style="text-align:right;font-weight:600;color:{% if r.cant_salida %}#dc2626{% else %}#e2e8f0{% endif %};">{{ 'S/.%.2f'|format(r.total_salida) if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;color:#2563eb;">{{ r.cant_entrada if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;color:#2563eb;">{{ 'S/.%.2f'|format(r.precio_entrada) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:600;color:#2563eb;">{{ 'S/.%.2f'|format(r.total_entrada) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;color:#dc2626;">{{ r.cant_salida if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;color:#dc2626;">{{ 'S/.%.2f'|format(r.precio_salida) if r.cant_salida else '—' }}</td>
+                <td class="td" style="text-align:right;font-weight:600;color:#dc2626;">{{ 'S/.%.2f'|format(r.total_salida) if r.cant_salida else '—' }}</td>
                 <td class="td" style="text-align:right;font-weight:700;color:#166534;">{{ r.cant_saldo|round(1) }}</td>
                 <td class="td" style="text-align:right;color:#166534;">S/.{{ '%.2f'|format(r.precio_saldo) }}</td>
                 <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(r.total_saldo) }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">No hay movimientos.</td></tr>
+            <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">No hay movimientos en este período.</td></tr>
             {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-    {% elif producto_sel %}
-    <div class="card" style="padding:40px;text-align:center;color:#94a3b8;">Sin movimientos en el período seleccionado.</div>
-    {% else %}
-    <div class="card" style="padding:50px;text-align:center;">
-        <p style="font-size:2rem;margin-bottom:8px;">🍴</p>
-        <p style="font-weight:600;color:#64748b;">Selecciona un producto para ver su kardex.</p>
-    </div>
-    {% endif %}
-</div>
-
-<!-- TAB 3: Ventas recientes -->
-<div id="tab-recientes" style="display:none;">
-    <div class="card" style="padding:0;overflow:hidden;">
-        <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
-            <p style="font-weight:700;color:#1e293b;font-size:0.92rem;">🕐 Ventas últimos 7 días</p>
-        </div>
-        {% if ventas_recientes %}
-        <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;min-width:500px;">
-            <thead><tr style="background:#f8fafc;">
-                <th class="th">Fecha</th>
-                <th class="th">Producto</th>
-                <th class="th" style="text-align:center;">Cant.</th>
-                <th class="th" style="text-align:right;">P. venta</th>
-                <th class="th" style="text-align:right;">Total</th>
-                <th class="th">Concepto</th>
-            </tr></thead>
-            <tbody>
-            {% for r in ventas_recientes %}
-            <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index%2==0 %}background:#fafafa;{% endif %}">
-                <td class="td" style="font-size:0.8rem;color:#64748b;white-space:nowrap;">{{ r.fecha.strftime('%d/%m/%Y') }}</td>
-                <td class="td" style="font-weight:600;font-size:0.875rem;">
-                    <a href="{{ url_for('kardex.comedor', producto_id=r.producto_carta_id) }}"
-                       onclick="showTab('tab-kardex')"
-                       style="color:#1e293b;text-decoration:none;">
-                        {{ r.producto_carta.nombre if r.producto_carta else '—' }}
-                    </a>
-                </td>
-                <td class="td" style="text-align:center;font-size:1rem;font-weight:800;color:#dc2626;">{{ r.cant_salida|int }}</td>
-                <td class="td" style="text-align:right;color:#64748b;font-size:0.85rem;">S/.{{ '%.2f'|format(r.precio_salida) }}</td>
-                <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(r.total_salida) }}</td>
-                <td class="td" style="font-size:0.78rem;color:#94a3b8;">{{ r.concepto or '—' }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-        {% else %}
-        <div style="padding:40px;text-align:center;color:#94a3b8;">Sin ventas en los últimos 7 días.</div>
-        {% endif %}
+        </tbody>
+    </table>
     </div>
 </div>
-
-{% block scripts %}
-<script>
-function showTab(id) {
-    ['tab-ranking','tab-kardex','tab-recientes'].forEach(t => {
-        document.getElementById(t).style.display = t===id ? 'block' : 'none';
-    });
-    const labels = {'tab-ranking':'btn-ranking','tab-kardex':'btn-kardex','tab-recientes':'btn-recientes'};
-    Object.entries(labels).forEach(([tab,btn]) => {
-        const el = document.getElementById(btn);
-        el.style.background = tab===id ? '#1e293b' : 'transparent';
-        el.style.color = tab===id ? 'white' : '#64748b';
-        el.style.fontWeight = tab===id ? '700' : '600';
-    });
-}
-{% if producto_sel %}showTab('tab-kardex');{% endif %}
-</script>
-{% endblock %}
+{% else %}
+<div class="card" style="text-align:center;padding:60px;"><p style="font-size:2rem;margin-bottom:8px;">🍴</p><p style="font-weight:600;color:#1e293b;">Selecciona un producto de carta para ver su Kardex</p></div>
+{% endif %}
 {% endblock %}

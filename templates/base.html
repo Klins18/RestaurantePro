@@ -157,10 +157,21 @@
         {% set grp_ventas = bp == 'ventas' %}
         {% set grp_abast = bp in ['pedidos','compras'] %}
         {% set grp_emp = bp == 'empleados' %}
+        {% set es_admin = current_user.rol == 'administrador' %}
+        {% set es_sup = current_user.rol in ['administrador','supervisor'] %}
+        {% set puede_pedidos    = es_sup or current_user.permisos.filter_by(permiso='pedidos').first() %}
+        {% set puede_compras    = es_sup or current_user.permisos.filter_by(permiso='compras').first() %}
+        {% set puede_gas        = es_sup or current_user.permisos.filter_by(permiso='gas').first() %}
+        {% set puede_inventario = es_sup or current_user.permisos.filter_by(permiso='inventario').first() %}
+        {% set puede_asistencia = es_sup or current_user.permisos.filter_by(permiso='asistencia').first() %}
+        {% set puede_reservas   = es_sup or current_user.permisos.filter_by(permiso='reservas').first() %}
+        {% set puede_cierre     = es_admin or current_user.permisos.filter_by(permiso='cierre_caja').first() %}
+        {% set puede_honorarios = es_admin or current_user.permisos.filter_by(permiso='honorarios').first() %}
 
         <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if ep == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
 
-        <!-- INVENTARIO -->
+        <!-- INVENTARIO: supervisor+ -->
+        {% if puede_inventario %}
         <div class="nav-group-header {% if grp_inv %}open{% endif %}" onclick="toggleGroup(this)">
             <span>📦 Inventario</span><span class="chevron">▶</span>
         </div>
@@ -170,6 +181,7 @@
             <a href="{{ url_for('bienes.index') }}" class="sidebar-link {% if bp=='bienes' %}active{% endif %}" onclick="closeSidebar()"><span>🪑</span> Bienes y equipos</a>
             <a href="{{ url_for('kardex.comedor') }}" class="sidebar-link sidebar-sub {% if ep=='kardex.comedor' %}active{% endif %}" onclick="closeSidebar()"><span>🍴</span> Kardex comedor</a>
         </div>
+        {% endif %}
 
         <!-- VENTAS -->
         {% set grp_ventas2 = grp_ventas or bp == 'pasajeros' %}
@@ -180,30 +192,49 @@
             <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if ep=='ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Resumen ventas</a>
             <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if ep=='ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Registrar venta</a>
             <a href="{{ url_for('pasajeros.index') }}" class="sidebar-link {% if bp=='pasajeros' and ep=='pasajeros.index' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del día</a>
+            {% if puede_reservas %}
             <a href="{{ url_for('pasajeros.reservas') }}" class="sidebar-link {% if ep=='pasajeros.reservas' %}active{% endif %}" onclick="closeSidebar()"><span>📅</span> Reservas</a>
+            {% endif %}
+            {% if puede_cierre %}
             <a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if ep=='ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de caja</a>
+            {% endif %}
         </div>
 
-        <!-- ABASTECIMIENTO (Pedidos + Compras unificados) -->
+        <!-- ABASTECIMIENTO: supervisor+ -->
+        {% if puede_pedidos or puede_compras or puede_gas %}
         <div class="nav-group-header {% if grp_abast %}open{% endif %}" onclick="toggleGroup(this)">
             <span>🛒 Abastecimiento</span><span class="chevron">▶</span>
         </div>
         <div class="nav-group-body {% if grp_abast %}open{% endif %}">
+            {% if puede_pedidos %}
             <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if bp=='pedidos' and ep not in ['pedidos.nueva','pedidos.notificaciones'] %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Listas de pedido</a>
+            {% endif %}
+            {% if puede_compras %}
             <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if bp=='compras' and ep != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro compras</a>
+            {% endif %}
+            {% if puede_gas %}
             <a href="{{ url_for('pasajeros.gas') }}" class="sidebar-link {% if ep=='pasajeros.gas' %}active{% endif %}" onclick="closeSidebar()"><span>🔴</span> Balones de gas</a>
+            {% endif %}
         </div>
+        {% endif %}
 
         <!-- EMPLEADOS -->
         <div class="nav-group-header {% if grp_emp %}open{% endif %}" onclick="toggleGroup(this)">
             <span>👥 Empleados</span><span class="chevron">▶</span>
         </div>
         <div class="nav-group-body {% if grp_emp %}open{% endif %}">
+            {% if es_admin %}
             <a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if ep and 'empleados' in ep and ep not in ['empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👤</span> Personal</a>
+            {% endif %}
+            {% if puede_asistencia %}
             <a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if ep=='empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
-            <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if ep=='empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
-            <a href="{{ url_for('empleados.honorarios') }}" class="sidebar-link {% if ep=='empleados.honorarios' %}active{% endif %}" onclick="closeSidebar()"><span>💼</span> Honorarios</a>
             <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if ep=='empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte mensual</a>
+            {% endif %}
+
+            <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if ep=='empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
+            {% if puede_honorarios %}
+            <a href="{{ url_for('empleados.honorarios') }}" class="sidebar-link {% if ep=='empleados.honorarios' %}active{% endif %}" onclick="closeSidebar()"><span>💼</span> Honorarios</a>
+            {% endif %}
         </div>
 
         <!-- Notificaciones + Admin -->
@@ -213,7 +244,7 @@
                 {%- set n_count = notif_no_leidas|default(0) -%}
                 {%- if n_count > 0 %}<span style="background:#ef4444;color:white;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:9999px;position:absolute;right:10px;top:50%;transform:translateY(-50%);">{{ n_count }}</span>{% endif %}
             </a>
-            {% if current_user.es_admin() %}
+            {% if es_admin %}
             <a href="{{ url_for('admin.index') }}" class="sidebar-link {% if 'admin' in ep %}active{% endif %}" onclick="closeSidebar()"><span>⚙️</span> Administración</a>
             {% endif %}
         </div>

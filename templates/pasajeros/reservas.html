@@ -89,7 +89,12 @@
                 <div style="display:flex;gap:4px;margin-top:4px;">
                     <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ (r.observaciones or '')|replace("'", "\\'") }}', '{{ r.estado }}')"
                         style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✏️</button>
-                    <form method="POST" style="margin:0;" onsubmit="return confirm('¿Cancelar esta reserva?')">
+                    <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Postergar esta reserva?')">
+                        <input type="hidden" name="accion" value="postergar">
+                        <input type="hidden" name="reserva_id" value="{{ r.id }}">
+                        <button type="submit" style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">⏳</button>
+                    </form>
+                    <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Cancelar esta reserva?')">
                         <input type="hidden" name="accion" value="cancelar">
                         <input type="hidden" name="reserva_id" value="{{ r.id }}">
                         <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕</button>
@@ -109,26 +114,73 @@
 <!-- HISTORIAL -->
 <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
-        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">🗓 Historial reciente</p>
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:10px;">🗓 Historial</p>
+        <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div>
+                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Estado</label>
+                <select name="hist_estado" class="input" style="font-size:0.78rem;padding:4px 8px;max-width:130px;" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="completada"  {% if filtro_hist=='completada'  %}selected{% endif %}>✅ Atendidas</option>
+                    <option value="cancelada"   {% if filtro_hist=='cancelada'   %}selected{% endif %}>❌ Canceladas</option>
+                    <option value="postergada"  {% if filtro_hist=='postergada'  %}selected{% endif %}>⏳ Postergadas</option>
+                    <option value="pendiente"   {% if filtro_hist=='pendiente'   %}selected{% endif %}>⏰ Pendientes</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Desde</label>
+                <input type="date" name="hist_desde" value="{{ filtro_desde }}" class="input" style="font-size:0.78rem;padding:4px;max-width:130px;" onchange="this.form.submit()">
+            </div>
+            <div>
+                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Hasta</label>
+                <input type="date" name="hist_hasta" value="{{ filtro_hasta }}" class="input" style="font-size:0.78rem;padding:4px;max-width:130px;" onchange="this.form.submit()">
+            </div>
+            {% if filtro_hist or filtro_desde or filtro_hasta %}
+            <a href="{{ url_for('pasajeros.reservas') }}" style="font-size:0.75rem;color:#94a3b8;text-decoration:none;padding:4px;">✕ Limpiar</a>
+            {% endif %}
+        </form>
     </div>
+    {% if historial %}
     {% for r in historial %}
-    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <div style="min-width:0;">
-            <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">{{ r.nombre_grupo or 'Sin nombre' }}</p>
-            <p style="font-size:0.75rem;color:#94a3b8;">{{ r.fecha.strftime('%d/%m/%Y') }}
-                {% if r.num_pax %} · {{ r.num_pax }} pax{% endif %}
+    {% set cfg = {
+        'completada': ('✅','#dcfce7','#166534'),
+        'cancelada':  ('❌','#fee2e2','#dc2626'),
+        'postergada': ('⏳','#fef3c7','#92400e'),
+        'pendiente':  ('⏰','#eff6ff','#1d4ed8')
+    } %}
+    {% set ic, bg, fg = cfg.get(r.estado, ('📋','#f1f5f9','#64748b')) %}
+    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.1rem;flex-shrink:0;">{{ ic }}</span>
+        <div style="flex:1;min-width:0;">
+            <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">{{ r.nombre_grupo or 'Sin nombre' }}
+                {% if r.empresa %}<span style="font-size:0.75rem;color:#94a3b8;font-weight:400;">· {{ r.empresa.nombre }}</span>{% endif %}
             </p>
+            <p style="font-size:0.75rem;color:#94a3b8;">
+                📅 {{ r.fecha.strftime('%d/%m/%Y') }}
+                {% if r.hora %}🕐 {{ r.hora }}{% endif %}
+                {% if r.num_pax %} · 👥 {{ r.num_pax }} pax{% endif %}
+                {% if r.precio_buffet %} · S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
+            </p>
+            {% if r.observaciones %}
+            <p style="font-size:0.72rem;color:#94a3b8;font-style:italic;margin-top:1px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>
+            {% endif %}
         </div>
-        <span style="font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;flex-shrink:0;
-            {% if r.estado=='completada' %}background:#dcfce7;color:#166534;
-            {% elif r.estado=='cancelada' %}background:#fee2e2;color:#dc2626;
-            {% else %}background:#f1f5f9;color:#64748b;{% endif %}">
-            {{ r.estado|capitalize }}
-        </span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            <span style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ bg }};color:{{ fg }};">
+                {{ r.estado|capitalize }}
+            </span>
+            <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ (r.observaciones or '')|replace("'","\\'") }}', '{{ r.estado }}')"
+                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:0.7rem;cursor:pointer;color:#64748b;">✏️ Editar</button>
+        </div>
     </div>
-    {% else %}
-    <div style="padding:30px;text-align:center;color:#94a3b8;font-size:0.85rem;">Sin historial</div>
     {% endfor %}
+    {% else %}
+    <div style="padding:30px;text-align:center;color:#94a3b8;font-size:0.85rem;">
+        Sin registros en el historial{% if filtro_hist %} con estado "{{ filtro_hist }}"{% endif %}.
+    </div>
+    {% endif %}
+    <div style="padding:8px 16px;background:#f8fafc;text-align:right;">
+        <span style="font-size:0.75rem;color:#94a3b8;">{{ historial|length }} registro(s)</span>
+    </div>
 </div>
 </div>
 
@@ -148,7 +200,7 @@
             <div><label class="label">Empresa turística</label>
                 <select name="empresa_id" id="res-empresa" class="input">
                     <option value="">Sin empresa / Privado</option>
-                    {% for e in empresas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                    {% for e in empresas if e.nombre|lower not in ['privado','grupo privado','private'] %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
                 </select>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -159,6 +211,7 @@
                 <select name="estado" id="res-estado" class="input">
                     <option value="pendiente">Pendiente</option>
                     <option value="confirmada">Confirmada</option>
+                    <option value="postergada">Postergada</option>
                     <option value="cancelada">Cancelada</option>
                 </select>
             </div>

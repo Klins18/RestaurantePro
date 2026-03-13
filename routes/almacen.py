@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Producto, Categoria, MovimientoAlmacen, Proveedor, registrar_auditoria
 from datetime import datetime
 import pytz
@@ -15,15 +16,13 @@ def now_peru():
 # ──────────────────────────────────────
 @almacen_bp.route('/')
 @login_required
+@permiso_required('inventario')
 def index():
     categoria_id = request.args.get('categoria', '')
     q_filtro = request.args.get('q', '').strip()
     q = Producto.query.filter_by(activo=True)
     if categoria_id:
-        try:
-            q = q.filter_by(categoria_id=int(categoria_id))
-        except:
-            pass
+        q = q.filter_by(categoria_id=int(categoria_id))
     if q_filtro:
         q = q.filter(Producto.nombre.ilike(f'%{q_filtro}%'))
     productos = q.order_by(Producto.nombre).all()
@@ -38,6 +37,7 @@ def index():
 # ──────────────────────────────────────
 @almacen_bp.route('/ingreso', methods=['GET', 'POST'])
 @login_required
+@permiso_required('inventario')
 def ingreso():
     if request.method == 'POST':
         producto_id = request.form.get('producto_id')
@@ -86,6 +86,7 @@ def ingreso():
 # ──────────────────────────────────────
 @almacen_bp.route('/egreso', methods=['GET', 'POST'])
 @login_required
+@permiso_required('inventario')
 def egreso():
     if request.method == 'POST':
         producto_id = request.form.get('producto_id')
@@ -136,6 +137,7 @@ def egreso():
 # ──────────────────────────────────────
 @almacen_bp.route('/movimientos')
 @login_required
+@permiso_required('inventario')
 def movimientos():
     tipo = request.args.get('tipo', '')
     producto_id = request.args.get('producto', '')

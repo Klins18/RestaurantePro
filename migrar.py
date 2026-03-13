@@ -311,3 +311,18 @@ for sql, nombre in [
         migraciones.append(f"+ tabla {nombre}")
     except Exception as e:
         if "already exists" not in str(e).lower(): errores.append(f"{nombre}: {e}")
+
+# ── Permisos individuales por usuario ──
+try:
+    cursor.execute("""CREATE TABLE IF NOT EXISTS permisos_usuario (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL,
+        permiso VARCHAR(50) NOT NULL,
+        otorgado_por INTEGER,
+        otorgado_en DATETIME,
+        UNIQUE(usuario_id, permiso),
+        FOREIGN KEY(usuario_id) REFERENCES usuarios(id))""")
+    conn.commit()
+    migraciones.append("+ tabla permisos_usuario")
+except Exception as e:
+    if "already exists" not in str(e).lower(): errores.append(f"permisos_usuario: {e}")

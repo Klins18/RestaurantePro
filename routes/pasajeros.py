@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, RegistroPasajeros, EmpresaTuristica, BalonGas, Reserva, VentaDiaria
 from datetime import date, datetime, timedelta
 import pytz
@@ -94,6 +95,7 @@ def index():
 # ─── BALONES DE GAS ─────────────────────────────────────────
 @pasajeros_bp.route('/gas', methods=['GET', 'POST'])
 @login_required
+@permiso_required('gas')
 def gas():
     if request.method == 'POST':
         accion = request.form.get('accion', 'nuevo')
@@ -167,6 +169,7 @@ def gas():
 # ─── RESERVAS ───────────────────────────────────────────────
 @pasajeros_bp.route('/reservas', methods=['GET', 'POST'])
 @login_required
+@permiso_required('reservas')
 def reservas():
     if request.method == 'POST':
         accion = request.form.get('accion', 'nuevo')
@@ -184,7 +187,7 @@ def reservas():
                 precio_buffet = float(request.form.get('precio_buffet', 0) or 0),
                 empresa_id    = request.form.get('empresa_id') or None,
                 observaciones = request.form.get('observaciones', '').strip(),
-                estado        = request.form.get('estado', 'pendiente'),
+                estado        = request.form.get('estado', 'pendiente'),  # pendiente|confirmada|cancelada|completada|postergada
             )
             if not datos['fecha']:
                 flash('La fecha es obligatoria.', 'error')
@@ -205,6 +208,11 @@ def reservas():
             r.estado = 'cancelada'
             flash('Reserva cancelada.', 'success')
 
+        elif accion == 'postergar':
+            r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
+            r.estado = 'postergada'
+            flash('Reserva marcada como postergada.', 'success')
+
         elif accion == 'completar':
             r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
             r.estado = 'completada'
@@ -223,25 +231,49 @@ def reservas():
     alertas = Reserva.query.filter(
         Reserva.fecha >= hoy,
         Reserva.fecha <= hoy + timedelta(days=2),
-        Reserva.estado.in_(['pendiente', 'confirmada'])
+        Reserva.estado.in_(['pendiente', 'confirmada', 'postergada'])
     ).order_by(Reserva.fecha, Reserva.hora).all()
 
     # Reservas próximas (futuras + hoy)
     proximas = Reserva.query.filter(
         Reserva.fecha >= hoy,
-        Reserva.estado.in_(['pendiente', 'confirmada'])
+        Reserva.estado.in_(['pendiente', 'confirmada', 'postergada'])
     ).order_by(Reserva.fecha, Reserva.hora).all()
 
-    # Historial (pasadas)
-    historial = Reserva.query.filter(
-        Reserva.fecha < hoy
-    ).order_by(Reserva.fecha.desc()).limit(30).all()
+    # Historial: pasadas + completadas/canceladas/postergadas futuras
+    filtro_hist = request.args.get('hist_estado', '')
+    filtro_desde = request.args.get('hist_desde', '')
+    filtro_hasta = request.args.get('hist_hasta', '')
+
+    q_hist = Reserva.query.filter(
+        (Reserva.fecha < hoy) |
+        (Reserva.estado.in_(['completada', 'cancelada']))
+    )
+    # Excluir futuras pendientes/confirmadas/postergadas (esas van en proximas)
+    q_hist = q_hist.filter(
+        ~((Reserva.fecha >= hoy) & (Reserva.estado.in_(['pendiente', 'confirmada', 'postergada'])))
+    )
+    if filtro_hist:
+        q_hist = q_hist.filter(Reserva.estado == filtro_hist)
+    if filtro_desde:
+        try:
+            from datetime import datetime as _dt
+            q_hist = q_hist.filter(Reserva.fecha >= _dt.strptime(filtro_desde, '%Y-%m-%d').date())
+        except: pass
+    if filtro_hasta:
+        try:
+            from datetime import datetime as _dt
+            q_hist = q_hist.filter(Reserva.fecha <= _dt.strptime(filtro_hasta, '%Y-%m-%d').date())
+        except: pass
+
+    historial = q_hist.order_by(Reserva.fecha.desc()).limit(60).all()
 
     empresas = EmpresaTuristica.query.filter_by(activo=True).order_by(EmpresaTuristica.nombre).all()
 
     return render_template('pasajeros/reservas.html',
         alertas=alertas, proximas=proximas, historial=historial,
-        empresas=empresas, hoy=hoy)
+        empresas=empresas, hoy=hoy,
+        filtro_hist=filtro_hist, filtro_desde=filtro_desde, filtro_hasta=filtro_hasta)
 
 
 # ─── API: alertas de reservas (para el header) ──────────────

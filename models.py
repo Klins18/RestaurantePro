@@ -672,3 +672,33 @@ class Honorario(db.Model):
     usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     usuario         = db.relationship('Usuario')
     creado_en       = db.Column(db.DateTime, default=now_peru)
+
+
+# ══════════════════════════════════════════════
+#  PERMISOS INDIVIDUALES POR USUARIO
+# ══════════════════════════════════════════════
+# Permisos disponibles:
+#   pedidos       → Listas de pedido (crear, ver, verificar)
+#   compras       → Registro de compras
+#   gas           → Balones de gas
+#   inventario    → Almacén, kardex, bienes
+#   asistencia    → Toma de asistencia + reporte
+#   reservas      → Reservas de grupos
+#   cierre_caja   → Cierre de caja
+#   honorarios    → Recibos de honorarios
+
+class PermisoUsuario(db.Model):
+    __tablename__ = 'permisos_usuario'
+    id         = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    permiso    = db.Column(db.String(50), nullable=False)
+    otorgado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    otorgado_en  = db.Column(db.DateTime, default=now_peru)
+
+    usuario  = db.relationship('Usuario', foreign_keys=[usuario_id],
+                                backref=db.backref('permisos', lazy='dynamic'))
+    otorgador = db.relationship('Usuario', foreign_keys=[otorgado_por])
+
+    __table_args__ = (
+        db.UniqueConstraint('usuario_id', 'permiso', name='uq_permiso_usuario'),
+    )

@@ -1,86 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Categorías{% endblock %}
 {% block page_title %}Categorías de Almacén{% endblock %}
-{% block page_subtitle %}Organización de insumos del inventario{% endblock %}
+{% block page_subtitle %}Organización de insumos{% endblock %}
 {% block content %}
-<div style="display:grid;grid-template-columns:1fr 310px;gap:18px;" id="cat-grid">
-
-<!-- LISTA -->
+<div style="display:grid;grid-template-columns:1fr 300px;gap:18px;" id="cat-grid">
 <div class="card" style="padding:0;overflow:hidden;">
-    <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;">
-        <p style="font-weight:700;color:#1e293b;font-size:0.95rem;">📁 Categorías ({{ categorias|length }})</p>
-    </div>
-    {% if categorias %}
-    {% for c in categorias %}
-    <div style="padding:12px 18px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;" id="row-{{ c.id }}">
-        <!-- Info -->
-        <div style="flex:1;" id="info-{{ c.id }}">
-            <p style="font-weight:600;color:#1e293b;font-size:0.9rem;">{{ c.nombre }}</p>
-            <p style="font-size:0.75rem;color:#94a3b8;">{{ c.descripcion or '—' }} · {{ c.productos|length }} producto(s)</p>
-        </div>
-        <!-- Form editar oculto -->
-        <form method="POST" action="{{ url_for('admin.editar_categoria', id=c.id) }}"
-              id="fedit-{{ c.id }}" style="display:none;flex:1;gap:8px;align-items:center;">
-            <input type="text" name="nombre" value="{{ c.nombre }}" required
-                style="border:1px solid #fde68a;border-radius:8px;padding:6px 10px;font-size:0.875rem;flex:1;outline:none;">
-            <input type="text" name="descripcion" value="{{ c.descripcion or '' }}" placeholder="Descripción..."
-                style="border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:0.875rem;flex:1;outline:none;">
-            <button type="submit" style="background:#10b981;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:0.8rem;font-weight:700;cursor:pointer;white-space:nowrap;">💾</button>
-            <button type="button" onclick="cancelar({{ c.id }})"
-                style="background:#f1f5f9;color:#64748b;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;">✕</button>
-        </form>
-        <!-- Botones -->
-        <div id="btns-{{ c.id }}" style="display:flex;gap:6px;flex-shrink:0;">
-            <button onclick="editar({{ c.id }})"
-                style="background:#fef3c7;color:#92400e;border:none;border-radius:8px;padding:5px 11px;font-size:0.8rem;font-weight:600;cursor:pointer;">✏️ Editar</button>
-            <form method="POST" action="{{ url_for('admin.eliminar_categoria', id=c.id) }}" style="margin:0;"
-                  onsubmit="return confirm('¿Eliminar «{{ c.nombre }}»?{% if c.productos %} ⚠️ Tiene {{ c.productos|length }} producto(s) asignados.{% endif %}')">
-                <button type="submit"
-                    style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:5px 11px;font-size:0.8rem;font-weight:600;cursor:pointer;">🗑️</button>
-            </form>
-        </div>
-    </div>
-    {% endfor %}
-    {% else %}
-    <div style="padding:50px;text-align:center;color:#94a3b8;">Sin categorías. Crea la primera.</div>
-    {% endif %}
-</div>
-
-<!-- NUEVA -->
-<div>
-    <div class="card" style="margin-bottom:14px;">
-        <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;font-size:0.95rem;">➕ Nueva Categoría</h3>
-        <form method="POST" action="{{ url_for('admin.nueva_categoria') }}" style="display:flex;flex-direction:column;gap:12px;">
-            <div><label class="label">Nombre *</label>
-                <input type="text" name="nombre" class="input" required placeholder="Ej: Verduras, Carnes..."></div>
-            <div><label class="label">Descripción</label>
-                <textarea name="descripcion" class="input" rows="2" placeholder="Descripción opcional..."></textarea></div>
-            <button type="submit" class="btn-primary" style="text-align:center;">Crear Categoría</button>
-        </form>
-    </div>
-    <div class="card" style="background:#fffbeb;border:1px solid #fde68a;padding:14px;">
-        <p style="font-size:0.75rem;font-weight:700;color:#92400e;margin-bottom:6px;">💡 Nota</p>
-        <p style="font-size:0.78rem;color:#78350f;line-height:1.5;">
-            No puedes eliminar una categoría que tenga productos asignados.<br>
-            Primero cambia la categoría de sus productos en el panel de Productos.
-        </p>
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead><tr><th class="th">Categoría</th><th class="th">Descripción</th></tr></thead>
+        <tbody>
+        {% for c in categorias %}
+        <tr><td class="td" style="font-weight:600;color:#1e293b;">{{ c.nombre }}</td><td class="td" style="color:#64748b;font-size:0.875rem;">{{ c.descripcion or "—" }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" style="padding:30px;text-align:center;color:#94a3b8;">Sin categorías.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
     </div>
 </div>
+<div class="card">
+    <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">➕ Nueva Categoría</h3>
+    <form method="POST" action="{{ url_for("admin.nueva_categoria") }}" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label class="label">Nombre</label><input type="text" name="nombre" class="input" required></div>
+        <div><label class="label">Descripción</label><textarea name="descripcion" class="input" rows="2"></textarea></div>
+        <button type="submit" class="btn-primary" style="text-align:center;">Crear</button>
+    </form>
 </div>
-
-<style>@media(max-width:768px){ .cat-grid-r{grid-template-columns:1fr!important;} }</style>
-<script>
-function editar(id){
-    document.getElementById('info-'+id).style.display='none';
-    document.getElementById('btns-'+id).style.display='none';
-    const f=document.getElementById('fedit-'+id);
-    f.style.display='flex';
-    f.querySelector('input').focus();
-}
-function cancelar(id){
-    document.getElementById('info-'+id).style.display='block';
-    document.getElementById('btns-'+id).style.display='flex';
-    document.getElementById('fedit-'+id).style.display='none';
-}
-</script>
+</div>
+<style>@media(max-width:768px){div[id="cat-grid"]{grid-template-columns:1fr!important;}}</style>
 {% endblock %}

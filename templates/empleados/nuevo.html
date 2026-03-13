@@ -6,7 +6,7 @@
 
 {% block content %}
 <form method="POST" action="{{ url_for('empleados.nuevo') }}">
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="nuevo-emp-grid">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="nuevo-emp-grid">
 
     <!-- Datos personales -->
     <div class="card">
@@ -67,5 +67,5 @@
     </div>
 </div>
 </form>
-<style>@media(max-width:768px).nuevo-emp-grid{grid-template-columns:1fr!important;} }</style>
+<style>@media(max-width:768px){div[id="nuevo-emp-grid"]{grid-template-columns:1fr!important;}}</style>
 {% endblock %}

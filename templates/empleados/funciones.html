@@ -4,7 +4,7 @@
 {% block page_subtitle %}{{ fecha.strftime('%A, %d de %B del %Y') }}{% endblock %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:320px 1fr;gap:16px;" class="func-grid">
+<div style="display:grid;grid-template-columns:320px 1fr;gap:16px;" id="func-grid">
 
     <!-- Formulario agregar función -->
     <div>
@@ -104,7 +104,7 @@
     </div>
 </div>
 
-<style>@media(max-width:768px).func-grid{grid-template-columns:1fr!important;} #func-grid > div:first-child .card{position:static!important;}}</style>
+<style>@media(max-width:768px){div[id="func-grid"]{grid-template-columns:1fr!important;} #func-grid > div:first-child .card{position:static!important;}}</style>
 {% endblock %}
 
 {% block scripts %}

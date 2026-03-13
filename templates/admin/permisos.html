@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Permisos de acceso{% endblock %}
+{% block page_title %}Permisos de acceso{% endblock %}
+{% block page_subtitle %}Asigna secciones específicas a cada empleado{% endblock %}
+
+{% block content %}
+
+<div class="card" style="padding:14px 18px;margin-bottom:16px;background:#eff6ff;border:1px solid #bfdbfe;">
+    <p style="font-size:0.85rem;color:#1d4ed8;">
+        <strong>ℹ️ ¿Cómo funciona?</strong> Los supervisores y administradores tienen acceso completo.
+        Aquí puedes habilitar secciones específicas para empleados sin cambiarles el rol.
+        Por ejemplo, darle acceso a Pedidos a Juanito sin convertirlo en supervisor.
+    </p>
+</div>
+
+{% if not usuarios %}
+<div class="card" style="padding:40px;text-align:center;color:#94a3b8;">
+    <p style="font-size:1.8rem;margin-bottom:8px;">👥</p>
+    <p>No hay empleados registrados con cuenta de usuario.</p>
+</div>
+{% else %}
+
+{% for usuario in usuarios %}
+{% set perms = permisos_map[usuario.id] %}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;">
+    <!-- Cabecera usuario -->
+    <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;background:#f8fafc;border-bottom:1px solid #f1f5f9;">
+        <div style="width:38px;height:38px;background:#6366f1;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:1rem;flex-shrink:0;">
+            {{ usuario.nombre_completo[0].upper() }}
+        </div>
+        <div>
+            <p style="font-weight:700;color:#1e293b;font-size:0.95rem;">{{ usuario.nombre_completo }}</p>
+            <p style="font-size:0.75rem;color:#94a3b8;">@{{ usuario.username }}
+                {% if perms %}
+                · <span style="color:#6366f1;font-weight:600;">{{ perms|length }} permiso(s) activo(s)</span>
+                {% else %}
+                · <span style="color:#94a3b8;">Sin permisos adicionales</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Grid de permisos -->
+    <div style="padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+        {% for key, (icono, label) in permisos_labels.items() %}
+        {% set activo = key in perms %}
+        <form method="POST" action="{{ url_for('admin.toggle_permiso', usuario_id=usuario.id) }}" style="margin:0;">
+            <input type="hidden" name="permiso" value="{{ key }}">
+            <button type="submit" style="
+                width:100%;text-align:left;padding:10px 14px;border-radius:10px;cursor:pointer;
+                display:flex;align-items:center;gap:10px;font-size:0.84rem;font-weight:600;
+                border: 2px solid {{ '#6366f1' if activo else '#e2e8f0' }};
+                background: {{ '#f5f3ff' if activo else 'white' }};
+                color: {{ '#4f46e5' if activo else '#64748b' }};
+                transition: all 0.15s;">
+                <span style="font-size:1.1rem;">{{ icono }}</span>
+                <span style="flex:1;">{{ label }}</span>
+                {% if activo %}
+                <span style="background:#6366f1;color:white;font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:9999px;">✓ ON</span>
+                {% else %}
+                <span style="background:#f1f5f9;color:#94a3b8;font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:9999px;">OFF</span>
+                {% endif %}
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

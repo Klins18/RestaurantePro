@@ -51,7 +51,7 @@
             <label class="label">Empresa / Grupo</label>
             <select name="empresa_id" class="input" id="sel-empresa-pax" onchange="togglePrivado(this)">
                 <option value="">👤 Grupo Privado</option>
-                {% for e in empresas %}
+                {% for e in empresas if e.nombre|lower not in ['privado','grupo privado','private'] %}
                 <option value="{{ e.id }}">{{ e.nombre }}</option>
                 {% endfor %}
             </select>
@@ -158,7 +158,7 @@
                 <label class="label">Empresa</label>
                 <select name="empresa_id" id="edit-empresa" class="input">
                     <option value="">👤 Grupo Privado</option>
-                    {% for e in empresas %}
+                    {% for e in empresas if e.nombre|lower not in ['privado','grupo privado','private'] %}
                     <option value="{{ e.id }}">{{ e.nombre }}</option>
                     {% endfor %}
                 </select>
