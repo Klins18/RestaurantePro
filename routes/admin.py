@@ -212,6 +212,17 @@ def editar_producto(id):
     flash(f'Producto "{prod.nombre}" actualizado.', 'success')
     return redirect(url_for('admin.productos'))
 
+@admin_bp.route('/productos/<int:id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_producto(id):
+    prod = Producto.query.get_or_404(id)
+    nombre = prod.nombre
+    prod.activo = False
+    db.session.commit()
+    flash(f'Producto "{nombre}" desactivado.', 'success')
+    return redirect(url_for('admin.productos'))
+
 # ──────────────────────────────────────
 #  PROVEEDORES
 # ──────────────────────────────────────

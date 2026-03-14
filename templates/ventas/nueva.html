@@ -60,6 +60,15 @@
         </div>
     </div>
 
+    <!-- Datos empresa (pax + precio buffet) -->
+    <div id="panel-empresa" style="display:none;" class="card">
+        <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px;">Datos del servicio</p>
+        <label class="label">Número de pax</label>
+        <input type="number" id="inp-num-pax" class="input" placeholder="0" min="0" style="margin-bottom:7px;" oninput="guardarEmpresa()">
+        <label class="label">Precio buffet por pax (S/.)</label>
+        <input type="number" id="inp-precio-buf" class="input" placeholder="0.00" min="0" step="0.50" oninput="guardarEmpresa()">
+    </div>
+
     <!-- Datos privado (oculto por defecto) -->
     <div id="panel-privado" style="display:none;" class="card">
         <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px;">Datos del grupo</p>
@@ -175,9 +184,13 @@ EMPRESAS.forEach(e => { tabs[e.id] = { nombre:e.nombre, color:e.color, esPrivado
         var datos = JSON.parse(guardado);
         Object.entries(datos).forEach(function([empId, tabData]) {
             if (tabs[empId]) {
-                tabs[empId].items = tabData.items || [];
-                tabs[empId].nombreGrupo = tabData.nombreGrupo || '';
-                tabs[empId].tipoPago = tabData.tipoPago || '';
+                tabs[empId].items      = tabData.items || [];
+                tabs[empId].nombreGrupo= tabData.nombreGrupo || '';
+                tabs[empId].tipoPago   = tabData.tipoPago || '';
+                tabs[empId].numPax     = tabData.numPax || 0;
+                tabs[empId].precioBuf  = tabData.precioBuf !== undefined
+                    ? tabData.precioBuf
+                    : (tabs[empId].esPeruHop ? PRECIO_PERUHOP : 0);
             }
         });
     } catch(e) {}
@@ -189,7 +202,8 @@ function guardarEstado() {
         localStorage.setItem(STORAGE_FECHA, hoyStr);
         var snapshot = {};
         Object.entries(tabs).forEach(function([id, t]) {
-            snapshot[id] = { items: t.items, nombreGrupo: t.nombreGrupo, tipoPago: t.tipoPago };
+            snapshot[id] = { items:t.items, nombreGrupo:t.nombreGrupo,
+                             tipoPago:t.tipoPago, numPax:t.numPax, precioBuf:t.precioBuf };
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch(e) {}
@@ -218,9 +232,13 @@ function activarTab(id) {
     document.getElementById('ind-nombre').style.color = 'white';
 
     document.getElementById('panel-privado').style.display = tab.esPrivado ? 'block' : 'none';
+    document.getElementById('panel-empresa').style.display = (!tab.esPrivado) ? 'block' : 'none';
     if (tab.esPrivado) {
         document.getElementById('inp-nombre-grupo').value = tab.nombreGrupo;
         document.getElementById('inp-tipo-pago').value    = tab.tipoPago;
+    } else {
+        document.getElementById('inp-num-pax').value   = tab.numPax || '';
+        document.getElementById('inp-precio-buf').value= tab.precioBuf || '';
     }
     renderListaActiva();
 }
@@ -229,6 +247,13 @@ function guardarPrivado() {
     if (!tabActiva) return;
     tabs[tabActiva].nombreGrupo = document.getElementById('inp-nombre-grupo').value;
     tabs[tabActiva].tipoPago    = document.getElementById('inp-tipo-pago').value;
+    guardarEstado();
+}
+
+function guardarEmpresa() {
+    if (!tabActiva) return;
+    tabs[tabActiva].numPax    = parseInt(document.getElementById('inp-num-pax').value) || 0;
+    tabs[tabActiva].precioBuf = parseFloat(document.getElementById('inp-precio-buf').value) || 0;
     guardarEstado();
 }
 
@@ -359,7 +384,10 @@ function registrarTodo() {
     var conItems = Object.entries(tabs).filter(([,t])=>t.items.length>0).map(([empId,tab])=>({
         empresa_id: empId==='privado' ? null : empId,
         es_privado: tab.esPrivado, nombre_grupo: tab.nombreGrupo,
-        tipo_pago: tab.tipoPago, observaciones:'', items: tab.items
+        tipo_pago: tab.tipoPago, observaciones:'',
+        num_pax: tab.numPax || 0,
+        precio_buffet: tab.precioBuf || 0,
+        items: tab.items
     }));
     if (conItems.length===0) return;
     document.getElementById('hid-tabs-json').value = JSON.stringify(conItems);

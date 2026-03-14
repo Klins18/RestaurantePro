@@ -53,9 +53,23 @@ def index():
     # Cierre del día
     cierre_hoy = CierreCaja.query.filter_by(fecha=hoy).first()
 
+    # Serie diaria para gráfico (fecha → total)
+    serie_diaria = {}
+    for v in sorted(ventas, key=lambda x: x.fecha):
+        k = v.fecha.strftime('%d/%m')
+        serie_diaria[k] = round(serie_diaria.get(k, 0) + v.total, 2)
+
+    # por_empresa necesita valores JSON-serializables (no Undefined)
+    por_empresa_json = {
+        k: {'total': float(v['total']), 'ventas': int(v['ventas']),
+            'pax': int(v['pax']), 'color': str(v['color'])}
+        for k, v in por_empresa.items()
+    }
+
     return render_template('ventas/index.html',
         ventas=ventas, total_periodo=total_periodo, total_pax=total_pax,
-        por_empresa=por_empresa, desde=desde_str, hasta=hasta_str,
+        por_empresa=por_empresa_json, serie_diaria=serie_diaria,
+        desde=desde_str, hasta=hasta_str,
         cierre_hoy=cierre_hoy, hoy=hoy)
 
 
@@ -66,111 +80,110 @@ def index():
 @login_required
 def nueva():
     if request.method == 'POST':
-        fecha_str  = request.form.get('fecha', '')
+        import json as _json
+        fecha_str = request.form.get('fecha', '')
         try:
             fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         except:
             fecha = date.today()
 
-        empresa_id = request.form.get('empresa_id') or None
-        es_privado = request.form.get('es_privado') == '1'
-        num_pax    = int(request.form.get('num_pax', 0) or 0)
-        ruta       = request.form.get('ruta', '').strip()
-        nombre_grupo = request.form.get('nombre_grupo', '').strip()
+        tabs_raw = request.form.get('tabs_json', '[]')
+        try:
+            tabs_data = _json.loads(tabs_raw)
+        except Exception:
+            flash('Error al leer los datos de la venta.', 'error')
+            return redirect(url_for('ventas.nueva'))
 
-        # Precio buffet por empresa
-        precio_buffet = 0.0
-        if empresa_id:
-            emp = EmpresaTuristica.query.get(empresa_id)
-            if emp and emp.nombre == 'Peru Hop':
-                precio_buffet = PRECIO_PERUHOP
-            elif request.form.get('precio_buffet'):
-                try:
-                    precio_buffet = float(request.form.get('precio_buffet'))
-                except:
-                    precio_buffet = 0.0
+        if not tabs_data:
+            flash('No hay ítems para registrar.', 'error')
+            return redirect(url_for('ventas.nueva'))
 
-        total_buffet = round(num_pax * precio_buffet, 2)
-        total_items  = float(request.form.get('total_items', 0) or 0)
-        descuento    = float(request.form.get('descuento', 0) or 0)
-        subtotal     = round(total_buffet + total_items, 2)
-        total        = round(subtotal - descuento, 2)
+        ultima_venta = None
+        ventas_registradas = 0
 
-        venta = VentaDiaria(
-            fecha=fecha,
-            empresa_id=empresa_id,
-            tipo_cliente='privado' if es_privado else 'empresa',
-            nombre_grupo=nombre_grupo if es_privado else '',
-            num_pax=num_pax,
-            ruta=ruta,
-            precio_buffet=precio_buffet,
-            es_privado=es_privado,
-            subtotal=subtotal,
-            descuento=descuento,
-            total=total,
-            tipo_pago=request.form.get('tipo_pago', '') if es_privado else '',
-            estado_pago='pagado' if es_privado else 'pendiente',
-            observaciones=request.form.get('observaciones', ''),
-            usuario_id=current_user.id,
-            creado_en=now_peru()
-        )
-        db.session.add(venta)
-        db.session.flush()
+        for tab in tabs_data:
+            empresa_id   = tab.get('empresa_id') or None
+            es_privado   = bool(tab.get('es_privado', False))
+            num_pax      = int(tab.get('num_pax', 0) or 0)
+            precio_buffet= float(tab.get('precio_buffet', 0) or 0)
+            nombre_grupo = str(tab.get('nombre_grupo', '') or '').strip()
+            tipo_pago    = str(tab.get('tipo_pago', '') or '')
+            items        = tab.get('items', [])
 
-        # Items de bebidas
-        prod_ids = request.form.getlist('item_producto_id[]')
-        var_ids  = request.form.getlist('item_variante_id[]')
-        descs    = request.form.getlist('item_desc[]')
-        cants    = request.form.getlist('item_cant[]')
-        precios  = request.form.getlist('item_precio[]')
-
-        for i, desc in enumerate(descs):
-            desc = desc.strip()
-            if not desc:
-                continue
-            try:
-                cant   = int(cants[i])   if cants[i]   else 1
-                precio = float(precios[i]) if precios[i] else 0
-            except:
-                cant, precio = 1, 0
-            subtotal_item = round(cant * precio, 2)
-            p_carta_id    = int(prod_ids[i]) if i < len(prod_ids) and prod_ids[i] else None
-            v_id          = int(var_ids[i])  if i < len(var_ids)  and var_ids[i]  else None
-
-            item = ItemVenta(
-                venta_id=venta.id,
-                producto_carta_id=p_carta_id,
-                variante_id=v_id,
-                descripcion=desc,
-                cantidad=cant,
-                precio_unitario=precio,
-                subtotal=subtotal_item
+            total_items = sum(
+                round(float(it.get('precio', 0)) * int(it.get('cant', 1)), 2)
+                for it in items
             )
-            db.session.add(item)
+            total_buffet = round(num_pax * precio_buffet, 2)
+            subtotal     = round(total_buffet + total_items, 2)
+            total        = subtotal  # sin descuento por ahora
 
-            # ── Descontar del inventario almacén si el producto lo tiene configurado ──
-            if p_carta_id:
-                prod_carta = ProductoCarta.query.get(p_carta_id)
-                if prod_carta and prod_carta.descuenta_inventario and prod_carta.producto_almacen_id:
-                    prod_alm = Producto.query.get(prod_carta.producto_almacen_id)
-                    if prod_alm:
-                        prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - cant)
-                        mov = MovimientoAlmacen(
-                            tipo='egreso',
-                            producto_id=prod_alm.id,
-                            cantidad=cant,
-                            motivo=f'Venta #{venta.id} — {desc}',
-                            referencia=f'VENTA-{venta.id}',
-                            usuario_id=current_user.id,
-                            fecha_hora=now_peru()
-                        )
-                        db.session.add(mov)
+            venta = VentaDiaria(
+                fecha=fecha,
+                empresa_id=empresa_id,
+                tipo_cliente='privado' if es_privado else 'empresa',
+                nombre_grupo=nombre_grupo,
+                num_pax=num_pax,
+                precio_buffet=precio_buffet,
+                es_privado=es_privado,
+                subtotal=subtotal,
+                descuento=0,
+                total=total,
+                tipo_pago=tipo_pago if es_privado else '',
+                estado_pago='pagado' if es_privado else 'pendiente',
+                observaciones=str(tab.get('observaciones', '') or ''),
+                usuario_id=current_user.id,
+                creado_en=now_peru()
+            )
+            db.session.add(venta)
+            db.session.flush()
 
-        registrar_auditoria(current_user.id, 'NUEVA_VENTA', 'ventas_diarias', venta.id,
-            f'Total: S/.{total:.2f} · Pax: {num_pax}', ip=request.remote_addr)
+            for it in items:
+                nombre_it  = str(it.get('nombre', '')).strip()
+                if not nombre_it:
+                    continue
+                cant       = int(it.get('cant', 1) or 1)
+                precio_it  = float(it.get('precio', 0) or 0)
+                sub_it     = round(cant * precio_it, 2)
+                p_carta_id = int(it['prod_id']) if it.get('prod_id') else None
+                v_id       = int(it['var_id'])  if it.get('var_id')  else None
+
+                db.session.add(ItemVenta(
+                    venta_id=venta.id,
+                    producto_carta_id=p_carta_id,
+                    variante_id=v_id,
+                    descripcion=nombre_it,
+                    cantidad=cant,
+                    precio_unitario=precio_it,
+                    subtotal=sub_it
+                ))
+
+                # Descontar inventario si aplica
+                if p_carta_id:
+                    pc = ProductoCarta.query.get(p_carta_id)
+                    if pc and pc.descuenta_inventario and pc.producto_almacen_id:
+                        pa = Producto.query.get(pc.producto_almacen_id)
+                        if pa:
+                            pa.stock_actual = max(0, (pa.stock_actual or 0) - cant)
+                            db.session.add(MovimientoAlmacen(
+                                tipo='egreso', producto_id=pa.id, cantidad=cant,
+                                motivo=f'Venta #{venta.id} — {nombre_it}',
+                                referencia=f'VENTA-{venta.id}',
+                                usuario_id=current_user.id, fecha_hora=now_peru()
+                            ))
+
+            registrar_auditoria(current_user.id, 'NUEVA_VENTA', 'ventas_diarias', venta.id,
+                f'Total: S/.{total:.2f} · Pax: {num_pax}', ip=request.remote_addr)
+            ultima_venta = venta
+            ventas_registradas += 1
+
         db.session.commit()
-        flash(f'Venta registrada. Total: S/.{total:.2f}', 'success')
-        return redirect(url_for('ventas.ver', id=venta.id))
+        if ventas_registradas == 1:
+            flash(f'Venta registrada correctamente. Total: S/.{ultima_venta.total:.2f}', 'success')
+            return redirect(url_for('ventas.ver', id=ultima_venta.id))
+        else:
+            flash(f'{ventas_registradas} ventas registradas correctamente.', 'success')
+            return redirect(url_for('ventas.index'))
 
     from models import CategoriaCarta
     empresas   = EmpresaTuristica.query.filter_by(activo=True).order_by(EmpresaTuristica.nombre).all()

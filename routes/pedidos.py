@@ -263,15 +263,20 @@ def verificar(id):
                 # ── Si el producto NO existe en el inventario, CREARLO automáticamente ──
                 if not prod and item.producto_nombre.strip():
                     from models import Categoria
-                    # Buscar o crear categoría basada en el tipo de pedido
-                    cat_nombre = lista.tipo_requerimiento or 'General'
-                    cat = Categoria.query.filter(
-                        db.func.lower(Categoria.nombre) == cat_nombre.lower()
-                    ).first()
+                    from sqlalchemy import text
+                    cat_nombre = (lista.tipo_requerimiento or 'General').upper()
+
+                    # INSERT OR IGNORE evita el UNIQUE constraint sin importar acentos
+                    db.session.execute(
+                        text("INSERT OR IGNORE INTO categorias (nombre, activo) VALUES (:n, 1)"),
+                        {"n": cat_nombre}
+                    )
+                    db.session.flush()
+                    # Ahora SELECT exacto — siempre existe
+                    cat = Categoria.query.filter_by(nombre=cat_nombre).first()
+                    # Fallback por si el nombre en BD difiere (ej: ya existía con otro case)
                     if not cat:
-                        cat = Categoria(nombre=cat_nombre, activo=True)
-                        db.session.add(cat)
-                        db.session.flush()  # Para obtener el ID
+                        cat = Categoria.query.filter_by(activo=True).first()
 
                     unidad = item.unidad_medida or 'unid'
                     prod = Producto(
