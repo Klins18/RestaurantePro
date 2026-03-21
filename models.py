@@ -702,3 +702,43 @@ class PermisoUsuario(db.Model):
     __table_args__ = (
         db.UniqueConstraint('usuario_id', 'permiso', name='uq_permiso_usuario'),
     )
+
+
+# ══════════════════════════════════════════════
+#  ÍNDICES DE RENDIMIENTO
+#  Aceleran las consultas más frecuentes
+# ══════════════════════════════════════════════
+from sqlalchemy import Index
+
+# Ventas — las más consultadas por fecha y empresa
+Index('ix_ventas_fecha',       VentaDiaria.fecha)
+Index('ix_ventas_empresa',     VentaDiaria.empresa_id)
+Index('ix_ventas_fecha_emp',   VentaDiaria.fecha, VentaDiaria.empresa_id)
+
+# Compras
+Index('ix_compras_fecha',      Compra.fecha)
+Index('ix_compras_estado',     Compra.estado)
+
+# Asistencias — consultadas por fecha y por empleado
+Index('ix_asist_fecha',        Asistencia.fecha)
+Index('ix_asist_emp_fecha',    Asistencia.empleado_id, Asistencia.fecha)
+
+# Kardex — consultado por producto y fecha
+Index('ix_kardex_alm_prod',    KardexAlmacen.producto_id)
+Index('ix_kardex_alm_fecha',   KardexAlmacen.fecha)
+Index('ix_kardex_com_prod',    KardexComedor.producto_carta_id)
+
+# Auditoría — consultada por fecha
+Index('ix_auditoria_fecha',    Auditoria.fecha_hora)
+Index('ix_auditoria_tabla',    Auditoria.tabla)
+
+# Notificaciones — consultadas por destinatario y estado de lectura
+Index('ix_notif_dest_leido',   Notificacion.destinatario_id, Notificacion.leido)
+
+# Pasajeros y reservas
+Index('ix_pasajeros_fecha',    RegistroPasajeros.fecha)
+Index('ix_reservas_fecha',     Reserva.fecha)
+Index('ix_reservas_estado',    Reserva.estado)
+
+# Permisos — consultados por usuario en cada request
+Index('ix_permisos_usuario',   PermisoUsuario.usuario_id)

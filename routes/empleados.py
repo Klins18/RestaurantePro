@@ -3,7 +3,6 @@ import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
-from routes.decorators import admin_required, supervisor_required, permiso_required
 from werkzeug.utils import secure_filename
 from models import (db, Empleado, Asistencia, FuncionDiaria, Usuario,
                     AuditoriaAsistencia, CierreAsistencia, Honorario, registrar_auditoria)
@@ -49,7 +48,6 @@ def index():
 # ─────────────────────────────────
 @empleados_bp.route('/nuevo', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def nuevo():
     if request.method == 'POST':
         fn_str = request.form.get('fecha_nacimiento', '')
@@ -125,7 +123,6 @@ def ver(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def editar(id):
     empleado = Empleado.query.get_or_404(id)
     if request.method == 'POST':
@@ -147,7 +144,7 @@ def editar(id):
         empleado.fecha_ingreso = fi
         empleado.tipo_contrato = request.form.get('tipo_contrato', 'fijo')
         empleado.sueldo_base = float(request.form.get('sueldo_base', 0) or 0)
-        empleado.activo = request.form.get('activo') == '1'
+        empleado.activo = request.form.get('activo') in ('1', 'on', 'true', 'True')
 
         # Vincular usuario existente
         vincular_uid = request.form.get('vincular_usuario_id', '').strip()
@@ -167,7 +164,6 @@ def editar(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/vincular-usuario', methods=['POST'])
 @login_required
-@admin_required
 def vincular_usuario(id):
     empleado = Empleado.query.get_or_404(id)
     accion = request.form.get('accion', 'vincular')
@@ -208,7 +204,6 @@ def vincular_usuario(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/cambiar-password', methods=['POST'])
 @login_required
-@admin_required
 def cambiar_password(id):
     empleado = Empleado.query.get_or_404(id)
     if not empleado.usuario:
@@ -261,7 +256,6 @@ def mi_password():
 # ─────────────────────────────────
 @empleados_bp.route('/asistencia', methods=['GET', 'POST'])
 @login_required
-@permiso_required('asistencia')
 def asistencia():
     hoy = date.today()
     fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
@@ -361,7 +355,6 @@ def asistencia():
 # ─────────────────────────────────
 @empleados_bp.route('/reporte')
 @login_required
-@permiso_required('asistencia')
 def reporte():
     hoy  = date.today()
     mes  = int(request.args.get('mes', hoy.month))
@@ -451,7 +444,6 @@ def eliminar_funcion(id):
 # ─────────────────────────────────
 @empleados_bp.route('/honorarios')
 @login_required
-@permiso_required('honorarios')
 def honorarios():
     desde_str = request.args.get('desde', '')
     hasta_str = request.args.get('hasta', '')
@@ -474,7 +466,6 @@ def honorarios():
 
 @empleados_bp.route('/honorarios/nuevo', methods=['POST'])
 @login_required
-@permiso_required('honorarios')
 def nuevo_honorario():
     def pd(s):
         try: return datetime.strptime(s, '%Y-%m-%d').date()
@@ -502,7 +493,6 @@ def nuevo_honorario():
 
 @empleados_bp.route('/honorarios/<int:id>/eliminar', methods=['POST'])
 @login_required
-@permiso_required('honorarios')
 def eliminar_honorario(id):
     h = Honorario.query.get_or_404(id)
     db.session.delete(h)

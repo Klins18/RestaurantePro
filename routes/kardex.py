@@ -64,13 +64,16 @@ def almacen():
             except: pass
         registros = q.order_by(KardexAlmacen.fecha, KardexAlmacen.id).all()
 
-    # Valor total del inventario (todos los productos con su último saldo)
-    from models import KardexAlmacen as KA
-    valor_total_inv = 0
-    for p in productos:
-        ultimo = KA.query.filter_by(producto_id=p.id).order_by(KA.fecha.desc(), KA.id.desc()).first()
-        if ultimo:
-            valor_total_inv += ultimo.total_saldo or 0
+    # Valor total inventario — subquery para el último registro de cada producto
+    from sqlalchemy import func, text as sa_text
+    subq = db.session.query(
+        KardexAlmacen.producto_id,
+        func.max(KardexAlmacen.id).label('max_id')
+    ).group_by(KardexAlmacen.producto_id).subquery()
+    ultima_fila = db.session.query(func.coalesce(func.sum(KardexAlmacen.total_saldo), 0.0)).join(
+        subq, KardexAlmacen.id == subq.c.max_id
+    ).scalar()
+    valor_total_inv = float(ultima_fila or 0)
 
     return render_template('kardex/almacen.html',
         productos=productos, registros=registros,

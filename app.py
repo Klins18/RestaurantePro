@@ -21,7 +21,7 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return Usuario.query.get(int(user_id))
+        return db.session.get(Usuario, int(user_id))
 
     # Blueprints
     from routes.auth import auth_bp
@@ -53,11 +53,22 @@ def create_app():
     def inject_notificaciones():
         try:
             from flask_login import current_user
+            from flask import session, request as req
             if current_user and current_user.is_authenticated:
-                from models import Notificacion, CierreCaja
-                count = Notificacion.query.filter_by(
-                    destinatario_id=current_user.id, leido=False
-                ).count()
+                from models import Notificacion
+                # Refrescar solo en rutas de notificaciones o cada 10 requests
+                cache_key = f'notif_count_{current_user.id}'
+                req_count_key = f'notif_req_{current_user.id}'
+                hits = session.get(req_count_key, 0)
+                if hits == 0 or 'notificaciones' in req.path:
+                    count = Notificacion.query.filter_by(
+                        destinatario_id=current_user.id, leido=False
+                    ).count()
+                    session[cache_key] = count
+                    session[req_count_key] = 10  # refrescar en 10 requests
+                else:
+                    session[req_count_key] = hits - 1
+                    count = session.get(cache_key, 0)
                 return {'notif_no_leidas': count}
         except:
             pass

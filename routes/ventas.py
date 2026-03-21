@@ -32,7 +32,11 @@ def index():
     except:
         desde = hasta = hoy
 
-    ventas = VentaDiaria.query.filter(
+    from sqlalchemy.orm import joinedload
+    # joinedload evita N+1: carga empresa en la misma query
+    ventas = VentaDiaria.query.options(
+        joinedload(VentaDiaria.empresa)
+    ).filter(
         VentaDiaria.fecha >= desde,
         VentaDiaria.fecha <= hasta
     ).order_by(VentaDiaria.fecha.desc(), VentaDiaria.creado_en.desc()).all()

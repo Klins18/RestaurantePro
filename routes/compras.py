@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Compra, ItemCompra, Proveedor, Producto, KardexAlmacen, registrar_auditoria
-from datetime import datetime, date, date
+from datetime import datetime, date
 import pytz
 from werkzeug.utils import secure_filename
 

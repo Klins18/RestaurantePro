@@ -326,3 +326,30 @@ try:
     migraciones.append("+ tabla permisos_usuario")
 except Exception as e:
     if "already exists" not in str(e).lower(): errores.append(f"permisos_usuario: {e}")
+
+# ── Índices de rendimiento ──
+indices = [
+    ("ix_ventas_fecha",     "CREATE INDEX IF NOT EXISTS ix_ventas_fecha ON ventas_diarias(fecha)"),
+    ("ix_ventas_empresa",   "CREATE INDEX IF NOT EXISTS ix_ventas_empresa ON ventas_diarias(empresa_id)"),
+    ("ix_ventas_fecha_emp", "CREATE INDEX IF NOT EXISTS ix_ventas_fecha_emp ON ventas_diarias(fecha, empresa_id)"),
+    ("ix_compras_fecha",    "CREATE INDEX IF NOT EXISTS ix_compras_fecha ON compras(fecha)"),
+    ("ix_compras_estado",   "CREATE INDEX IF NOT EXISTS ix_compras_estado ON compras(estado)"),
+    ("ix_asist_fecha",      "CREATE INDEX IF NOT EXISTS ix_asist_fecha ON asistencias(fecha)"),
+    ("ix_asist_emp_fecha",  "CREATE INDEX IF NOT EXISTS ix_asist_emp_fecha ON asistencias(empleado_id, fecha)"),
+    ("ix_kardex_alm_prod",  "CREATE INDEX IF NOT EXISTS ix_kardex_alm_prod ON kardex_almacen(producto_id)"),
+    ("ix_kardex_alm_fecha", "CREATE INDEX IF NOT EXISTS ix_kardex_alm_fecha ON kardex_almacen(fecha)"),
+    ("ix_kardex_com_prod",  "CREATE INDEX IF NOT EXISTS ix_kardex_com_prod ON kardex_comedor(producto_carta_id)"),
+    ("ix_auditoria_fecha",  "CREATE INDEX IF NOT EXISTS ix_auditoria_fecha ON auditoria(fecha_hora)"),
+    ("ix_notif_dest",       "CREATE INDEX IF NOT EXISTS ix_notif_dest ON notificaciones(destinatario_id, leido)"),
+    ("ix_pasajeros_fecha",  "CREATE INDEX IF NOT EXISTS ix_pasajeros_fecha ON registro_pasajeros(fecha)"),
+    ("ix_reservas_fecha",   "CREATE INDEX IF NOT EXISTS ix_reservas_fecha ON reservas(fecha)"),
+    ("ix_permisos_usuario", "CREATE INDEX IF NOT EXISTS ix_permisos_usuario ON permisos_usuario(usuario_id)"),
+]
+for nombre, sql in indices:
+    try:
+        cursor.execute(sql)
+        conn.commit()
+        migraciones.append(f"+ índice {nombre}")
+    except Exception as e:
+        if "already exists" not in str(e).lower():
+            errores.append(f"índice {nombre}: {e}")
