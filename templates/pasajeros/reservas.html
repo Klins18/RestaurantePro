@@ -9,7 +9,7 @@
 
 {% block content %}
 
-<!-- ALERTAS activas -->
+<!-- ALERTAS -->
 {% if alertas %}
 <div style="margin-bottom:14px;">
     {% for r in alertas %}
@@ -18,25 +18,30 @@
         {% if dias_diff == 0 %}background:#fef3c7;border:1px solid #fde68a;
         {% elif dias_diff == 1 %}background:#fce7f3;border:1px solid #fbcfe8;
         {% else %}background:#eff6ff;border:1px solid #bfdbfe;{% endif %}">
-        <span style="font-size:1.4rem;">
-            {% if dias_diff == 0 %}🔔{% elif dias_diff == 1 %}⚠️{% else %}📅{% endif %}
-        </span>
+        <span style="font-size:1.4rem;">{% if dias_diff == 0 %}🔔{% elif dias_diff == 1 %}⚠️{% else %}📅{% endif %}</span>
         <div style="flex:1;">
             <p style="font-weight:700;color:#1e293b;font-size:0.88rem;">
-                {{ r.nombre_grupo or 'Grupo sin nombre' }}
-                {% if r.empresa %}· {{ r.empresa.nombre }}{% endif %}
+                {{ r.nombre_grupo or 'Grupo sin nombre' }}{% if r.empresa %} · {{ r.empresa.nombre }}{% endif %}
             </p>
             <p style="font-size:0.78rem;color:#64748b;">
                 {% if dias_diff == 0 %}HOY{% elif dias_diff == 1 %}Mañana{% else %}En {{ dias_diff }} días{% endif %}
-                {{ r.fecha.strftime('%d/%m/%Y') }}
-                {% if r.hora %}a las {{ r.hora }}{% endif %}
+                {{ r.fecha.strftime('%d/%m/%Y') }}{% if r.hora %} a las {{ r.hora }}{% endif %}
                 {% if r.num_pax %} · {{ r.num_pax }} pax{% endif %}
                 {% if r.precio_buffet %} · S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
+                <!-- Badge pago -->
+                {% if r.estado_pago and r.estado_pago != 'sin_pago' %}
+                <span style="margin-left:6px;font-weight:700;
+                    {% if r.estado_pago=='pagado' %}color:#166534;{% elif r.estado_pago=='anticipado' %}color:#d97706;{% else %}color:#6366f1;{% endif %}">
+                    💳 {% if r.estado_pago=='pagado' %}Pagado{% elif r.estado_pago=='anticipado' %}Anticipo S/.{{ r.monto_anticipado }}{% else %}Parcial{% endif %}
+                </span>
+                {% endif %}
             </p>
         </div>
         <div style="display:flex;gap:6px;">
             <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ r.observaciones or '' }}', '{{ r.estado }}')"
                 style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;">✏️</button>
+            <button onclick="abrirPago({{ r.id }}, {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, {{ r.monto_anticipado or 0 }}, '{{ r.tipo_pago or '' }}')"
+                style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#1d4ed8;">💳 Pago</button>
             {% if r.estado == 'pendiente' %}
             <form method="POST" style="margin:0;">
                 <input type="hidden" name="accion" value="completar">
@@ -52,7 +57,7 @@
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="res-grid">
 
-<!-- PRÓXIMAS RESERVAS -->
+<!-- PRÓXIMAS -->
 <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
         <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">📅 Próximas reservas</p>
@@ -63,10 +68,18 @@
     <div style="padding:12px 16px;border-bottom:1px solid #f8fafc;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
             <div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
                     <span style="font-weight:700;color:#1e293b;font-size:0.88rem;">{{ r.nombre_grupo or 'Sin nombre' }}</span>
                     {% if r.estado == 'confirmada' %}
                     <span style="background:#dcfce7;color:#166534;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:5px;">Confirmada</span>
+                    {% endif %}
+                    <!-- Estado pago badge -->
+                    {% if r.estado_pago == 'pagado' %}
+                    <span style="background:#dcfce7;color:#166534;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:5px;">💳 Pagado</span>
+                    {% elif r.estado_pago == 'anticipado' %}
+                    <span style="background:#fef3c7;color:#92400e;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:5px;">💳 Anticipo S/.{{ r.monto_anticipado }}</span>
+                    {% elif r.estado_pago == 'parcial' %}
+                    <span style="background:#eff6ff;color:#1d4ed8;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:5px;">💳 Parcial</span>
                     {% endif %}
                 </div>
                 <p style="font-size:0.78rem;color:#64748b;">
@@ -75,29 +88,31 @@
                     {% if r.num_pax %}· 👥 {{ r.num_pax }} pax{% endif %}
                     {% if r.precio_buffet %}· S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
                 </p>
-                {% if r.empresa %}
-                <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa.nombre }}</p>
+                {% if r.saldo_pendiente and r.saldo_pendiente > 0 %}
+                <p style="font-size:0.75rem;color:#dc2626;font-weight:600;margin-top:2px;">
+                    Saldo pendiente: S/.{{ '%.2f'|format(r.saldo_pendiente) }}
+                </p>
                 {% endif %}
-                {% if r.observaciones %}
-                <p style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-top:2px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>
+                {% if r.empresa %}<p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa.nombre }}</p>{% endif %}
+                {% if r.observaciones %}<p style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-top:2px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>{% endif %}
+                {% if r.archivo_voucher %}
+                <a href="{{ url_for('pasajeros.reserva_voucher', filename=r.archivo_voucher) }}" target="_blank"
+                   style="font-size:0.72rem;color:#6366f1;font-weight:600;text-decoration:none;">📎 Ver voucher</a>
                 {% endif %}
             </div>
             <div style="flex-shrink:0;text-align:right;">
                 <p style="font-size:0.7rem;font-weight:700;color:{% if dias_diff==0 %}#f59e0b{% elif dias_diff<=2 %}#6366f1{% else %}#94a3b8{% endif %};">
                     {% if dias_diff==0 %}HOY{% elif dias_diff==1 %}Mañana{% else %}{{ dias_diff }}d{% endif %}
                 </p>
-                <div style="display:flex;gap:4px;margin-top:4px;">
-                    <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ (r.observaciones or '')|replace("'", "\\'") }}', '{{ r.estado }}')"
-                        style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✏️</button>
-                    <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Postergar esta reserva?')">
-                        <input type="hidden" name="accion" value="postergar">
-                        <input type="hidden" name="reserva_id" value="{{ r.id }}">
-                        <button type="submit" style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">⏳</button>
-                    </form>
-                    <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Cancelar esta reserva?')">
+                <div style="display:flex;gap:4px;margin-top:4px;flex-direction:column;">
+                    <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '', '{{ r.estado }}')"
+                        style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✏️ Editar</button>
+                    <button onclick="abrirPago({{ r.id }}, {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, {{ r.monto_anticipado or 0 }}, '{{ r.tipo_pago or '' }}')"
+                        style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">💳 Pago</button>
+                    <form method="POST" style="margin:0;" onsubmit="return confirm('¿Cancelar esta reserva?')">
                         <input type="hidden" name="accion" value="cancelar">
                         <input type="hidden" name="reserva_id" value="{{ r.id }}">
-                        <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕</button>
+                        <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;width:100%;">✕ Cancelar</button>
                     </form>
                 </div>
             </div>
@@ -105,8 +120,7 @@
     </div>
     {% else %}
     <div style="padding:40px;text-align:center;color:#94a3b8;">
-        <p style="font-size:1.8rem;margin-bottom:8px;">📅</p>
-        <p>No hay reservas próximas.</p>
+        <p style="font-size:1.8rem;margin-bottom:8px;">📅</p><p>No hay reservas próximas.</p>
     </div>
     {% endfor %}
 </div>
@@ -114,73 +128,46 @@
 <!-- HISTORIAL -->
 <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
-        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:10px;">🗓 Historial</p>
-        <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-            <div>
-                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Estado</label>
-                <select name="hist_estado" class="input" style="font-size:0.78rem;padding:4px 8px;max-width:130px;" onchange="this.form.submit()">
-                    <option value="">Todos</option>
-                    <option value="completada"  {% if filtro_hist=='completada'  %}selected{% endif %}>✅ Atendidas</option>
-                    <option value="cancelada"   {% if filtro_hist=='cancelada'   %}selected{% endif %}>❌ Canceladas</option>
-                    <option value="postergada"  {% if filtro_hist=='postergada'  %}selected{% endif %}>⏳ Postergadas</option>
-                    <option value="pendiente"   {% if filtro_hist=='pendiente'   %}selected{% endif %}>⏰ Pendientes</option>
-                </select>
-            </div>
-            <div>
-                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Desde</label>
-                <input type="date" name="hist_desde" value="{{ filtro_desde }}" class="input" style="font-size:0.78rem;padding:4px;max-width:130px;" onchange="this.form.submit()">
-            </div>
-            <div>
-                <label style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;display:block;margin-bottom:2px;">Hasta</label>
-                <input type="date" name="hist_hasta" value="{{ filtro_hasta }}" class="input" style="font-size:0.78rem;padding:4px;max-width:130px;" onchange="this.form.submit()">
-            </div>
-            {% if filtro_hist or filtro_desde or filtro_hasta %}
-            <a href="{{ url_for('pasajeros.reservas') }}" style="font-size:0.75rem;color:#94a3b8;text-decoration:none;padding:4px;">✕ Limpiar</a>
-            {% endif %}
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:8px;">🗓 Historial reciente</p>
+        <form method="GET" style="display:flex;flex-wrap:wrap;gap:8px;">
+            <select name="hist_estado" class="input" style="width:130px;font-size:0.8rem;" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                <option value="completada" {% if filtro_hist=='completada' %}selected{% endif %}>Completadas</option>
+                <option value="cancelada" {% if filtro_hist=='cancelada' %}selected{% endif %}>Canceladas</option>
+                <option value="postergada" {% if filtro_hist=='postergada' %}selected{% endif %}>Postergadas</option>
+            </select>
+            <input type="date" name="hist_desde" value="{{ filtro_desde }}" class="input" style="width:130px;font-size:0.8rem;">
+            <input type="date" name="hist_hasta" value="{{ filtro_hasta }}" class="input" style="width:130px;font-size:0.8rem;">
+            <button type="submit" class="btn-primary btn-sm" style="font-size:0.78rem;">🔍</button>
         </form>
     </div>
-    {% if historial %}
     {% for r in historial %}
-    {% set cfg = {
-        'completada': ('✅','#dcfce7','#166534'),
-        'cancelada':  ('❌','#fee2e2','#dc2626'),
-        'postergada': ('⏳','#fef3c7','#92400e'),
-        'pendiente':  ('⏰','#eff6ff','#1d4ed8')
-    } %}
-    {% set ic, bg, fg = cfg.get(r.estado, ('📋','#f1f5f9','#64748b')) %}
-    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:1.1rem;flex-shrink:0;">{{ ic }}</span>
-        <div style="flex:1;min-width:0;">
-            <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">{{ r.nombre_grupo or 'Sin nombre' }}
-                {% if r.empresa %}<span style="font-size:0.75rem;color:#94a3b8;font-weight:400;">· {{ r.empresa.nombre }}</span>{% endif %}
-            </p>
-            <p style="font-size:0.75rem;color:#94a3b8;">
-                📅 {{ r.fecha.strftime('%d/%m/%Y') }}
-                {% if r.hora %}🕐 {{ r.hora }}{% endif %}
-                {% if r.num_pax %} · 👥 {{ r.num_pax }} pax{% endif %}
+    <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div style="min-width:0;flex:1;">
+            <p style="font-size:0.85rem;font-weight:600;color:#1e293b;">{{ r.nombre_grupo or 'Sin nombre' }}</p>
+            <p style="font-size:0.75rem;color:#94a3b8;">{{ r.fecha.strftime('%d/%m/%Y') }}{% if r.num_pax %} · {{ r.num_pax }} pax{% endif %}
                 {% if r.precio_buffet %} · S/.{{ '%.0f'|format(r.precio_buffet) }}/pax{% endif %}
             </p>
-            {% if r.observaciones %}
-            <p style="font-size:0.72rem;color:#94a3b8;font-style:italic;margin-top:1px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>
+            {% if r.estado_pago and r.estado_pago != 'sin_pago' %}
+            <p style="font-size:0.72rem;color:#64748b;">💳 {{ r.monto_anticipado }} anticipado · saldo S/.{{ '%.2f'|format(r.saldo_pendiente or 0) }}</p>
             {% endif %}
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
-            <span style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ bg }};color:{{ fg }};">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <span style="font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;
+                {% if r.estado=='completada' %}background:#dcfce7;color:#166534;
+                {% elif r.estado=='cancelada' %}background:#fee2e2;color:#dc2626;
+                {% else %}background:#f1f5f9;color:#64748b;{% endif %}">
                 {{ r.estado|capitalize }}
             </span>
-            <button onclick="abrirEditar({{ r.id }}, '{{ r.fecha }}', '{{ r.hora or '' }}', '{{ r.nombre_grupo or '' }}', {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, '{{ r.empresa_id or '' }}', '{{ (r.observaciones or '')|replace("'","\\'") }}', '{{ r.estado }}')"
-                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:0.7rem;cursor:pointer;color:#64748b;">✏️ Editar</button>
+            {% if r.archivo_voucher %}
+            <a href="{{ url_for('pasajeros.reserva_voucher', filename=r.archivo_voucher) }}" target="_blank"
+               style="font-size:0.7rem;color:#6366f1;font-weight:600;text-decoration:none;">📎 Voucher</a>
+            {% endif %}
         </div>
     </div>
-    {% endfor %}
     {% else %}
-    <div style="padding:30px;text-align:center;color:#94a3b8;font-size:0.85rem;">
-        Sin registros en el historial{% if filtro_hist %} con estado "{{ filtro_hist }}"{% endif %}.
-    </div>
-    {% endif %}
-    <div style="padding:8px 16px;background:#f8fafc;text-align:right;">
-        <span style="font-size:0.75rem;color:#94a3b8;">{{ historial|length }} registro(s)</span>
-    </div>
+    <div style="padding:30px;text-align:center;color:#94a3b8;font-size:0.85rem;">Sin historial</div>
+    {% endfor %}
 </div>
 </div>
 
@@ -196,30 +183,69 @@
                 <div><label class="label">Hora</label><input type="time" name="hora" id="res-hora" class="input"></div>
             </div>
             <div><label class="label">Nombre del grupo</label>
-                <input type="text" name="nombre_grupo" id="res-nombre" class="input" placeholder="Ej: Familia Rodríguez, Tour Lima..."></div>
+                <input type="text" name="nombre_grupo" id="res-nombre" class="input" placeholder="Ej: Familia Rodríguez..."></div>
             <div><label class="label">Empresa turística</label>
                 <select name="empresa_id" id="res-empresa" class="input">
                     <option value="">Sin empresa / Privado</option>
-                    {% for e in empresas if e.nombre|lower not in ['privado','grupo privado','private'] %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                    {% for e in empresas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
                 </select>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <div><label class="label">N° Pax</label><input type="number" name="num_pax" id="res-pax" class="input" min="0" value="0"></div>
-                <div><label class="label">Precio buffet S/.</label><input type="number" name="precio_buffet" id="res-precio" class="input" min="0" step="0.5" value="0"></div>
+                <div><label class="label">Precio buffet S/.</label><input type="number" name="precio_buffet" id="res-precio" class="input" min="0" step="any" value="0"></div>
             </div>
             <div><label class="label">Estado</label>
                 <select name="estado" id="res-estado" class="input">
                     <option value="pendiente">Pendiente</option>
                     <option value="confirmada">Confirmada</option>
-                    <option value="postergada">Postergada</option>
                     <option value="cancelada">Cancelada</option>
                 </select>
             </div>
             <div><label class="label">Observaciones</label>
-                <textarea name="observaciones" id="res-obs" class="input" rows="2" placeholder="Notas sobre la reserva..."></textarea></div>
+                <textarea name="observaciones" id="res-obs" class="input" rows="2"></textarea></div>
             <div style="display:flex;gap:8px;margin-top:4px;">
-                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">💾 Guardar reserva</button>
+                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">💾 Guardar</button>
                 <button type="button" onclick="cerrarModalRes()" class="btn-secondary">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal pago -->
+<div id="modal-pago" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center;">
+    <div class="card" style="width:420px;max-width:95vw;padding:22px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="font-weight:700;color:#1e293b;">💳 Registrar pago</h3>
+            <button onclick="cerrarModalPago()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('pasajeros.reservas') }}"
+              enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+            <input type="hidden" name="accion" value="pago">
+            <input type="hidden" name="reserva_id" id="pago-id">
+            <!-- Resumen -->
+            <div style="background:#f8fafc;border-radius:8px;padding:10px 14px;">
+                <p style="font-size:0.82rem;color:#64748b;">Total esperado: <strong id="pago-total" style="color:#1e293b;">S/.0.00</strong>
+                <span style="font-size:0.75rem;color:#94a3b8;" id="pago-detalle"></span></p>
+            </div>
+            <div><label class="label">Monto anticipado / pagado (S/.)</label>
+                <input type="number" name="monto_anticipado" id="pago-monto" step="any" min="0" class="input" required placeholder="0.00"
+                       oninput="calcularSaldo()"></div>
+            <div style="background:#fef3c7;border-radius:8px;padding:8px 12px;display:none;" id="saldo-box">
+                <p style="font-size:0.82rem;font-weight:700;color:#92400e;">Saldo pendiente: <span id="pago-saldo">S/.0.00</span></p>
+            </div>
+            <div><label class="label">Método de pago</label>
+                <select name="tipo_pago" id="pago-tipo" class="input">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="yape">Yape</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                </select>
+            </div>
+            <div><label class="label">Foto / voucher del pago (opcional)</label>
+                <input type="file" name="archivo_voucher" class="input" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+                <button type="submit" class="btn-primary" style="flex:1;text-align:center;">✅ Guardar pago</button>
+                <button type="button" onclick="cerrarModalPago()" class="btn-secondary">Cancelar</button>
             </div>
         </form>
     </div>
@@ -228,6 +254,8 @@
 <style>@media(max-width:768px){div[id="res-grid"]{grid-template-columns:1fr!important;}}</style>
 {% block scripts %}
 <script>
+var _pagoPax=0, _pagoPrecio=0;
+
 function abrirFormNuevo() {
     document.getElementById('modal-titulo-res').textContent = 'Nueva Reserva';
     document.getElementById('res-accion').value = 'nuevo';
@@ -257,6 +285,32 @@ function abrirEditar(id, fecha, hora, nombre, pax, precio, empresaId, obs, estad
     document.getElementById('modal-reserva').style.display = 'flex';
 }
 function cerrarModalRes() { document.getElementById('modal-reserva').style.display = 'none'; }
+
+function abrirPago(id, pax, precio, montoActual, tipoActual) {
+    _pagoPax = pax; _pagoPrecio = precio;
+    document.getElementById('pago-id').value = id;
+    document.getElementById('pago-monto').value = montoActual || '';
+    document.getElementById('pago-tipo').value = tipoActual || 'efectivo';
+    var total = pax * precio;
+    document.getElementById('pago-total').textContent = 'S/.' + total.toFixed(2);
+    document.getElementById('pago-detalle').textContent = ' (' + pax + ' pax × S/.' + precio + ')';
+    calcularSaldo();
+    document.getElementById('modal-pago').style.display = 'flex';
+}
+function cerrarModalPago() { document.getElementById('modal-pago').style.display = 'none'; }
+
+function calcularSaldo() {
+    var monto = parseFloat(document.getElementById('pago-monto').value) || 0;
+    var total = _pagoPax * _pagoPrecio;
+    var saldo = total - monto;
+    var box = document.getElementById('saldo-box');
+    if (saldo > 0 && monto > 0) {
+        document.getElementById('pago-saldo').textContent = 'S/.' + saldo.toFixed(2);
+        box.style.display = 'block';
+    } else {
+        box.style.display = 'none';
+    }
+}
 </script>
 {% endblock %}
 {% endblock %}

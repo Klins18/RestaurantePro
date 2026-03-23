@@ -55,6 +55,25 @@ def dashboard():
     from models import CierreCaja
     cierre_hoy = CierreCaja.query.filter_by(fecha=hoy).first()
 
+    # ── Funciones del día para el usuario logueado ──
+    mis_funciones = []
+    from models import Empleado, FuncionDiaria
+    empleado_actual = Empleado.query.filter_by(
+        usuario_id=current_user.id, activo=True
+    ).first()
+    if empleado_actual:
+        mis_funciones = FuncionDiaria.query.filter_by(
+            empleado_id=empleado_actual.id, fecha=hoy
+        ).order_by(FuncionDiaria.completado, FuncionDiaria.id).all()
+
+    # Reservas de hoy y mañana (alertas)
+    from models import Reserva
+    manana = hoy + timedelta(days=1)
+    reservas_proximas = Reserva.query.filter(
+        Reserva.fecha.in_([hoy, manana]),
+        Reserva.estado.in_(['pendiente', 'confirmada'])
+    ).order_by(Reserva.fecha, Reserva.hora).all()
+
     return render_template('dashboard.html',
         total_productos=total_productos,
         pedidos_pendientes=pedidos_pendientes,
@@ -69,5 +88,22 @@ def dashboard():
         ultimos_movimientos=ultimos_movimientos,
         ultimas_listas=ultimas_listas,
         cierre_hoy=cierre_hoy,
+        mis_funciones=mis_funciones,
+        empleado_actual=empleado_actual,
+        reservas_proximas=reservas_proximas,
         hoy=hoy,
     )
+
+
+@main_bp.route('/funcion/<int:id>/toggle', methods=['POST'])
+@login_required
+def toggle_funcion_dashboard(id):
+    """Marcar/desmarcar función directamente desde el dashboard."""
+    from models import FuncionDiaria, Empleado
+    f = FuncionDiaria.query.get_or_404(id)
+    # Solo puede tocar sus propias funciones
+    emp = Empleado.query.filter_by(usuario_id=current_user.id).first()
+    if emp and f.empleado_id == emp.id:
+        f.completado = not f.completado
+        db.session.commit()
+    return redirect(url_for('main.dashboard'))

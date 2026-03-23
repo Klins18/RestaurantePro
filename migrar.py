@@ -353,3 +353,91 @@ for nombre, sql in indices:
     except Exception as e:
         if "already exists" not in str(e).lower():
             errores.append(f"índice {nombre}: {e}")
+
+# ── Proveedores diarios (leche, pan) ──
+for sql in [
+    """CREATE TABLE IF NOT EXISTS productos_recurrentes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre VARCHAR(100) NOT NULL,
+        unidad VARCHAR(20) DEFAULT 'litros',
+        proveedor_nombre VARCHAR(150),
+        proveedor_tel VARCHAR(20),
+        precio_unitario REAL DEFAULT 0,
+        activo INTEGER DEFAULT 1,
+        creado_en DATETIME)""",
+    """CREATE TABLE IF NOT EXISTS entregas_diarias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        producto_id INTEGER NOT NULL REFERENCES productos_recurrentes(id),
+        fecha DATE NOT NULL,
+        cantidad REAL NOT NULL,
+        precio_unitario REAL DEFAULT 0,
+        subtotal REAL DEFAULT 0,
+        observaciones VARCHAR(255),
+        usuario_id INTEGER REFERENCES usuarios(id),
+        creado_en DATETIME,
+        UNIQUE(producto_id, fecha))""",
+    """CREATE TABLE IF NOT EXISTS pagos_proveedor (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        producto_id INTEGER NOT NULL REFERENCES productos_recurrentes(id),
+        periodo_desde DATE NOT NULL,
+        periodo_hasta DATE NOT NULL,
+        cantidad_total REAL DEFAULT 0,
+        monto_total REAL DEFAULT 0,
+        monto_pagado REAL DEFAULT 0,
+        tipo_pago VARCHAR(30) DEFAULT 'efectivo',
+        fecha_pago DATE,
+        archivo_voucher VARCHAR(255),
+        observaciones TEXT,
+        estado VARCHAR(20) DEFAULT 'pendiente',
+        usuario_id INTEGER REFERENCES usuarios(id),
+        creado_en DATETIME)""",
+    "CREATE INDEX IF NOT EXISTS ix_entregas_prod_fecha ON entregas_diarias(producto_id, fecha)",
+    "CREATE INDEX IF NOT EXISTS ix_pagos_prov_prod ON pagos_proveedor(producto_id)",
+]:
+    try:
+        cursor.execute(sql)
+        conn.commit()
+        migraciones.append(f"+ {sql[:50].strip()}...")
+    except Exception as e:
+        if "already exists" not in str(e).lower():
+            errores.append(f"prov_diarios: {e}")
+
+# ── Campos de pago en reservas ──
+for col_sql in [
+    "ALTER TABLE reservas ADD COLUMN monto_anticipado REAL DEFAULT 0",
+    "ALTER TABLE reservas ADD COLUMN saldo_pendiente REAL DEFAULT 0",
+    "ALTER TABLE reservas ADD COLUMN tipo_pago VARCHAR(30)",
+    "ALTER TABLE reservas ADD COLUMN estado_pago VARCHAR(20) DEFAULT 'sin_pago'",
+    "ALTER TABLE reservas ADD COLUMN archivo_voucher VARCHAR(255)",
+]:
+    try:
+        cursor.execute(col_sql)
+        conn.commit()
+        migraciones.append(f"+ {col_sql[len('ALTER TABLE reservas ADD COLUMN '):50]}...")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            errores.append(f"reservas pago: {e}")
+
+# ── Comprobantes de pedido ──
+for sql in [
+    """CREATE TABLE IF NOT EXISTS comprobantes_pedido (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lista_id INTEGER NOT NULL REFERENCES listas_pedido(id),
+        tipo VARCHAR(20) DEFAULT 'boleta',
+        numero VARCHAR(50),
+        proveedor_nombre VARCHAR(150),
+        monto_total REAL DEFAULT 0,
+        archivo VARCHAR(255),
+        notas VARCHAR(255),
+        creado_en DATETIME,
+        usuario_id INTEGER REFERENCES usuarios(id))""",
+    "ALTER TABLE items_pedido ADD COLUMN comprobante_id INTEGER REFERENCES comprobantes_pedido(id)",
+    "CREATE INDEX IF NOT EXISTS ix_comp_pedido_lista ON comprobantes_pedido(lista_id)",
+]:
+    try:
+        cursor.execute(sql)
+        conn.commit()
+        migraciones.append(f"+ {sql[:55].strip()}...")
+    except Exception as e:
+        if "already exists" not in str(e).lower() and "duplicate column" not in str(e).lower():
+            errores.append(f"comp_pedido: {e}")

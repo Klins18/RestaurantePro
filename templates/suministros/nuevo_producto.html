@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Nuevo Suministro{% endblock %}
+{% block page_title %}Nuevo Producto Recurrente{% endblock %}
+{% block page_subtitle %}Configura leche, pan u otro producto de entrega diaria{% endblock %}
+{% block header_actions %}<a href="{{ url_for('suministros.index') }}" class="btn-secondary btn-sm">← Volver</a>{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:0 auto;">
+<div class="card">
+    <form method="POST" style="display:flex;flex-direction:column;gap:14px;">
+        <div><label class="label">Nombre del producto *</label>
+            <input type="text" name="nombre" class="input" required placeholder="Leche, Pan de trigo..."></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div><label class="label">Unidad de medida</label>
+                <select name="unidad" class="input">
+                    <option value="litros">Litros</option>
+                    <option value="kg">Kilogramos</option>
+                    <option value="unidades">Unidades</option>
+                    <option value="bolsas">Bolsas</option>
+                    <option value="panes">Panes</option>
+                </select>
+            </div>
+            <div><label class="label">Precio por unidad (S/.)</label>
+                <input type="number" name="precio_unitario" class="input" step="any" min="0" value="0"></div>
+        </div>
+        <div><label class="label">Nombre del proveedor</label>
+            <input type="text" name="proveedor_nombre" class="input" placeholder="Nombre del lechero, panadero..."></div>
+        <div><label class="label">Teléfono del proveedor</label>
+            <input type="text" name="proveedor_tel" class="input" placeholder="9XXXXXXXX"></div>
+        <button type="submit" class="btn-primary" style="text-align:center;">✅ Crear producto</button>
+    </form>
+</div>
+</div>
+{% endblock %}

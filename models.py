@@ -112,19 +112,39 @@ class ListaPedido(db.Model):
 # ─────────────────────────────────────────
 #  ITEMS DE CADA LISTA DE PEDIDO
 # ─────────────────────────────────────────
+class ComprobantePedido(db.Model):
+    """Boleta, factura o ticket adjunto a una lista de pedido."""
+    __tablename__ = 'comprobantes_pedido'
+    id               = db.Column(db.Integer, primary_key=True)
+    lista_id         = db.Column(db.Integer, db.ForeignKey('listas_pedido.id'), nullable=False)
+    tipo             = db.Column(db.String(20), default='boleta')
+    numero           = db.Column(db.String(50))
+    proveedor_nombre = db.Column(db.String(150))
+    monto_total      = db.Column(db.Float, default=0)
+    archivo          = db.Column(db.String(255))
+    notas            = db.Column(db.String(255))
+    creado_en        = db.Column(db.DateTime, default=now_peru)
+    usuario_id       = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario          = db.relationship('Usuario')
+    lista            = db.relationship('ListaPedido',
+                           backref=db.backref('comprobantes', lazy='dynamic'))
+
+
 class ItemPedido(db.Model):
     __tablename__ = 'items_pedido'
     id = db.Column(db.Integer, primary_key=True)
     lista_id = db.Column(db.Integer, db.ForeignKey('listas_pedido.id'), nullable=False)
-    producto_nombre = db.Column(db.String(150), nullable=False)  # Nombre libre como en las fotos
+    producto_nombre = db.Column(db.String(150), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=True)
     unidad_medida = db.Column(db.String(30))
     cantidad_solicitada = db.Column(db.Float)
     cantidad_recibida = db.Column(db.Float, nullable=True)
-    precio_unitario = db.Column(db.Float, nullable=True)   # Precio unitario de mercado
-    verificado = db.Column(db.Boolean, default=False)  # Check de verificación
+    precio_unitario = db.Column(db.Float, nullable=True)
+    verificado = db.Column(db.Boolean, default=False)
     observacion = db.Column(db.String(255))
     orden = db.Column(db.Integer, default=0)
+    comprobante_id = db.Column(db.Integer, db.ForeignKey('comprobantes_pedido.id'), nullable=True)
+    comprobante    = db.relationship('ComprobantePedido', backref='items')
 
 # ─────────────────────────────────────────
 #  MOVIMIENTOS DE ALMACÉN (Ingresos/Egresos)
@@ -616,6 +636,12 @@ class Reserva(db.Model):
     observaciones = db.Column(db.Text)
     estado        = db.Column(db.String(20), default='pendiente')  # pendiente|confirmada|cancelada|completada
     alerta_vista  = db.Column(db.Boolean, default=False)
+    # ── Campos de pago ──
+    monto_anticipado  = db.Column(db.Float, default=0)   # monto ya pagado
+    saldo_pendiente   = db.Column(db.Float, default=0)   # lo que queda por cobrar
+    tipo_pago         = db.Column(db.String(30))         # efectivo|yape|transferencia|tarjeta
+    estado_pago       = db.Column(db.String(20), default='sin_pago')  # sin_pago|anticipado|parcial|pagado
+    archivo_voucher   = db.Column(db.String(255))        # foto/PDF del comprobante
     creado_en     = db.Column(db.DateTime, default=now_peru)
     usuario_id    = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     usuario       = db.relationship('Usuario')
@@ -742,3 +768,62 @@ Index('ix_reservas_estado',    Reserva.estado)
 
 # Permisos — consultados por usuario en cada request
 Index('ix_permisos_usuario',   PermisoUsuario.usuario_id)
+
+
+# ══════════════════════════════════════════════
+#  PROVEEDORES DIARIOS (Leche, Pan, etc.)
+# ══════════════════════════════════════════════
+class ProductoRecurrente(db.Model):
+    """Producto de entrega diaria: leche, pan de trigo, etc."""
+    __tablename__ = 'productos_recurrentes'
+    id               = db.Column(db.Integer, primary_key=True)
+    nombre           = db.Column(db.String(100), nullable=False)   # "Leche", "Pan de trigo"
+    unidad           = db.Column(db.String(20), default='litros')  # litros, kg, unidades
+    proveedor_nombre = db.Column(db.String(150))
+    proveedor_tel    = db.Column(db.String(20))
+    precio_unitario  = db.Column(db.Float, default=0)              # precio habitual por unidad
+    activo           = db.Column(db.Boolean, default=True)
+    creado_en        = db.Column(db.DateTime, default=now_peru)
+    entregas         = db.relationship('EntregaDiaria', backref='producto', lazy='dynamic',
+                                       cascade='all, delete-orphan')
+    pagos            = db.relationship('PagoProveedor', backref='producto', lazy='dynamic')
+
+
+class EntregaDiaria(db.Model):
+    """Registro de una entrega del día (ej: 15 litros de leche el 23/03)."""
+    __tablename__ = 'entregas_diarias'
+    id              = db.Column(db.Integer, primary_key=True)
+    producto_id     = db.Column(db.Integer, db.ForeignKey('productos_recurrentes.id'), nullable=False)
+    fecha           = db.Column(db.Date, nullable=False)
+    cantidad        = db.Column(db.Float, nullable=False)
+    precio_unitario = db.Column(db.Float, default=0)   # puede variar por día
+    subtotal        = db.Column(db.Float, default=0)   # cantidad × precio
+    observaciones   = db.Column(db.String(255))
+    usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    creado_en       = db.Column(db.DateTime, default=now_peru)
+    usuario         = db.relationship('Usuario')
+    __table_args__  = (db.UniqueConstraint('producto_id', 'fecha',
+                                           name='uq_entrega_producto_dia'),)
+
+
+class PagoProveedor(db.Model):
+    """Pago quincenal o mensual al proveedor por las entregas acumuladas."""
+    __tablename__ = 'pagos_proveedor'
+    id             = db.Column(db.Integer, primary_key=True)
+    producto_id    = db.Column(db.Integer, db.ForeignKey('productos_recurrentes.id'), nullable=False)
+    periodo_desde  = db.Column(db.Date, nullable=False)
+    periodo_hasta  = db.Column(db.Date, nullable=False)
+    cantidad_total = db.Column(db.Float, default=0)   # litros/kg/unidades del período
+    monto_total    = db.Column(db.Float, default=0)   # total a pagar
+    monto_pagado   = db.Column(db.Float, default=0)   # lo que se entregó
+    tipo_pago      = db.Column(db.String(30), default='efectivo')
+    fecha_pago     = db.Column(db.Date)
+    archivo_voucher= db.Column(db.String(255))         # foto/PDF del recibo
+    observaciones  = db.Column(db.Text)
+    estado         = db.Column(db.String(20), default='pendiente')  # pendiente|pagado
+    usuario_id     = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    creado_en      = db.Column(db.DateTime, default=now_peru)
+    usuario        = db.relationship('Usuario')
+
+Index('ix_entregas_prod_fecha',  EntregaDiaria.producto_id, EntregaDiaria.fecha)
+Index('ix_pagos_prov_prod',      PagoProveedor.producto_id)

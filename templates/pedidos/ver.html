@@ -113,7 +113,6 @@
                     <th class="th" style="text-align:right;">Total</th>
                     <th class="th" style="text-align:center;">Recibido</th>
                     <th class="th" style="text-align:center;width:36px;">✓</th>
-                    <th class="th">Observación</th>
                 </tr>
             </thead>
             <tbody>
@@ -136,11 +135,6 @@
                     <td class="td" style="text-align:center;font-size:1.1rem;">
                         {% if item.verificado %}<span style="color:#16a34a;">✓</span>{% else %}<span style="color:#e2e8f0;">○</span>{% endif %}
                     </td>
-                    <td class="td" style="font-size:0.78rem;color:#64748b;font-style:italic;">
-                        {% if item.observacion %}
-                        <span style="background:#fef9c3;padding:2px 7px;border-radius:6px;color:#854d0e;font-style:normal;font-weight:500;">⚠ {{ item.observacion }}</span>
-                        {% else %}—{% endif %}
-                    </td>
                 </tr>
                 {% endif %}
                 {% else %}
@@ -149,6 +143,109 @@
             </tbody>
         </table>
         </div>
+    </div>
+</div>
+
+<!-- ══ COMPROBANTES / BOLETAS ══ -->
+{% set comps = lista.comprobantes.all() %}
+<div class="card" style="padding:0;overflow:hidden;margin-top:16px;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">🧾 Comprobantes adjuntos</p>
+        <button onclick="document.getElementById('modal-comp').style.display='flex'"
+            class="btn-primary btn-sm">+ Agregar</button>
+    </div>
+
+    {% if not comps %}
+    <p style="padding:20px;text-align:center;color:#94a3b8;font-size:0.85rem;">Sin comprobantes adjuntos</p>
+    {% else %}
+    {% for c in comps %}
+    <div style="padding:12px 16px;border-bottom:1px solid #f8fafc;display:flex;align-items:flex-start;gap:12px;">
+        <div style="width:36px;height:36px;border-radius:8px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1rem;">
+            {% if c.tipo == 'factura' %}🧾{% elif c.tipo == 'boleta' %}🧾{% else %}📄{% endif %}
+        </div>
+        <div style="flex:1;min-width:0;">
+            <p style="font-weight:700;color:#1e293b;font-size:0.88rem;">
+                {{ c.tipo|capitalize }} {% if c.numero %}#{{ c.numero }}{% else %}S/N{% endif %}
+                {% if c.monto_total %}<span style="color:#10b981;font-size:0.85rem;"> · S/.{{ '%.2f'|format(c.monto_total) }}</span>{% endif %}
+            </p>
+            {% if c.proveedor_nombre %}<p style="font-size:0.75rem;color:#64748b;">{{ c.proveedor_nombre }}</p>{% endif %}
+            {% set items_comp = c.items | selectattr('producto_nombre') | list %}
+            {% if items_comp %}
+            <p style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
+                Items: {% for i in items_comp %}{{ i.producto_nombre }}{% if not loop.last %}, {% endif %}{% endfor %}
+            </p>
+            {% endif %}
+            {% if c.notas %}<p style="font-size:0.72rem;color:#94a3b8;font-style:italic;">{{ c.notas }}</p>{% endif %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+            {% if c.archivo %}
+            <a href="{{ url_for('pedidos.comprobante_archivo', filename=c.archivo) }}" target="_blank"
+               style="color:#6366f1;font-size:0.78rem;font-weight:600;text-decoration:none;">📎 Ver</a>
+            {% endif %}
+            <form method="POST" action="{{ url_for('pedidos.eliminar_comprobante', cid=c.id) }}" style="margin:0;">
+                <button type="submit" onclick="return confirm('¿Eliminar comprobante?')"
+                    style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.8rem;">🗑️</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Modal agregar comprobante -->
+<div id="modal-comp" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;">
+    <div class="card" style="width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-weight:800;color:#1e293b;font-size:1rem;">🧾 Agregar comprobante</p>
+            <button onclick="document.getElementById('modal-comp').style.display='none'"
+                style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('pedidos.agregar_comprobante', id=lista.id) }}"
+              enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Tipo</label>
+                    <select name="tipo" class="input">
+                        <option value="boleta">Boleta</option>
+                        <option value="factura">Factura</option>
+                        <option value="ticket">Ticket</option>
+                        <option value="sin_comprobante">Sin comprobante</option>
+                    </select>
+                </div>
+                <div><label class="label">Número</label>
+                    <input type="text" name="numero" class="input" placeholder="Ej: B001-00123"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Proveedor</label>
+                    <input type="text" name="proveedor_nombre" class="input" placeholder="Nombre del proveedor"></div>
+                <div><label class="label">Monto total (S/.)</label>
+                    <input type="number" name="monto_total" step="any" min="0" class="input" placeholder="0.00"></div>
+            </div>
+            <div><label class="label">Archivo (foto/PDF)</label>
+                <input type="file" name="archivo" class="input" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <!-- Asignar items -->
+            {% set items_lista = lista.items | selectattr('producto_nombre') | list %}
+            {% if items_lista %}
+            <div>
+                <label class="label">Asignar ítems a este comprobante (opcional)</label>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;">
+                    {% for item in items_lista %}
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;">
+                        <input type="checkbox" name="item_{{ item.id }}"
+                               {% if item.comprobante_id %}disabled{% endif %}
+                               style="width:15px;height:15px;">
+                        <span style="flex:1;">{{ item.producto_nombre }}</span>
+                        {% if item.comprobante %}
+                        <span style="font-size:0.68rem;color:#94a3b8;">(ya asignado)</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <div><label class="label">Notas</label>
+                <input type="text" name="notas" class="input" placeholder="Observaciones opcionales..."></div>
+            <button type="submit" class="btn-primary" style="text-align:center;">✅ Guardar comprobante</button>
+        </form>
     </div>
 </div>
 

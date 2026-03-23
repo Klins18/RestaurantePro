@@ -3,6 +3,8 @@
 {% block page_title %}Registro de Compras{% endblock %}
 {% block page_subtitle %}Facturas, boletas y tickets de compra{% endblock %}
 {% block header_actions %}
+<a href="{{ url_for('compras.costeo') }}" class="btn-secondary btn-sm">📉 Costeo</a>
+<a href="{{ url_for('compras.consolidado') }}" class="btn-secondary btn-sm">📊 Consolidado</a>
 <a href="{{ url_for('compras.nueva') }}" class="btn-primary btn-sm">+ Nueva compra</a>
 {% endblock %}
 

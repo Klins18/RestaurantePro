@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+import os
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
-from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, RegistroPasajeros, EmpresaTuristica, BalonGas, Reserva, VentaDiaria
 from datetime import date, datetime, timedelta
 import pytz
@@ -10,6 +11,20 @@ PERU_TZ = pytz.timezone('America/Lima')
 
 def now_peru():
     return datetime.now(PERU_TZ).replace(tzinfo=None)
+
+UPLOAD_RESERVAS = 'static/uploads/reservas'
+ALLOWED_EXT = {'pdf','png','jpg','jpeg','webp'}
+
+def guardar_voucher_reserva(file):
+    if file and file.filename and '.' in file.filename:
+        ext = file.filename.rsplit('.',1)[1].lower()
+        if ext in ALLOWED_EXT:
+            os.makedirs(UPLOAD_RESERVAS, exist_ok=True)
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S_')
+            fname = ts + secure_filename(file.filename)
+            file.save(os.path.join(UPLOAD_RESERVAS, fname))
+            return fname
+    return None
 
 def hoy_peru():
     return datetime.now(PERU_TZ).date()
@@ -95,7 +110,6 @@ def index():
 # ─── BALONES DE GAS ─────────────────────────────────────────
 @pasajeros_bp.route('/gas', methods=['GET', 'POST'])
 @login_required
-@permiso_required('gas')
 def gas():
     if request.method == 'POST':
         accion = request.form.get('accion', 'nuevo')
@@ -169,7 +183,6 @@ def gas():
 # ─── RESERVAS ───────────────────────────────────────────────
 @pasajeros_bp.route('/reservas', methods=['GET', 'POST'])
 @login_required
-@permiso_required('reservas')
 def reservas():
     if request.method == 'POST':
         accion = request.form.get('accion', 'nuevo')
@@ -187,7 +200,7 @@ def reservas():
                 precio_buffet = float(request.form.get('precio_buffet', 0) or 0),
                 empresa_id    = request.form.get('empresa_id') or None,
                 observaciones = request.form.get('observaciones', '').strip(),
-                estado        = request.form.get('estado', 'pendiente'),  # pendiente|confirmada|cancelada|completada|postergada
+                estado        = request.form.get('estado', 'pendiente'),
             )
             if not datos['fecha']:
                 flash('La fecha es obligatoria.', 'error')
@@ -202,6 +215,20 @@ def reservas():
                 for k, v in datos.items():
                     setattr(r, k, v)
                 flash('Reserva actualizada.', 'success')
+
+        elif accion == 'pago':
+            r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
+            monto_ant = float(request.form.get('monto_anticipado', 0) or 0)
+            total_esp = round((r.num_pax or 0) * (r.precio_buffet or 0), 2)
+            saldo = round(total_esp - monto_ant, 2)
+            archivo = guardar_voucher_reserva(request.files.get('archivo_voucher'))
+            r.monto_anticipado = monto_ant
+            r.saldo_pendiente  = max(0, saldo)
+            r.tipo_pago        = request.form.get('tipo_pago', '')
+            r.estado_pago      = 'pagado' if saldo <= 0 else ('anticipado' if monto_ant > 0 else 'sin_pago')
+            if archivo:
+                r.archivo_voucher = archivo
+            flash(f'Pago registrado: S/.{monto_ant:.2f} anticipado, saldo S/.{max(0,saldo):.2f}', 'success')
 
         elif accion == 'cancelar':
             r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
@@ -277,6 +304,12 @@ def reservas():
 
 
 # ─── API: alertas de reservas (para el header) ──────────────
+@pasajeros_bp.route('/reservas/voucher/<filename>')
+@login_required
+def reserva_voucher(filename):
+    return send_from_directory(UPLOAD_RESERVAS, filename)
+
+
 @pasajeros_bp.route('/api/alertas')
 @login_required
 def api_alertas():

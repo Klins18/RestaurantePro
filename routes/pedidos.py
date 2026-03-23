@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
+import os
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
-from models import db, ListaPedido, ItemPedido, Usuario, Producto, MovimientoAlmacen, KardexAlmacen, Notificacion, registrar_auditoria
+from models import db, ListaPedido, ItemPedido, ComprobantePedido, Usuario, Producto, MovimientoAlmacen, KardexAlmacen, Notificacion, registrar_auditoria
 from datetime import datetime, date
 import pytz
 
@@ -10,6 +12,20 @@ PERU_TZ = pytz.timezone('America/Lima')
 
 def now_peru():
     return datetime.now(PERU_TZ).replace(tzinfo=None)
+
+UPLOAD_COMPROBANTES = 'static/uploads/comprobantes_pedido'
+ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'webp'}
+
+def guardar_comprobante(file):
+    if file and file.filename and '.' in file.filename:
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        if ext in ALLOWED_EXT:
+            os.makedirs(UPLOAD_COMPROBANTES, exist_ok=True)
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S_')
+            fname = ts + secure_filename(file.filename)
+            file.save(os.path.join(UPLOAD_COMPROBANTES, fname))
+            return fname
+    return None
 
 # ── PRODUCTOS PREDEFINIDOS POR TIPO ────────────────────────────
 LISTAS_PREDEFINIDAS = {
@@ -214,6 +230,9 @@ def verificar(id):
             except:
                 pass
             item.observacion = obs
+            # Asignar comprobante si seleccionado
+            comp_id_str = request.form.get(f'comp_{item.id}', '').strip()
+            item.comprobante_id = int(comp_id_str) if comp_id_str else None
 
             # ── Detectar irregularidades ──
             nombre = item.producto_nombre.strip()
@@ -489,6 +508,59 @@ def eliminar(id):
 # ──────────────────────────────────────
 #  NOTIFICACIONES
 # ──────────────────────────────────────
+# ──────────────────────────────────────
+#  COMPROBANTES (boletas/facturas de la lista)
+# ──────────────────────────────────────
+@pedidos_bp.route('/<int:id>/comprobante', methods=['POST'])
+@login_required
+@permiso_required('pedidos')
+def agregar_comprobante(id):
+    lista = ListaPedido.query.get_or_404(id)
+    archivo = guardar_comprobante(request.files.get('archivo'))
+    monto = float(request.form.get('monto_total', 0) or 0)
+    comp = ComprobantePedido(
+        lista_id=lista.id,
+        tipo=request.form.get('tipo', 'boleta'),
+        numero=request.form.get('numero', '').strip(),
+        proveedor_nombre=request.form.get('proveedor_nombre', '').strip(),
+        monto_total=monto,
+        archivo=archivo,
+        notas=request.form.get('notas', '').strip(),
+        usuario_id=current_user.id,
+        creado_en=now_peru()
+    )
+    db.session.add(comp)
+    db.session.flush()
+    # Asignar items seleccionados a este comprobante
+    for item in lista.items:
+        if request.form.get(f'item_{item.id}') == 'on':
+            item.comprobante_id = comp.id
+    db.session.commit()
+    flash(f'Comprobante agregado ({comp.tipo} #{comp.numero or "S/N"}).', 'success')
+    return redirect(url_for('pedidos.ver', id=id))
+
+
+@pedidos_bp.route('/comprobante/<int:cid>/eliminar', methods=['POST'])
+@login_required
+@permiso_required('pedidos')
+def eliminar_comprobante(cid):
+    comp = ComprobantePedido.query.get_or_404(cid)
+    lista_id = comp.lista_id
+    # Desasignar items
+    for item in comp.items:
+        item.comprobante_id = None
+    db.session.delete(comp)
+    db.session.commit()
+    flash('Comprobante eliminado.', 'success')
+    return redirect(url_for('pedidos.ver', id=lista_id))
+
+
+@pedidos_bp.route('/comprobante/archivo/<filename>')
+@login_required
+def comprobante_archivo(filename):
+    return send_from_directory(UPLOAD_COMPROBANTES, filename)
+
+
 @pedidos_bp.route('/notificaciones')
 @login_required
 def notificaciones():

@@ -331,3 +331,66 @@ def api_carta():
                 })
         result.append({'id': cat.id, 'nombre': cat.nombre, 'productos': prods})
     return jsonify(result)
+
+# ──────────────────────────────────────
+#  REPORTE MENSUAL DE GRUPOS PRIVADOS
+# ──────────────────────────────────────
+@ventas_bp.route('/privados')
+@login_required
+def privados():
+    hoy = date.today()
+    mes_str  = request.args.get('mes',  hoy.strftime('%Y-%m'))
+    try:
+        anio, mes = int(mes_str.split('-')[0]), int(mes_str.split('-')[1])
+    except:
+        anio, mes = hoy.year, hoy.month
+
+    inicio = date(anio, mes, 1)
+    if mes == 12:
+        fin = date(anio + 1, 1, 1)
+    else:
+        fin = date(anio, mes + 1, 1)
+
+    # Ventas privadas del mes
+    ventas = VentaDiaria.query.filter(
+        VentaDiaria.fecha >= inicio,
+        VentaDiaria.fecha < fin,
+        VentaDiaria.tipo_cliente == 'privado'
+    ).order_by(VentaDiaria.fecha, VentaDiaria.creado_en).all()
+
+    # Calcular totales
+    total_grupos   = len(ventas)
+    total_pax      = sum(v.num_pax or 0 for v in ventas)
+    total_ingresos = sum(v.total or 0 for v in ventas)
+    total_buffet   = sum((v.num_pax or 0) * (v.precio_buffet or 0) for v in ventas)
+    total_consumo  = sum(
+        sum(it.subtotal or 0 for it in v.items) for v in ventas
+    )
+
+    # Por método de pago
+    por_pago = {}
+    for v in ventas:
+        k = v.tipo_pago or 'sin especificar'
+        por_pago[k] = round(por_pago.get(k, 0) + v.total, 2)
+
+    # Serie por día para gráfico
+    serie_dia = {}
+    for v in ventas:
+        k = v.fecha.strftime('%d/%m')
+        serie_dia[k] = round(serie_dia.get(k, 0) + v.total, 2)
+
+    # Meses disponibles (últimos 12)
+    meses = []
+    d = date(hoy.year, hoy.month, 1)
+    for _ in range(12):
+        meses.append(d)
+        d = date(d.year if d.month > 1 else d.year - 1,
+                 d.month - 1 if d.month > 1 else 12, 1)
+    meses.reverse()
+
+    return render_template('ventas/privados.html',
+        ventas=ventas, mes_actual=inicio, meses=meses,
+        total_grupos=total_grupos, total_pax=total_pax,
+        total_ingresos=total_ingresos, total_buffet=total_buffet,
+        total_consumo=total_consumo, por_pago=por_pago,
+        serie_dia=serie_dia, hoy=hoy)

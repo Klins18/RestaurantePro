@@ -124,23 +124,36 @@
         </div>
     </div>
 
-    <!-- PRECIO + OBSERVACIÓN -->
-    <div style="padding:8px 14px 12px;display:grid;grid-template-columns:1fr 2fr;gap:8px;border-top:1px solid #f1f5f9;">
+    <!-- PRECIO + OBSERVACIÓN + COMPROBANTE -->
+    <div style="padding:8px 14px 12px;display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:8px;border-top:1px solid #f1f5f9;">
         <div>
             <label style="font-size:0.65rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;display:block;margin-bottom:4px;">S/. Precio unit.</label>
             <input type="number" name="precio_{{ item.id }}" id="precio_{{ item.id }}"
                 value="{{ item.precio_unitario or '' }}"
-                min="0" step="0.01"
+                min="0" step="any"
                 style="border:2px solid #dbeafe;border-radius:8px;padding:7px 10px;font-size:0.95rem;width:100%;box-sizing:border-box;text-align:right;outline:none;color:#1d4ed8;font-weight:700;"
                 placeholder="0.00"
                 onfocus="this.style.borderColor='#3b82f6'" onfocusout="this.style.borderColor='#dbeafe'">
         </div>
         <div>
-            <label style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;display:block;margin-bottom:4px;">⚠ Observación / incidencia</label>
+            <label style="font-size:0.65rem;font-weight:700;color:#8b5cf6;text-transform:uppercase;display:block;margin-bottom:4px;">🧾 Boleta/Factura</label>
+            <select name="comp_{{ item.id }}"
+                style="border:2px solid #ede9fe;border-radius:8px;padding:7px 10px;font-size:0.82rem;width:100%;box-sizing:border-box;outline:none;color:#5b21b6;">
+                <option value="">— Sin asignar —</option>
+                {% for c in lista.comprobantes.all() %}
+                <option value="{{ c.id }}" {% if item.comprobante_id == c.id %}selected{% endif %}>
+                    {{ c.tipo|capitalize }} {% if c.numero %}#{{ c.numero }}{% else %}S/N{% endif %}
+                    {% if c.proveedor_nombre %} · {{ c.proveedor_nombre[:15] }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;display:block;margin-bottom:4px;">⚠ Observación</label>
             <input type="text" name="obs_{{ item.id }}"
                 value="{{ item.observacion or '' }}"
                 style="border:2px solid #fef3c7;border-radius:8px;padding:7px 10px;font-size:0.875rem;width:100%;box-sizing:border-box;outline:none;"
-                placeholder="Ej: llegó en mal estado, faltó cantidad..."
+                placeholder="Ej: llegó en mal estado..."
                 onfocus="this.style.borderColor='#fbbf24'" onfocusout="this.style.borderColor='#fef3c7'">
         </div>
     </div>

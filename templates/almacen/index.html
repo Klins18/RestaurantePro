@@ -3,11 +3,29 @@
 {% block page_title %}Inventario / Stock{% endblock %}
 {% block page_subtitle %}Estado actual del almacén{% endblock %}
 {% block header_actions %}
-<a href="{{ url_for("almacen.ingreso") }}" class="btn-primary btn-sm">⬇️ Ingreso</a>
-<a href="{{ url_for("almacen.egreso") }}" class="btn-danger btn-sm">⬆️ Egreso</a>
+<a href="{{ url_for('almacen.ingreso') }}" class="btn-primary btn-sm">⬇️ Ingreso</a>
+<a href="{{ url_for('almacen.egreso') }}" class="btn-danger btn-sm">⬆️ Salida</a>
+<a href="{{ url_for('almacen.movimientos') }}" class="btn-secondary btn-sm">📋 Movimientos</a>
 {% endblock %}
 
 {% block content %}
+
+{% if alertas > 0 %}
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:12px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.4rem;">⚠️</span>
+        <div>
+            <p style="font-weight:700;color:#991b1b;font-size:0.9rem;">{{ alertas }} producto(s) por debajo del stock mínimo</p>
+            <p style="font-size:0.78rem;color:#b91c1c;">Revisar y reabastecer pronto</p>
+        </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <a href="{{ url_for('almacen.alertas') }}" style="background:#dc2626;color:white;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:0.82rem;font-weight:700;">Ver alertas →</a>
+        <a href="{{ url_for('almacen.index', bajos='1') }}" style="background:#fee2e2;color:#991b1b;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:0.82rem;font-weight:600;">Solo ver bajos</a>
+    </div>
+</div>
+{% endif %}
+
 <div class="card" style="margin-bottom:16px;">
     <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div><label class="label">Categoría</label>
@@ -18,11 +36,9 @@
         </div>
         <div><label class="label">Buscar</label><input type="text" name="q" value="{{ q_filtro }}" class="input" style="width:180px;" placeholder="Nombre del producto..."></div>
         <button type="submit" class="btn-primary btn-sm">🔍 Filtrar</button>
-        <a href="{{ url_for("almacen.index") }}" class="btn-secondary btn-sm">Limpiar</a>
-        {% if alertas > 0 %}
-        <div style="margin-left:auto;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
-            <span>⚠️</span><span style="font-size:0.875rem;color:#b91c1c;font-weight:600;">{{ alertas }} producto(s) bajo stock mínimo</span>
-        </div>
+        <a href="{{ url_for('almacen.index') }}" class="btn-secondary btn-sm">Limpiar</a>
+        {% if solo_bajos %}
+        <span style="background:#fef3c7;color:#92400e;padding:5px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;">Mostrando solo productos bajos</span>
         {% endif %}
     </form>
 </div>
@@ -37,23 +53,34 @@
             <th class="th" style="text-align:right;">Stock Actual</th>
             <th class="th" style="text-align:right;">Stock Mínimo</th>
             <th class="th" style="text-align:center;">Estado</th>
+            <th class="th" style="text-align:center;">Acciones</th>
         </tr></thead>
         <tbody>
             {% for p in productos %}
-            <tr style="{% if p.stock_actual <= p.stock_minimo %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <tr style="{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
                 <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
                 <td class="td" style="font-size:0.82rem;color:#64748b;">{{ p.categoria.nombre if p.categoria else "—" }}</td>
                 <td class="td" style="text-align:center;color:#64748b;font-size:0.875rem;">{{ p.unidad_medida }}</td>
-                <td class="td" style="text-align:right;font-weight:700;font-size:1rem;color:{% if p.stock_actual <= p.stock_minimo %}#dc2626{% else %}#166534{% endif %};">{{ p.stock_actual|round(2) }}</td>
+                <td class="td" style="text-align:right;font-weight:700;font-size:1rem;color:{% if p.stock_actual <= 0 %}#dc2626{% elif p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}#d97706{% else %}#166534{% endif %};">
+                    {{ p.stock_actual|round(2) }}
+                </td>
                 <td class="td" style="text-align:right;color:#94a3b8;font-size:0.875rem;">{{ p.stock_minimo|round(2) }}</td>
                 <td class="td" style="text-align:center;">
-                    {% if p.stock_actual <= 0 %}<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">Sin stock</span>
-                    {% elif p.stock_actual <= p.stock_minimo %}<span style="background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⚠️ Bajo</span>
-                    {% else %}<span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">✓ Normal</span>{% endif %}
+                    {% if p.stock_actual <= 0 %}
+                        <span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">🔴 Sin stock</span>
+                    {% elif p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}
+                        <span style="background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⚠️ Bajo</span>
+                    {% else %}
+                        <span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">✓ Normal</span>
+                    {% endif %}
+                </td>
+                <td class="td" style="text-align:center;white-space:nowrap;">
+                    <a href="{{ url_for('almacen.movimientos', producto=p.id) }}"
+                       style="font-size:0.75rem;color:#6366f1;font-weight:600;text-decoration:none;">📋 Ver movimientos</a>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8;">No hay productos.</td></tr>
+            <tr><td colspan="7" style="padding:40px;text-align:center;color:#94a3b8;">No hay productos.</td></tr>
             {% endfor %}
         </tbody>
     </table>

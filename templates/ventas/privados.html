@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Grupos Privados — {{ mes_actual.strftime('%B %Y') }}{% endblock %}
+{% block page_title %}Reporte Grupos Privados{% endblock %}
+{% block page_subtitle %}{{ mes_actual.strftime('%B %Y') }} · {{ total_grupos }} grupo(s) atendido(s){% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('ventas.index') }}" class="btn-secondary btn-sm">← Ventas</a>
+<button onclick="window.print()" class="btn-primary btn-sm">🖨️ Imprimir / PDF</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Selector de mes -->
+<div class="card no-print" style="margin-bottom:14px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div>
+            <label class="label">Mes</label>
+            <select name="mes" class="input" style="width:180px;" onchange="this.form.submit()">
+                {% for m in meses %}
+                <option value="{{ m.strftime('%Y-%m') }}" {% if m == mes_actual %}selected{% endif %}>
+                    {{ m.strftime('%B %Y') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- ══ ZONA IMPRIMIBLE ══ -->
+<div id="zona-imprimible">
+
+<!-- Encabezado del reporte -->
+<div class="print-header" style="display:none;">
+    <h1 style="font-size:1.3rem;font-weight:800;color:#1e293b;margin:0;">Restaurante Turístico Marangani</h1>
+    <p style="color:#64748b;font-size:0.85rem;margin:4px 0 0;">Reporte Grupos Privados — {{ mes_actual.strftime('%B %Y') }}</p>
+    <p style="color:#94a3b8;font-size:0.75rem;">Generado el {{ hoy.strftime('%d/%m/%Y') }}</p>
+    <hr style="margin:10px 0;border-color:#e2e8f0;">
+</div>
+
+<!-- Tarjetas resumen -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+    <div class="card" style="padding:14px 16px;border-top:4px solid #6366f1;">
+        <p style="font-size:0.65rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Grupos</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total_grupos }}</p>
+    </div>
+    <div class="card" style="padding:14px 16px;border-top:4px solid #0891b2;">
+        <p style="font-size:0.65rem;font-weight:700;color:#0891b2;text-transform:uppercase;margin-bottom:4px;">Total pax</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total_pax }}</p>
+    </div>
+    <div class="card" style="padding:14px 16px;border-top:4px solid #10b981;">
+        <p style="font-size:0.65rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Ingresos</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_ingresos) }}</p>
+    </div>
+    <div class="card" style="padding:14px 16px;border-top:4px solid #f59e0b;">
+        <p style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Ticket prom.</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">
+            S/.{{ "%.2f"|format(total_ingresos / total_grupos) if total_grupos else "0.00" }}
+        </p>
+    </div>
+</div>
+
+<!-- Gráfico + Métodos de pago -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:18px;" class="no-print">
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 18px;border-bottom:1px solid #f1f5f9;">
+            <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">📈 Ingresos por día</p>
+        </div>
+        <div style="padding:14px;">
+            <canvas id="grafico-privados" height="120"></canvas>
+        </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 18px;border-bottom:1px solid #f1f5f9;">
+            <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">💳 Métodos de pago</p>
+        </div>
+        {% for tipo, monto in por_pago.items() %}
+        <div style="padding:10px 16px;border-bottom:1px solid #f8fafc;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:0.85rem;font-weight:600;color:#1e293b;text-transform:capitalize;">{{ tipo }}</span>
+            <span style="font-weight:700;color:#10b981;">S/.{{ "%.2f"|format(monto) }}</span>
+        </div>
+        {% else %}
+        <p style="padding:20px;text-align:center;color:#94a3b8;font-size:0.85rem;">Sin datos</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Tabla detalle -->
+{% if not ventas %}
+<div class="card" style="padding:40px;text-align:center;">
+    <p style="font-size:2rem;margin-bottom:8px;">👥</p>
+    <p style="color:#94a3b8;">No hubo grupos privados en {{ mes_actual.strftime('%B %Y') }}.</p>
+</div>
+{% else %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="background:#1e293b;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;">
+        <p style="color:white;font-weight:700;font-size:0.9rem;">📋 Detalle de grupos — {{ mes_actual.strftime('%B %Y') }}</p>
+        <p style="color:#64748b;font-size:0.75rem;">{{ total_grupos }} grupo(s) · {{ total_pax }} pax · S/.{{ "%.2f"|format(total_ingresos) }}</p>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:700px;">
+        <thead>
+            <tr style="background:#f8fafc;">
+                <th class="th">Fecha</th>
+                <th class="th">Nombre del grupo</th>
+                <th class="th" style="text-align:center;">Pax</th>
+                <th class="th" style="text-align:right;">P.Buffet</th>
+                <th class="th" style="text-align:right;">Buffet</th>
+                <th class="th" style="text-align:right;">Consumo</th>
+                <th class="th" style="text-align:right;">Total</th>
+                <th class="th">Pago</th>
+                <th class="th no-print" style="text-align:center;">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for v in ventas %}
+        {% set consumo_v = v.items | sum(attribute='subtotal') %}
+        <tr style="{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="white-space:nowrap;font-size:0.82rem;color:#64748b;">{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+            <td class="td" style="font-weight:600;color:#1e293b;">
+                {{ v.nombre_grupo or 'Sin nombre' }}
+                {% if v.items %}
+                <div style="margin-top:3px;">
+                {% for it in v.items %}
+                <span style="font-size:0.68rem;background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:4px;margin-right:3px;">
+                    {{ it.descripcion }} x{{ it.cantidad }}
+                </span>
+                {% endfor %}
+                </div>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;font-weight:700;">{{ v.num_pax or 0 }}</td>
+            <td class="td" style="text-align:right;color:#64748b;font-size:0.82rem;">
+                {% if v.precio_buffet %}S/.{{ v.precio_buffet }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;color:#1d4ed8;font-weight:700;">
+                {% set tot_buf = (v.num_pax or 0) * (v.precio_buffet or 0) %}
+                {% if tot_buf > 0 %}S/.{{ "%.2f"|format(tot_buf) }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;color:#6366f1;font-weight:700;">
+                {% if consumo_v > 0 %}S/.{{ "%.2f"|format(consumo_v) }}{% else %}—{% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(v.total) }}</td>
+            <td class="td" style="font-size:0.8rem;color:#64748b;text-transform:capitalize;">{{ v.tipo_pago or '—' }}</td>
+            <td class="td no-print" style="text-align:center;">
+                {% if v.estado_pago == 'pagado' %}
+                <span style="background:#dcfce7;color:#166534;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:9999px;">Pagado</span>
+                {% else %}
+                <span style="background:#fef3c7;color:#92400e;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:9999px;">Pendiente</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background:#1e293b;">
+                <td colspan="2" class="td" style="font-weight:800;color:white;">TOTAL DEL MES</td>
+                <td class="td" style="text-align:center;font-weight:800;color:white;">{{ total_pax }}</td>
+                <td class="td"></td>
+                <td class="td" style="text-align:right;font-weight:800;color:#93c5fd;">S/.{{ "%.2f"|format(total_buffet) }}</td>
+                <td class="td" style="text-align:right;font-weight:800;color:#c4b5fd;">S/.{{ "%.2f"|format(total_consumo) }}</td>
+                <td class="td" style="text-align:right;font-weight:800;color:#6ee7b7;font-size:1rem;">S/.{{ "%.2f"|format(total_ingresos) }}</td>
+                <td class="td"></td>
+                <td class="td no-print"></td>
+            </tr>
+        </tfoot>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+</div> <!-- fin zona-imprimible -->
+
+<style>
+@media print {
+    .no-print { display: none !important; }
+    .print-header { display: block !important; }
+    body { background: white !important; }
+    .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    nav, header, .sidebar, #sidebar { display: none !important; }
+    #zona-imprimible { padding: 0; margin: 0; }
+    .btn-primary, .btn-secondary { display: none !important; }
+    @page { margin: 1.5cm; size: A4 landscape; }
+}
+</style>
+
+{% block scripts %}
+<script>
+var labels = {{ serie_dia.keys() | list | tojson }};
+var datos  = {{ serie_dia.values() | list | tojson }};
+var ctx = document.getElementById('grafico-privados');
+if (ctx && typeof Chart !== 'undefined') {
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: datos,
+                backgroundColor: '#6366f1',
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: c => 'S/. ' + c.parsed.y.toFixed(2) } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+                y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 },
+                    callback: v => 'S/.' + v } }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

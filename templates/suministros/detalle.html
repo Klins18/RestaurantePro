@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ prod.nombre }}{% endblock %}
+{% block page_title %}{{ prod.nombre }}{% endblock %}
+{% block page_subtitle %}{{ prod.proveedor_nombre or 'Sin proveedor' }} · S/.{{ prod.precio_unitario }}/{{ prod.unidad }}{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('suministros.index') }}" class="btn-secondary btn-sm">← Suministros</a>
+{% endblock %}
+
+{% block content %}
+
+{% if pend_cantidad > 0 %}
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div>
+        <p style="font-weight:700;color:#92400e;">💰 Pendiente de pago: {{ pend_cantidad }} {{ prod.unidad }} = <span style="font-size:1.1rem;">S/.{{ "%.2f"|format(pend_monto) }}</span></p>
+        <p style="font-size:0.75rem;color:#b45309;">Desde {{ desde_pend.strftime('%d/%m/%Y') }} hasta hoy</p>
+    </div>
+    <button onclick="document.getElementById('modal-pago').style.display='flex'" class="btn-primary btn-sm">💳 Registrar pago</button>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:14px;">
+    <p style="font-weight:700;color:#1e293b;margin-bottom:10px;font-size:0.9rem;">➕ Registrar entrega</p>
+    <form method="POST" action="{{ url_for('suministros.registrar_entrega', pid=prod.id) }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div><label class="label">Fecha</label>
+            <input type="date" name="fecha" class="input" value="{{ hoy }}" style="width:145px;"></div>
+        <div><label class="label">Cantidad ({{ prod.unidad }})</label>
+            <input type="number" name="cantidad" step="any" min="0" class="input" style="width:110px;" required placeholder="0"></div>
+        <div><label class="label">Precio/{{ prod.unidad }} (S/.)</label>
+            <input type="number" name="precio_unitario" step="any" min="0" value="{{ prod.precio_unitario }}" class="input" style="width:100px;"></div>
+        <div style="flex:1;min-width:140px;"><label class="label">Observación</label>
+            <input type="text" name="observaciones" class="input" placeholder="Opcional..."></div>
+        <button type="submit" class="btn-primary btn-sm">💾 Guardar</button>
+    </form>
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:145px;"></div>
+        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:145px;"></div>
+        <button type="submit" class="btn-primary btn-sm">🔍 Filtrar</button>
+    </form>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+    <div class="card" style="padding:14px 18px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:2px;">Total {{ prod.unidad }}</p>
+        <p style="font-size:1.5rem;font-weight:800;color:#1e293b;">{{ total_cantidad|round(2) }}</p>
+    </div>
+    <div class="card" style="padding:14px 18px;border-left:4px solid #10b981;">
+        <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:2px;">Total S/.</p>
+        <p style="font-size:1.5rem;font-weight:800;color:#1e293b;">{{ "%.2f"|format(total_monto) }}</p>
+    </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:18px;">
+    <div style="padding:12px 18px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">📋 Entregas del período</p>
+        <span style="font-size:0.78rem;color:#94a3b8;">{{ entregas|length }} registros</span>
+    </div>
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+            <th class="th">Fecha</th>
+            <th class="th" style="text-align:right;">Cantidad</th>
+            <th class="th" style="text-align:right;">Precio/{{ prod.unidad }}</th>
+            <th class="th" style="text-align:right;">Subtotal</th>
+            <th class="th">Obs.</th>
+            <th class="th" style="text-align:center;">Acción</th>
+        </tr></thead>
+        <tbody>
+        {% for e in entregas %}
+        <tr style="{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="font-weight:600;color:#1e293b;">{{ e.fecha.strftime('%d/%m/%Y') }}</td>
+            <td class="td" style="text-align:right;font-weight:700;color:#1d4ed8;">{{ e.cantidad }} {{ prod.unidad }}</td>
+            <td class="td" style="text-align:right;color:#64748b;">S/.{{ e.precio_unitario }}</td>
+            <td class="td" style="text-align:right;font-weight:700;color:#10b981;">S/.{{ "%.2f"|format(e.subtotal) }}</td>
+            <td class="td" style="font-size:0.8rem;color:#94a3b8;">{{ e.observaciones or '—' }}</td>
+            <td class="td" style="text-align:center;">
+                <form method="POST" action="{{ url_for('suministros.eliminar_entrega', eid=e.id) }}" style="display:inline;">
+                    <button type="submit" onclick="return confirm('¿Eliminar esta entrega?')"
+                        style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.9rem;">🗑️</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:30px;text-align:center;color:#94a3b8;">Sin entregas en el período.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{% if pagos %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 18px;border-bottom:1px solid #f1f5f9;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">💳 Historial de pagos</p>
+    </div>
+    <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+            <th class="th">Período</th>
+            <th class="th" style="text-align:right;">Cantidad</th>
+            <th class="th" style="text-align:right;">Monto pagado</th>
+            <th class="th">Tipo pago</th>
+            <th class="th">Fecha pago</th>
+            <th class="th" style="text-align:center;">Voucher</th>
+        </tr></thead>
+        <tbody>
+        {% for pg in pagos %}
+        <tr style="{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="font-size:0.82rem;color:#1e293b;">{{ pg.periodo_desde.strftime('%d/%m') }} al {{ pg.periodo_hasta.strftime('%d/%m/%Y') }}</td>
+            <td class="td" style="text-align:right;color:#64748b;">{{ pg.cantidad_total }} {{ prod.unidad }}</td>
+            <td class="td" style="text-align:right;font-weight:700;color:#10b981;">S/.{{ "%.2f"|format(pg.monto_pagado) }}</td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;text-transform:capitalize;">{{ pg.tipo_pago }}</td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;">{{ pg.fecha_pago.strftime('%d/%m/%Y') if pg.fecha_pago else '—' }}</td>
+            <td class="td" style="text-align:center;">
+                {% if pg.archivo_voucher %}
+                <a href="{{ url_for('suministros.voucher', filename=pg.archivo_voucher) }}" target="_blank"
+                   style="color:#6366f1;font-size:0.8rem;font-weight:600;text-decoration:none;">📎 Ver</a>
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+<div id="modal-pago" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;">
+    <div class="card" style="width:440px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-weight:800;color:#1e293b;font-size:1rem;">💳 Registrar pago al proveedor</p>
+            <button onclick="document.getElementById('modal-pago').style.display='none'"
+                style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('suministros.registrar_pago', pid=prod.id) }}"
+              enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+            <div style="background:#fef3c7;border-radius:8px;padding:10px 14px;">
+                <p style="font-size:0.82rem;font-weight:700;color:#92400e;">
+                    Pendiente: {{ pend_cantidad }} {{ prod.unidad }} = S/.{{ "%.2f"|format(pend_monto) }}
+                </p>
+                <p style="font-size:0.72rem;color:#b45309;">Desde {{ desde_pend.strftime('%d/%m/%Y') }}</p>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Período desde</label>
+                    <input type="date" name="periodo_desde" class="input" value="{{ desde_pend }}" required></div>
+                <div><label class="label">Período hasta</label>
+                    <input type="date" name="periodo_hasta" class="input" value="{{ hoy }}" required></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Monto a pagar (S/.)</label>
+                    <input type="number" name="monto_pagado" step="any" min="0"
+                           value="{{ "%.2f"|format(pend_monto) }}" class="input" required></div>
+                <div><label class="label">Fecha de pago</label>
+                    <input type="date" name="fecha_pago" class="input" value="{{ hoy }}"></div>
+            </div>
+            <div><label class="label">Método de pago</label>
+                <select name="tipo_pago" class="input">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="yape">Yape</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                </select>
+            </div>
+            <div><label class="label">Foto / voucher de pago (opcional)</label>
+                <input type="file" name="archivo_voucher" class="input" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div><label class="label">Observaciones</label>
+                <textarea name="observaciones" class="input" rows="2" placeholder="Notas adicionales..."></textarea></div>
+            <button type="submit" class="btn-primary" style="text-align:center;">✅ Confirmar pago</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
