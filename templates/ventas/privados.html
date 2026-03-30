@@ -29,30 +29,37 @@
 <div id="zona-imprimible">
 
 <!-- Encabezado del reporte -->
-<div class="print-header" style="display:none;">
-    <h1 style="font-size:1.3rem;font-weight:800;color:#1e293b;margin:0;">Restaurante Turístico Marangani</h1>
-    <p style="color:#64748b;font-size:0.85rem;margin:4px 0 0;">Reporte Grupos Privados — {{ mes_actual.strftime('%B %Y') }}</p>
-    <p style="color:#94a3b8;font-size:0.75rem;">Generado el {{ hoy.strftime('%d/%m/%Y') }}</p>
-    <hr style="margin:10px 0;border-color:#e2e8f0;">
+<div class="print-header" style="display:none;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1e293b;padding-bottom:10px;margin-bottom:10px;">
+        <div>
+            <h1 style="font-size:1.1rem;font-weight:800;color:#1e293b;margin:0;letter-spacing:-0.02em;">RESTAURANTE TURÍSTICO MARANGANI</h1>
+            <p style="color:#64748b;font-size:0.78rem;margin:3px 0 0;">Marangani, Cusco, Perú</p>
+        </div>
+        <div style="text-align:right;">
+            <p style="font-size:0.9rem;font-weight:700;color:#1e293b;margin:0;">REPORTE DE GRUPOS PRIVADOS</p>
+            <p style="font-size:0.78rem;color:#64748b;margin:3px 0 0;">Período: {{ mes_actual.strftime('%B %Y')|upper }}</p>
+            <p style="font-size:0.72rem;color:#94a3b8;margin:2px 0 0;">Emitido el {{ hoy.strftime('%d de %B de %Y') }}</p>
+        </div>
+    </div>
 </div>
 
 <!-- Tarjetas resumen -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
     <div class="card" style="padding:14px 16px;border-top:4px solid #6366f1;">
         <p style="font-size:0.65rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:4px;">Grupos</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total_grupos }}</p>
+        <p style="font-size:1.2rem;font-weight:800;color:#1e293b;">{{ total_grupos }}</p>
     </div>
     <div class="card" style="padding:14px 16px;border-top:4px solid #0891b2;">
         <p style="font-size:0.65rem;font-weight:700;color:#0891b2;text-transform:uppercase;margin-bottom:4px;">Total pax</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total_pax }}</p>
+        <p style="font-size:1.2rem;font-weight:800;color:#1e293b;">{{ total_pax }}</p>
     </div>
     <div class="card" style="padding:14px 16px;border-top:4px solid #10b981;">
         <p style="font-size:0.65rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:4px;">Ingresos</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_ingresos) }}</p>
+        <p style="font-size:1.2rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_ingresos) }}</p>
     </div>
     <div class="card" style="padding:14px 16px;border-top:4px solid #f59e0b;">
         <p style="font-size:0.65rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:4px;">Ticket prom.</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">
+        <p style="font-size:1.2rem;font-weight:800;color:#1e293b;">
             S/.{{ "%.2f"|format(total_ingresos / total_grupos) if total_grupos else "0.00" }}
         </p>
     </div>
@@ -118,7 +125,7 @@
             <td class="td" style="font-weight:600;color:#1e293b;">
                 {{ v.nombre_grupo or 'Sin nombre' }}
                 {% if v.items %}
-                <div style="margin-top:3px;">
+                <div class="detalle-consumo" style="margin-top:3px;">
                 {% for it in v.items %}
                 <span style="font-size:0.68rem;background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:4px;margin-right:3px;">
                     {{ it.descripcion }} x{{ it.cantidad }}
@@ -171,14 +178,22 @@
 
 <style>
 @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .no-print { display: none !important; }
     .print-header { display: block !important; }
-    body { background: white !important; }
-    .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
-    nav, header, .sidebar, #sidebar { display: none !important; }
+    body, html { background: white !important; font-size: 11px !important; }
+    .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; margin-bottom: 10px !important; }
+    nav, header, .sidebar, #sidebar, aside { display: none !important; }
+    main, .main-content, [role="main"] { margin: 0 !important; padding: 0 !important; }
     #zona-imprimible { padding: 0; margin: 0; }
-    .btn-primary, .btn-secondary { display: none !important; }
-    @page { margin: 1.5cm; size: A4 landscape; }
+    .btn-primary, .btn-secondary, button { display: none !important; }
+    /* Tarjetas resumen más compactas */
+    .card p[style*="1.8rem"] { font-size: 1rem !important; }
+    /* Tabla más compacta */
+    .th, .td { padding: 5px 8px !important; font-size: 10px !important; }
+    /* Ocultar consumos detallados en la tabla para ahorrar espacio */
+    .detalle-consumo { display: none !important; }
+    @page { margin: 1.5cm 1.8cm; size: A4 portrait; }
 }
 </style>
 
