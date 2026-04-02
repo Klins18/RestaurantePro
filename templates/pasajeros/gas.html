@@ -3,16 +3,26 @@
 {% block page_title %}Control de Gas{% endblock %}
 {% block page_subtitle %}Registro de compra y duración de balones{% endblock %}
 {% block header_actions %}
+<a href="{{ url_for('pasajeros.gas', export='excel') }}"
+   style="background:#166534;color:white;padding:6px 12px;border-radius:10px;text-decoration:none;font-size:0.8rem;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+   📥 Exportar CSV
+</a>
 <a href="{{ url_for('pasajeros.index') }}" class="btn-secondary btn-sm">← Pasajeros</a>
 {% endblock %}
 
 {% block content %}
 
-<!-- Métricas rápidas -->
+<!-- Métricas -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
     <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
         <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:3px;">En uso</p>
         <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ en_uso|length }}</p>
+    </div>
+    <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
+        <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:3px;">Disponibles</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">
+            {{ balones | selectattr('estado','eq','disponible') | list | length }}
+        </p>
     </div>
     <div class="card" style="padding:14px;border-left:4px solid #3b82f6;">
         <p style="font-size:0.68rem;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:3px;">Promedio duración</p>
@@ -20,11 +30,7 @@
         <p style="font-size:0.72rem;color:#94a3b8;">días</p>
     </div>
     <div class="card" style="padding:14px;border-left:4px solid {% if dias_restantes_prom is not none and dias_restantes_prom <= 3 %}#ef4444{% else %}#10b981{% endif %};">
-        <p style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:3px;">Días transcurridos</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ dias_transcurridos if dias_transcurridos is not none else '—' }}</p>
-    </div>
-    <div class="card" style="padding:14px;border-left:4px solid {% if dias_restantes_prom is not none and dias_restantes_prom <= 3 %}#ef4444{% else %}#10b981{% endif %};">
-        <p style="font-size:0.68rem;font-weight:700;color:{% if dias_restantes_prom is not none and dias_restantes_prom <= 3 %}#ef4444{% else %}#64748b{% endif %};text-transform:uppercase;margin-bottom:3px;">Días restantes (aprox)</p>
+        <p style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:3px;">Días restantes</p>
         <p style="font-size:1.8rem;font-weight:800;color:{% if dias_restantes_prom is not none and dias_restantes_prom <= 3 %}#dc2626{% else %}#1e293b{% endif %};">
             {{ dias_restantes_prom if dias_restantes_prom is not none else '—' }}
         </p>
@@ -34,23 +40,44 @@
     </div>
 </div>
 
-<div style="display:grid;grid-template-columns:320px 1fr;gap:14px;" id="gas-grid">
+<div style="display:grid;grid-template-columns:340px 1fr;gap:14px;" id="gas-grid">
 
-<!-- Nuevo balón -->
+<!-- Formulario de registro -->
 <div class="card" style="padding:16px;">
-    <h3 style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:14px;">🔴 Registrar balón</h3>
-    <form method="POST" action="{{ url_for('pasajeros.gas') }}" style="display:flex;flex-direction:column;gap:10px;">
+    <h3 style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:14px;">🔴 Registrar compra de balones</h3>
+    <form method="POST" action="{{ url_for('pasajeros.gas') }}" style="display:flex;flex-direction:column;gap:10px;" id="form-nuevo">
         <input type="hidden" name="accion" value="nuevo">
-        <div><label class="label">Fecha de compra *</label>
-            <input type="date" name="fecha_compra" class="input" value="{{ hoy.strftime('%Y-%m-%d') }}" required></div>
-        <div><label class="label">Fecha inicio uso</label>
-            <input type="date" name="fecha_inicio" class="input"></div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div><label class="label">Peso (kg)</label>
-                <input type="number" name="peso_kg" class="input" value="10" min="1" step="0.5"></div>
-            <div><label class="label">Precio S/.</label>
-                <input type="number" name="precio" class="input" min="0" step="0.5" value="0"></div>
+            <div><label class="label">Fecha de compra *</label>
+                <input type="date" name="fecha_compra" class="input" required id="inp-fecha-compra"></div>
+            <div><label class="label">Fecha inicio uso</label>
+                <input type="date" name="fecha_inicio" class="input"></div>
         </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div>
+                <label class="label">Cantidad *</label>
+                <input type="number" name="cantidad" id="inp-cantidad" class="input"
+                       value="1" min="1" step="1" oninput="calcularTotal()">
+            </div>
+            <div>
+                <label class="label">Peso c/u (kg)</label>
+                <input type="number" name="peso_kg" class="input" value="10" min="1" step="0.5">
+            </div>
+            <div>
+                <label class="label">Precio unit. S/.</label>
+                <input type="number" name="precio_unitario" id="inp-precio" class="input"
+                       min="0" step="0.5" value="0" oninput="calcularTotal()">
+            </div>
+        </div>
+
+        <!-- Total calculado -->
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:0.82rem;font-weight:600;color:#166534;">Total de la compra</span>
+            <span id="disp-total" style="font-size:1.1rem;font-weight:800;color:#166534;">S/.0.00</span>
+        </div>
+
         <div><label class="label">Proveedor</label>
             <input type="text" name="proveedor" class="input" placeholder="Nombre del proveedor..."></div>
         <div>
@@ -62,39 +89,45 @@
         </div>
         <div><label class="label">Observaciones</label>
             <textarea name="observaciones" class="input" rows="2"></textarea></div>
-        <button type="submit" class="btn-primary" style="text-align:center;">Registrar</button>
+        <button type="submit" class="btn-primary" style="text-align:center;">✅ Registrar</button>
     </form>
 </div>
 
-<!-- Lista de balones -->
+<!-- Historial -->
 <div class="card" style="padding:0;overflow:hidden;">
-    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
         <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">Historial de balones</p>
+        <span style="font-size:0.78rem;color:#94a3b8;">{{ balones|length }} registros</span>
     </div>
     {% if balones %}
     <div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;min-width:600px;">
+    <table style="width:100%;border-collapse:collapse;min-width:680px;">
         <thead><tr style="background:#f8fafc;">
             <th class="th">F. Compra</th>
-            <th class="th">Kg</th>
-            <th class="th">Precio</th>
+            <th class="th" style="text-align:center;">Kg</th>
+            <th class="th" style="text-align:right;">P. Unit.</th>
             <th class="th">Proveedor</th>
             <th class="th">Inicio uso</th>
             <th class="th">Fin</th>
             <th class="th" style="text-align:center;">Días</th>
             <th class="th" style="text-align:center;">Estado</th>
-            <th class="th" style="text-align:center;">Acción</th>
+            <th class="th" style="text-align:center;">Acciones</th>
         </tr></thead>
         <tbody>
         {% for b in balones %}
-        <tr style="border-bottom:1px solid #f1f5f9;">
-            <td class="td" style="font-size:0.82rem;">{{ b.fecha_compra.strftime('%d/%m/%Y') }}</td>
-            <td class="td" style="font-size:0.82rem;">{{ b.peso_kg }}kg</td>
-            <td class="td" style="font-size:0.82rem;">{% if b.precio %}S/.{{ '%.2f'|format(b.precio) }}{% else %}—{% endif %}</td>
+        <!-- Fila vista -->
+        <tr id="fila-{{ b.id }}" style="border-bottom:1px solid #f1f5f9;">
+            <td class="td" style="font-size:0.82rem;white-space:nowrap;">{{ b.fecha_compra.strftime('%d/%m/%Y') }}</td>
+            <td class="td" style="text-align:center;font-size:0.82rem;font-weight:700;">{{ b.peso_kg }}kg</td>
+            <td class="td" style="text-align:right;font-size:0.82rem;color:#1d4ed8;font-weight:700;">
+                {% if b.precio %}S/.{{ '%.2f'|format(b.precio) }}{% else %}—{% endif %}
+            </td>
             <td class="td" style="font-size:0.82rem;color:#64748b;">{{ b.proveedor or '—' }}</td>
             <td class="td" style="font-size:0.82rem;">{{ b.fecha_inicio.strftime('%d/%m') if b.fecha_inicio else '—' }}</td>
             <td class="td" style="font-size:0.82rem;">{{ b.fecha_fin.strftime('%d/%m') if b.fecha_fin else '—' }}</td>
-            <td class="td" style="text-align:center;font-weight:700;color:{% if b.dias_uso %}#1d4ed8{% else %}#94a3b8{% endif %};">{{ b.dias_uso or '—' }}</td>
+            <td class="td" style="text-align:center;font-weight:700;color:{% if b.dias_uso %}#1d4ed8{% else %}#94a3b8{% endif %};">
+                {{ b.dias_uso or '—' }}
+            </td>
             <td class="td" style="text-align:center;">
                 {% if b.estado == 'disponible' %}
                 <span style="background:#dbeafe;color:#1d4ed8;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;">Disponible</span>
@@ -104,20 +137,49 @@
                 <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:6px;">Agotado</span>
                 {% endif %}
             </td>
-            <td class="td" style="text-align:center;">
+            <td class="td" style="text-align:center;white-space:nowrap;">
+                <!-- Editar -->
+                <button onclick="editarFila({{ b.id }}, '{{ b.fecha_compra }}', {{ b.peso_kg }}, {{ b.precio or 0 }}, '{{ b.proveedor or '' }}', '{{ b.observaciones or '' }}')"
+                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:600;cursor:pointer;color:#1d4ed8;margin-right:3px;">✏️</button>
+                <!-- Usar / Agotar -->
                 {% if b.estado == 'disponible' %}
                 <form method="POST" style="margin:0;display:inline;">
                     <input type="hidden" name="accion" value="usar">
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
-                    <button type="submit" style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">Usar</button>
+                    <button type="submit" style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">Usar</button>
                 </form>
                 {% elif b.estado == 'en_uso' %}
                 <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Marcar como agotado?')">
                     <input type="hidden" name="accion" value="agotar">
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
-                    <button type="submit" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">Agotar</button>
+                    <button type="submit" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">Agotar</button>
                 </form>
                 {% endif %}
+            </td>
+        </tr>
+        <!-- Fila edición (oculta) -->
+        <tr id="edit-{{ b.id }}" style="display:none;background:#eff6ff;">
+            <td colspan="9" style="padding:10px 14px;">
+                <form method="POST" action="{{ url_for('pasajeros.gas') }}"
+                      style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+                    <input type="hidden" name="accion" value="editar">
+                    <input type="hidden" name="balon_id" value="{{ b.id }}">
+                    <div><label class="label">Fecha compra</label>
+                        <input type="date" name="fecha_compra" id="edit-fecha-{{ b.id }}" class="input" style="width:140px;"></div>
+                    <div><label class="label">Kg</label>
+                        <input type="number" name="peso_kg" id="edit-kg-{{ b.id }}" class="input" style="width:80px;" step="0.5" min="1"></div>
+                    <div><label class="label">Precio unit. S/.</label>
+                        <input type="number" name="precio_unitario" id="edit-precio-{{ b.id }}" class="input" style="width:100px;" step="0.5" min="0"></div>
+                    <div><label class="label">Proveedor</label>
+                        <input type="text" name="proveedor" id="edit-prov-{{ b.id }}" class="input" style="width:160px;"></div>
+                    <div style="flex:1;min-width:140px;"><label class="label">Observaciones</label>
+                        <input type="text" name="observaciones" id="edit-obs-{{ b.id }}" class="input"></div>
+                    <div style="display:flex;gap:6px;">
+                        <button type="submit" class="btn-primary btn-sm">💾 Guardar</button>
+                        <button type="button" onclick="cancelarEdit({{ b.id }})"
+                            style="background:#f1f5f9;border:none;border-radius:8px;padding:6px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;color:#64748b;">Cancelar</button>
+                    </div>
+                </form>
             </td>
         </tr>
         {% endfor %}
@@ -132,11 +194,34 @@
     {% endif %}
 </div>
 </div>
-<style>@media(max-width:768px){div[id="gas-grid"]{grid-template-columns:1fr!important;}}</style>
+
+<style>div[id="gas-grid"]{grid-template-columns:340px 1fr;}
+@media(max-width:768px){div[id="gas-grid"]{grid-template-columns:1fr!important;}}</style>
+
 {% block scripts %}
 <script>
-// Poner fecha de hoy por defecto
-document.querySelector('[name=fecha_compra]').value = new Date().toISOString().split('T')[0];
+document.getElementById('inp-fecha-compra').value = new Date().toISOString().split('T')[0];
+
+function calcularTotal() {
+    var cant   = parseFloat(document.getElementById('inp-cantidad').value) || 0;
+    var precio = parseFloat(document.getElementById('inp-precio').value) || 0;
+    document.getElementById('disp-total').textContent = 'S/.' + (cant * precio).toFixed(2);
+}
+
+function editarFila(id, fecha, kg, precio, proveedor, obs) {
+    document.getElementById('fila-' + id).style.display = 'none';
+    document.getElementById('edit-' + id).style.display = '';
+    document.getElementById('edit-fecha-' + id).value   = fecha;
+    document.getElementById('edit-kg-' + id).value      = kg;
+    document.getElementById('edit-precio-' + id).value  = precio;
+    document.getElementById('edit-prov-' + id).value    = proveedor;
+    document.getElementById('edit-obs-' + id).value     = obs;
+}
+
+function cancelarEdit(id) {
+    document.getElementById('edit-' + id).style.display  = 'none';
+    document.getElementById('fila-' + id).style.display  = '';
+}
 </script>
 {% endblock %}
 {% endblock %}

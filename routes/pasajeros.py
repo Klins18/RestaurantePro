@@ -118,20 +118,30 @@ def gas():
             def parse_date(s):
                 try: return datetime.strptime(s, '%Y-%m-%d').date()
                 except: return None
-            b = BalonGas(
-                fecha_compra  = parse_date(request.form.get('fecha_compra')) or date.today(),
-                fecha_inicio  = parse_date(request.form.get('fecha_inicio')),
-                proveedor     = request.form.get('proveedor', '').strip(),
-                precio        = float(request.form.get('precio', 0) or 0),
-                peso_kg       = float(request.form.get('peso_kg', 10) or 10),
-                estado        = request.form.get('estado', 'disponible'),
-                observaciones = request.form.get('observaciones', '').strip(),
-                usuario_id    = current_user.id,
-                creado_en     = now_peru()
-            )
-            db.session.add(b)
+            cantidad      = max(1, int(request.form.get('cantidad', 1) or 1))
+            precio_unit   = float(request.form.get('precio_unitario', 0) or 0)
+            peso          = float(request.form.get('peso_kg', 10) or 10)
+            estado_ini    = request.form.get('estado', 'disponible')
+            fecha_c       = parse_date(request.form.get('fecha_compra')) or date.today()
+            fecha_ini     = parse_date(request.form.get('fecha_inicio'))
+            proveedor     = request.form.get('proveedor', '').strip()
+            obs           = request.form.get('observaciones', '').strip()
+            for _ in range(cantidad):
+                b = BalonGas(
+                    fecha_compra  = fecha_c,
+                    fecha_inicio  = fecha_ini,
+                    proveedor     = proveedor,
+                    precio        = precio_unit,
+                    peso_kg       = peso,
+                    estado        = estado_ini,
+                    observaciones = obs,
+                    usuario_id    = current_user.id,
+                    creado_en     = now_peru()
+                )
+                db.session.add(b)
             db.session.commit()
-            flash('Balón registrado.', 'success')
+            total = round(cantidad * precio_unit, 2)
+            flash(f'{cantidad} balón(es) registrado(s). Total: S/.{total:.2f}', 'success')
 
         elif accion == 'usar':
             b = BalonGas.query.get_or_404(int(request.form.get('balon_id')))
@@ -150,15 +160,45 @@ def gas():
             flash(f'Balón cerrado. Duró {b.dias_uso or "?"} días.', 'success')
 
         elif accion == 'editar':
+            def parse_date2(s):
+                try: return datetime.strptime(s, '%Y-%m-%d').date()
+                except: return None
             b = BalonGas.query.get_or_404(int(request.form.get('balon_id')))
+            b.fecha_compra  = parse_date2(request.form.get('fecha_compra')) or b.fecha_compra
             b.proveedor     = request.form.get('proveedor', '').strip()
-            b.precio        = float(request.form.get('precio', 0) or 0)
+            b.precio        = float(request.form.get('precio_unitario', 0) or 0)
             b.peso_kg       = float(request.form.get('peso_kg', 10) or 10)
             b.observaciones = request.form.get('observaciones', '').strip()
             db.session.commit()
             flash('Balón actualizado.', 'success')
 
         return redirect(url_for('pasajeros.gas'))
+
+    # Exportar a Excel/CSV
+    if request.args.get('export') == 'excel':
+        import csv, io
+        balones_exp = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Fecha Compra','Kg','Precio Unit. S/.','Proveedor',
+                         'Inicio Uso','Fin Uso','Días Uso','Estado','Observaciones'])
+        for b in balones_exp:
+            writer.writerow([
+                b.fecha_compra.strftime('%d/%m/%Y'),
+                b.peso_kg,
+                f'{b.precio:.2f}' if b.precio else '',
+                b.proveedor or '',
+                b.fecha_inicio.strftime('%d/%m/%Y') if b.fecha_inicio else '',
+                b.fecha_fin.strftime('%d/%m/%Y') if b.fecha_fin else '',
+                b.dias_uso or '',
+                b.estado,
+                b.observaciones or ''
+            ])
+        from flask import make_response
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = 'attachment; filename=balones_gas.csv'
+        return resp
 
     balones = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
 
