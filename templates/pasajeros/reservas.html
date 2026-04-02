@@ -93,7 +93,13 @@
                     Saldo pendiente: S/.{{ '%.2f'|format(r.saldo_pendiente) }}
                 </p>
                 {% endif %}
-                {% if r.empresa %}<p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa.nombre }}</p>{% endif %}
+                {% if r.empresa %}
+                <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa.nombre }}{% if r.numero_file %} · File: <strong>{{ r.numero_file }}</strong>{% endif %}</p>
+                {% elif r.empresa_libre %}
+                <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ r.empresa_libre }}{% if r.numero_file %} · File: <strong>{{ r.numero_file }}</strong>{% endif %}</p>
+                {% elif r.numero_file %}
+                <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">File: <strong>{{ r.numero_file }}</strong></p>
+                {% endif %}
                 {% if r.observaciones %}<p style="font-size:0.75rem;color:#94a3b8;font-style:italic;margin-top:2px;">{{ r.observaciones[:60] }}{% if r.observaciones|length > 60 %}…{% endif %}</p>{% endif %}
                 {% if r.archivo_voucher %}
                 <a href="{{ url_for('pasajeros.reserva_voucher', filename=r.archivo_voucher) }}" target="_blank"
@@ -184,16 +190,27 @@
             </div>
             <div><label class="label">Nombre del grupo</label>
                 <input type="text" name="nombre_grupo" id="res-nombre" class="input" placeholder="Ej: Familia Rodríguez..."></div>
-            <div><label class="label">Empresa turística</label>
-                <select name="empresa_id" id="res-empresa" class="input">
+            <div>
+                <label class="label">Agencia / Empresa turística</label>
+                <select name="empresa_id" id="res-empresa" class="input" onchange="toggleEmpresaLibre(this.value)">
                     <option value="">Sin empresa / Privado</option>
                     {% for e in empresas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
                 </select>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <div><label class="label">N° Pax</label><input type="number" name="num_pax" id="res-pax" class="input" min="0" value="0"></div>
-                <div><label class="label">Precio buffet S/.</label><input type="number" name="precio_buffet" id="res-precio" class="input" min="0" step="any" value="0"></div>
+            <!-- Campo empresa libre (solo si privado) -->
+            <div id="panel-empresa-libre" style="display:none;">
+                <label class="label">Nombre de la empresa (opcional)</label>
+                <input type="text" name="empresa_libre" id="res-empresa-libre" class="input"
+                       placeholder="Ej: Grupo familiar López, Agencia XYZ...">
             </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label class="label">N° File</label>
+                    <input type="text" name="numero_file" id="res-file" class="input" placeholder="Ej: FILE-2026-001"></div>
+                <div><label class="label">N° Pax</label>
+                    <input type="number" name="num_pax" id="res-pax" class="input" min="0" value="0"></div>
+            </div>
+            <div><label class="label">Precio buffet S/.</label>
+                <input type="number" name="precio_buffet" id="res-precio" class="input" min="0" step="any" value="0"></div>
             <div><label class="label">Estado</label>
                 <select name="estado" id="res-estado" class="input">
                     <option value="pendiente">Pendiente</option>
@@ -256,6 +273,11 @@
 <script>
 var _pagoPax=0, _pagoPrecio=0;
 
+function toggleEmpresaLibre(val) {
+    var panel = document.getElementById('panel-empresa-libre');
+    panel.style.display = (val === '') ? 'block' : 'none';
+}
+
 function abrirFormNuevo() {
     document.getElementById('modal-titulo-res').textContent = 'Nueva Reserva';
     document.getElementById('res-accion').value = 'nuevo';
@@ -264,12 +286,16 @@ function abrirFormNuevo() {
     document.getElementById('res-hora').value = '';
     document.getElementById('res-nombre').value = '';
     document.getElementById('res-empresa').value = '';
+    document.getElementById('res-empresa-libre').value = '';
+    document.getElementById('res-file').value = '';
     document.getElementById('res-pax').value = 0;
     document.getElementById('res-precio').value = 0;
     document.getElementById('res-estado').value = 'pendiente';
     document.getElementById('res-obs').value = '';
+    document.getElementById('panel-empresa-libre').style.display = 'block';
     document.getElementById('modal-reserva').style.display = 'flex';
 }
+
 function abrirEditar(id, fecha, hora, nombre, pax, precio, empresaId, obs, estado) {
     document.getElementById('modal-titulo-res').textContent = 'Editar Reserva';
     document.getElementById('res-accion').value = 'editar';
@@ -278,10 +304,12 @@ function abrirEditar(id, fecha, hora, nombre, pax, precio, empresaId, obs, estad
     document.getElementById('res-hora').value = hora;
     document.getElementById('res-nombre').value = nombre;
     document.getElementById('res-empresa').value = empresaId;
+    document.getElementById('res-file').value = '';
     document.getElementById('res-pax').value = pax;
     document.getElementById('res-precio').value = precio;
     document.getElementById('res-estado').value = estado;
     document.getElementById('res-obs').value = obs;
+    toggleEmpresaLibre(empresaId);
     document.getElementById('modal-reserva').style.display = 'flex';
 }
 function cerrarModalRes() { document.getElementById('modal-reserva').style.display = 'none'; }

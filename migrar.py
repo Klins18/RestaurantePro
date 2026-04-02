@@ -441,3 +441,16 @@ for sql in [
     except Exception as e:
         if "already exists" not in str(e).lower() and "duplicate column" not in str(e).lower():
             errores.append(f"comp_pedido: {e}")
+
+# ── Campos adicionales en reservas ──
+for col_sql in [
+    "ALTER TABLE reservas ADD COLUMN numero_file VARCHAR(80)",
+    "ALTER TABLE reservas ADD COLUMN empresa_libre VARCHAR(150)",
+]:
+    try:
+        cursor.execute(col_sql)
+        conn.commit()
+        migraciones.append(f"+ {col_sql[32:60]}...")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            errores.append(f"reservas extra: {e}")

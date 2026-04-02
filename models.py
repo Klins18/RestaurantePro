@@ -636,6 +636,9 @@ class Reserva(db.Model):
     observaciones = db.Column(db.Text)
     estado        = db.Column(db.String(20), default='pendiente')  # pendiente|confirmada|cancelada|completada
     alerta_vista  = db.Column(db.Boolean, default=False)
+    # ── Datos adicionales ──
+    numero_file   = db.Column(db.String(80))    # Nro. de file de la agencia
+    empresa_libre = db.Column(db.String(150))   # Nombre libre si es privado/sin empresa
     # ── Campos de pago ──
     monto_anticipado  = db.Column(db.Float, default=0)   # monto ya pagado
     saldo_pendiente   = db.Column(db.Float, default=0)   # lo que queda por cobrar

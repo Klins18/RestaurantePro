@@ -174,30 +174,92 @@ def gas():
 
         return redirect(url_for('pasajeros.gas'))
 
-    # Exportar a Excel/CSV
+    # Exportar a Excel (.xlsx)
     if request.args.get('export') == 'excel':
-        import csv, io
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from flask import make_response
+
         balones_exp = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['Fecha Compra','Kg','Precio Unit. S/.','Proveedor',
-                         'Inicio Uso','Fin Uso','Días Uso','Estado','Observaciones'])
-        for b in balones_exp:
-            writer.writerow([
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Balones de Gas'
+
+        # Estilos
+        hdr_font  = Font(bold=True, color='FFFFFF', size=11)
+        hdr_fill  = PatternFill('solid', fgColor='1E293B')
+        hdr_align = Alignment(horizontal='center', vertical='center')
+        thin = Side(style='thin', color='D1D5DB')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        headers = ['Fecha Compra', 'Peso (kg)', 'Precio Unit. S/.', 'Total S/.',
+                   'Proveedor', 'Inicio Uso', 'Fin Uso', 'Días Uso', 'Estado', 'Observaciones']
+        col_widths = [14, 10, 14, 12, 22, 12, 12, 10, 12, 30]
+
+        # Título
+        ws.merge_cells('A1:J1')
+        ws['A1'] = 'REGISTRO DE BALONES DE GAS — Restaurante Turístico Marangani'
+        ws['A1'].font = Font(bold=True, size=13, color='1E293B')
+        ws['A1'].alignment = Alignment(horizontal='center')
+        ws.row_dimensions[1].height = 28
+
+        # Cabecera
+        for col, (h, w) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=2, column=col, value=h)
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+            cell.alignment = hdr_align
+            cell.border = border
+            ws.column_dimensions[cell.column_letter].width = w
+        ws.row_dimensions[2].height = 20
+
+        # Datos
+        estado_labels = {'disponible': 'Disponible', 'en_uso': 'En uso', 'agotado': 'Agotado'}
+        fill_uso  = PatternFill('solid', fgColor='FEF3C7')
+        fill_disp = PatternFill('solid', fgColor='DBEAFE')
+        fill_agot = PatternFill('solid', fgColor='F1F5F9')
+
+        for row_idx, b in enumerate(balones_exp, 3):
+            total = round((b.precio or 0), 2)
+            valores = [
                 b.fecha_compra.strftime('%d/%m/%Y'),
                 b.peso_kg,
-                f'{b.precio:.2f}' if b.precio else '',
+                round(b.precio, 2) if b.precio else 0,
+                total,
                 b.proveedor or '',
                 b.fecha_inicio.strftime('%d/%m/%Y') if b.fecha_inicio else '',
                 b.fecha_fin.strftime('%d/%m/%Y') if b.fecha_fin else '',
                 b.dias_uso or '',
-                b.estado,
+                estado_labels.get(b.estado, b.estado),
                 b.observaciones or ''
-            ])
-        from flask import make_response
-        resp = make_response(output.getvalue())
-        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
-        resp.headers['Content-Disposition'] = 'attachment; filename=balones_gas.csv'
+            ]
+            fill_row = fill_uso if b.estado == 'en_uso' else (fill_disp if b.estado == 'disponible' else fill_agot)
+            for col, val in enumerate(valores, 1):
+                cell = ws.cell(row=row_idx, column=col, value=val)
+                cell.border = border
+                cell.alignment = Alignment(vertical='center',
+                    horizontal='right' if col in (2,3,4,8) else 'center' if col in (6,7,9) else 'left')
+                if col in (1,5,6,7,9,10):
+                    cell.fill = fill_row
+                ws.row_dimensions[row_idx].height = 16
+
+        # Totales al pie
+        n = len(balones_exp) + 3
+        ws.cell(row=n, column=1, value='TOTAL').font = Font(bold=True)
+        ws.cell(row=n, column=4,
+            value=f'=SUM(D3:D{n-1})').font = Font(bold=True, color='166534')
+        ws.cell(row=n, column=4).number_format = '"S/."#,##0.00'
+
+        # Congelar cabecera
+        ws.freeze_panes = 'A3'
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        resp = make_response(output.read())
+        resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        resp.headers['Content-Disposition'] = 'attachment; filename=balones_gas.xlsx'
         return resp
 
     balones = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
@@ -239,6 +301,8 @@ def reservas():
                 num_pax       = int(request.form.get('num_pax', 0) or 0),
                 precio_buffet = float(request.form.get('precio_buffet', 0) or 0),
                 empresa_id    = request.form.get('empresa_id') or None,
+                empresa_libre = request.form.get('empresa_libre', '').strip(),
+                numero_file   = request.form.get('numero_file', '').strip(),
                 observaciones = request.form.get('observaciones', '').strip(),
                 estado        = request.form.get('estado', 'pendiente'),
             )
