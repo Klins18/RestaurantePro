@@ -1,68 +1,108 @@
 {% extends 'base.html' %}
 {% block title %}Notificaciones{% endblock %}
 {% block page_title %}Notificaciones{% endblock %}
-{% block page_subtitle %}Alertas e irregularidades del sistema{% endblock %}
+{% block page_subtitle %}Alertas y avisos del sistema{% endblock %}
 
 {% block content %}
-{% if notificaciones %}
-<div style="display:flex;flex-direction:column;gap:10px;">
-    {% for n in notificaciones %}
-    <div class="card" style="padding:0;overflow:hidden;border-left:4px solid
-        {% if n.tipo == 'irregularidad' %}#ef4444
-        {% elif n.tipo == 'warning' %}#f59e0b
-        {% else %}#6366f1{% endif %};">
-        <div style="padding:14px 18px;display:flex;align-items:flex-start;gap:14px;">
-            <!-- Ícono -->
-            <div style="font-size:1.6rem;flex-shrink:0;margin-top:2px;">
-                {% if n.tipo == 'irregularidad' %}⚠️
-                {% elif n.tipo == 'info' %}✅
-                {% elif n.tipo == 'warning' %}🔔
-                {% else %}📋{% endif %}
-            </div>
-            <!-- Contenido -->
-            <div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-                    <p style="font-weight:700;color:#1e293b;font-size:0.95rem;">{{ n.titulo }}</p>
-                    {% if not n.leido %}
-                    <span style="background:#ef4444;color:white;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:9999px;">Nuevo</span>
-                    {% endif %}
-                </div>
-                {% if n.mensaje %}
-                <pre style="font-family:inherit;font-size:0.85rem;color:#374151;white-space:pre-wrap;margin:0;background:#f8fafc;border-radius:8px;padding:10px 12px;border:1px solid #f1f5f9;">{{ n.mensaje }}</pre>
-                {% endif %}
-                <div style="display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap;">
-                    <span style="font-size:0.75rem;color:#94a3b8;">
-                        🕐 {{ n.creado_en.strftime('%d/%m/%Y %H:%M') if n.creado_en else '—' }}
-                    </span>
-                    {% if n.creado_por %}
-                    <span style="font-size:0.75rem;color:#94a3b8;">
-                        👤 {{ n.creado_por.nombre_completo }}
-                    </span>
-                    {% endif %}
-                    {% if n.referencia_id and n.referencia_tipo == 'pedido' %}
-                    <a href="{{ url_for('pedidos.ver', id=n.referencia_id) }}"
-                        style="font-size:0.8rem;color:#6366f1;font-weight:600;text-decoration:none;">
-                        Ver pedido #{{ n.referencia_id }} →
-                    </a>
-                    {% endif %}
-                    <form method="POST" action="{{ url_for('pedidos.eliminar_notificacion', id=n.id) }}"
-                          style="margin:0;margin-left:auto;" onsubmit="return confirm('¿Eliminar esta notificación?')">
-                        <button type="submit" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:#e2e8f0;font-weight:600;"
-                            onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#e2e8f0'">
-                            Eliminar
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
+
+<!-- Filtro + acciones -->
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
+    <div style="display:flex;gap:0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <a href="{{ url_for('pedidos.notificaciones', mostrar='pendientes') }}"
+           style="padding:8px 16px;font-size:0.82rem;font-weight:600;text-decoration:none;
+           {% if mostrar=='pendientes' %}background:#1e293b;color:white;{% else %}background:white;color:#64748b;{% endif %}">
+           Pendientes
+           {% set n_pend = notificaciones | selectattr('leido', 'equalto', False) | list | length if mostrar != 'pendientes' else notificaciones | length %}
+        </a>
+        <a href="{{ url_for('pedidos.notificaciones', mostrar='todas') }}"
+           style="padding:8px 16px;font-size:0.82rem;font-weight:600;text-decoration:none;border-left:1px solid #e2e8f0;
+           {% if mostrar=='todas' %}background:#1e293b;color:white;{% else %}background:white;color:#64748b;{% endif %}">
+           Todas
+        </a>
     </div>
-    {% endfor %}
+
+    {% if notificaciones and mostrar == 'pendientes' %}
+    <form method="POST" action="{{ url_for('pedidos.leer_todas_notificaciones') }}" style="margin:0;">
+        <button type="submit"
+            style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;color:#64748b;">
+            ✓ Marcar todas como leídas
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if not notificaciones %}
+<div class="card" style="padding:60px;text-align:center;">
+    <p style="font-size:2.5rem;margin-bottom:12px;">🔔</p>
+    <p style="font-weight:700;color:#1e293b;font-size:1rem;">
+        {% if mostrar == 'pendientes' %}No tienes notificaciones pendientes{% else %}No hay notificaciones{% endif %}
+    </p>
+    <p style="color:#94a3b8;font-size:0.85rem;margin-top:6px;">
+        El sistema te avisará sobre stock bajo, reservas próximas e irregularidades en pedidos.
+    </p>
 </div>
 {% else %}
-<div class="card" style="padding:60px;text-align:center;">
-    <p style="font-size:2.5rem;margin-bottom:10px;">🔔</p>
-    <p style="font-weight:700;color:#64748b;font-size:1rem;">Sin notificaciones</p>
-    <p style="color:#94a3b8;font-size:0.875rem;margin-top:6px;">Aquí aparecerán las alertas de irregularidades en pedidos y otras notificaciones del sistema.</p>
+
+<div style="display:flex;flex-direction:column;gap:8px;">
+{% for n in notificaciones %}
+<div style="background:white;border-radius:12px;border:1px solid {% if not n.leido %}#bfdbfe{% else %}#f1f5f9{% endif %};
+    overflow:hidden;opacity:{% if n.leido %}0.7{% else %}1{% endif %};">
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">
+        <!-- Icono por tipo -->
+        <div style="width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.2rem;
+            {% if n.tipo == 'warning' %}background:#fef3c7;
+            {% elif n.tipo == 'error' or n.tipo == 'irregularidad' %}background:#fee2e2;
+            {% elif n.tipo == 'info' %}background:#eff6ff;
+            {% else %}background:#f1f5f9;{% endif %}">
+            {% if n.tipo == 'warning' %}⚠️
+            {% elif n.tipo == 'error' or n.tipo == 'irregularidad' %}🚨
+            {% elif n.referencia_tipo == 'reserva' %}📅
+            {% elif n.referencia_tipo == 'stock' %}📦
+            {% else %}🔔{% endif %}
+        </div>
+        <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                <p style="font-weight:{% if not n.leido %}700{% else %}600{% endif %};color:#1e293b;font-size:0.88rem;">
+                    {{ n.titulo }}
+                </p>
+                {% if not n.leido %}
+                <span style="background:#3b82f6;width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;"></span>
+                {% endif %}
+            </div>
+            {% if n.mensaje %}
+            <p style="font-size:0.8rem;color:#64748b;margin-top:3px;">{{ n.mensaje }}</p>
+            {% endif %}
+            <p style="font-size:0.72rem;color:#94a3b8;margin-top:5px;">
+                {{ n.creado_en.strftime('%d/%m/%Y %H:%M') }}
+                {% if n.referencia_tipo == 'pedido' and n.referencia_id %}
+                · <a href="{{ url_for('pedidos.ver', id=n.referencia_id) }}" style="color:#6366f1;text-decoration:none;font-weight:600;">Ver pedido →</a>
+                {% elif n.referencia_tipo == 'stock' and n.referencia_id %}
+                · <a href="{{ url_for('almacen.alertas') }}" style="color:#6366f1;text-decoration:none;font-weight:600;">Ver inventario →</a>
+                {% elif n.referencia_tipo == 'reserva' and n.referencia_id %}
+                · <a href="{{ url_for('pasajeros.reservas') }}" style="color:#6366f1;text-decoration:none;font-weight:600;">Ver reservas →</a>
+                {% endif %}
+            </p>
+        </div>
+        <!-- Acciones -->
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+            {% if not n.leido %}
+            <form method="POST" action="{{ url_for('pedidos.leer_notificacion', id=n.id) }}" style="margin:0;">
+                <button type="submit" title="Marcar como leída"
+                    style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:0.75rem;color:#166534;">
+                    ✓
+                </button>
+            </form>
+            {% endif %}
+            <form method="POST" action="{{ url_for('pedidos.eliminar_notificacion', id=n.id) }}" style="margin:0;">
+                <button type="submit" title="Eliminar"
+                    style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:0.75rem;color:#dc2626;">
+                    ✕
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
 </div>
 {% endif %}
 {% endblock %}

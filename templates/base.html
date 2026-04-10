@@ -212,6 +212,7 @@
 
         <!-- Notificaciones + Admin -->
         <div style="margin-top:4px;">
+            <a href="{{ url_for('reportes.index') }}" class="sidebar-link {% if bp=='reportes' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reportes</a>
             <a href="{{ url_for('pedidos.notificaciones') }}" class="sidebar-link {% if ep=='pedidos.notificaciones' %}active{% endif %}" onclick="closeSidebar()" style="position:relative;">
                 <span>🔔</span> Notificaciones
                 {%- set n_count = notif_no_leidas|default(0) -%}

@@ -571,7 +571,27 @@ def notificaciones():
     for n in notifs:
         n.leido = True
     db.session.commit()
-    return render_template('pedidos/notificaciones.html', notificaciones=notifs)
+    return render_template('pedidos/notificaciones.html', notificaciones=notifs, mostrar=mostrar)
+
+
+@pedidos_bp.route('/notificaciones/<int:id>/leer', methods=['POST'])
+@login_required
+def leer_notificacion(id):
+    n = Notificacion.query.get_or_404(id)
+    n.leido = True
+    db.session.commit()
+    return redirect(request.referrer or url_for('pedidos.notificaciones'))
+
+
+@pedidos_bp.route('/notificaciones/leer-todas', methods=['POST'])
+@login_required
+def leer_todas_notificaciones():
+    Notificacion.query.filter_by(
+        destinatario_id=current_user.id, leido=False
+    ).update({'leido': True})
+    db.session.commit()
+    flash('Todas las notificaciones marcadas como leídas.', 'success')
+    return redirect(url_for('pedidos.notificaciones'))
 
 
 @pedidos_bp.route('/notificaciones/<int:id>/eliminar', methods=['POST'])

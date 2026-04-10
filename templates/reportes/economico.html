@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Reporte Económico{% endblock %}
+{% block page_title %}Reporte Económico{% endblock %}
+{% block page_subtitle %}Registro de compras — {{ inicio.strftime('%B %Y') }}{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('reportes.economico', mes=mes_str, export='excel') }}"
+   style="background:#166534;color:white;padding:6px 14px;border-radius:10px;text-decoration:none;font-size:0.82rem;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
+   📥 Exportar Excel
+</a>
+<a href="{{ url_for('reportes.index') }}" class="btn-secondary btn-sm">← Reportes</a>
+{% endblock %}
+
+{% block content %}
+<!-- Selector de mes -->
+<div class="card" style="margin-bottom:14px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div><label class="label">Mes</label>
+            <select name="mes" class="input" style="width:180px;" onchange="this.form.submit()">
+                {% for m in meses %}
+                <option value="{{ m.strftime('%Y-%m') }}" {% if m.strftime('%Y-%m') == mes_str %}selected{% endif %}>
+                    {{ m.strftime('%B %Y') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- Resumen financiero -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+    <div class="card" style="padding:14px 18px;border-left:4px solid #dc2626;">
+        <p style="font-size:0.68rem;font-weight:700;color:#dc2626;text-transform:uppercase;margin-bottom:3px;">Total Egresos</p>
+        <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_periodo) }}</p>
+        <p style="font-size:0.72rem;color:#94a3b8;">compras del mes</p>
+    </div>
+    <div class="card" style="padding:14px 18px;border-left:4px solid #10b981;">
+        <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;margin-bottom:3px;">Total Ingresos</p>
+        <p style="font-size:1.4rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_ingresos) }}</p>
+        <p style="font-size:0.72rem;color:#94a3b8;">ventas del mes</p>
+    </div>
+    <div class="card" style="padding:14px 18px;border-left:4px solid {% if total_ingresos >= total_periodo %}#10b981{% else %}#dc2626{% endif %};">
+        <p style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:3px;">Balance</p>
+        {% set balance = total_ingresos - total_periodo %}
+        <p style="font-size:1.4rem;font-weight:800;color:{% if balance >= 0 %}#166534{% else %}#dc2626{% endif %};">
+            S/.{{ "%.2f"|format(balance) }}
+        </p>
+        <p style="font-size:0.72rem;color:#94a3b8;">{% if balance >= 0 %}superávit{% else %}déficit{% endif %}</p>
+    </div>
+</div>
+
+<!-- Tabla estilo Excel -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="background:#1e293b;padding:10px 18px;display:flex;justify-content:space-between;align-items:center;">
+        <p style="color:white;font-weight:700;font-size:0.9rem;">📋 REGISTRO DE COMPRAS — {{ inicio.strftime('%B %Y')|upper }}</p>
+        <span style="color:#64748b;font-size:0.75rem;">{{ filas|length }} registros</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:900px;font-size:0.8rem;">
+        <thead>
+            <tr style="background:#f1f5f9;">
+                <th class="th" style="text-align:center;width:40px;">ITEM</th>
+                <th class="th" style="width:90px;">FECHA</th>
+                <th class="th">DETALLE</th>
+                <th class="th" style="text-align:center;width:80px;">UNIDAD</th>
+                <th class="th" style="text-align:right;width:60px;">CTD.</th>
+                <th class="th" style="text-align:right;width:80px;">P.U.</th>
+                <th class="th" style="text-align:right;width:90px;">SUBTOTAL</th>
+                <th class="th" style="text-align:right;width:90px;">TOTAL</th>
+                <th class="th" style="width:130px;">RESPONSABLE</th>
+                <th class="th" style="width:110px;">COMPROBANTE</th>
+                <th class="th">RAZÓN SOCIAL</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for f in filas %}
+        <tr style="border-bottom:1px solid #f1f5f9;{% if loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="text-align:center;color:#94a3b8;font-weight:700;">{{ f.num or '' }}</td>
+            <td class="td" style="white-space:nowrap;color:#64748b;">
+                {% if f.fecha %}{{ f.fecha.strftime('%d/%m/%Y') }}{% endif %}
+            </td>
+            <td class="td" style="font-weight:{% if f.num %}600{% else %}400{% endif %};color:#1e293b;">{{ f.detalle }}</td>
+            <td class="td" style="text-align:center;color:#64748b;">{{ f.unidad or '' }}</td>
+            <td class="td" style="text-align:right;color:#64748b;">
+                {% if f.cantidad is not none %}{{ f.cantidad }}{% endif %}
+            </td>
+            <td class="td" style="text-align:right;color:#1d4ed8;">
+                {% if f.precio_unit is not none %}S/.{{ "%.2f"|format(f.precio_unit) }}{% endif %}
+            </td>
+            <td class="td" style="text-align:right;color:#64748b;">
+                {% if f.subtotal is not none %}S/.{{ "%.2f"|format(f.subtotal) }}{% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:700;color:#dc2626;">
+                {% if f.total is not none %}S/.{{ "%.2f"|format(f.total) }}{% endif %}
+            </td>
+            <td class="td" style="font-size:0.76rem;color:#64748b;">{{ f.responsable or '' }}</td>
+            <td class="td" style="font-size:0.76rem;color:#64748b;">{{ f.comprobante or '' }}</td>
+            <td class="td" style="font-size:0.76rem;color:#64748b;">{{ f.razon_social or '' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">
+            No hay compras en {{ inicio.strftime('%B %Y') }}.
+        </td></tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background:#fef2f2;font-weight:700;">
+                <td colspan="6" class="td" style="color:#1e293b;">TOTAL DEL MES</td>
+                <td class="td" style="text-align:right;color:#dc2626;">S/.{{ "%.2f"|format(total_periodo) }}</td>
+                <td class="td" style="text-align:right;color:#dc2626;">S/.{{ "%.2f"|format(total_periodo) }}</td>
+                <td colspan="3" class="td"></td>
+            </tr>
+        </tfoot>
+    </table>
+    </div>
+</div>
+{% endblock %}
