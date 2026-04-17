@@ -564,13 +564,45 @@ def comprobante_archivo(filename):
 @pedidos_bp.route('/notificaciones')
 @login_required
 def notificaciones():
-    notifs = Notificacion.query.filter_by(
-        destinatario_id=current_user.id
-    ).order_by(Notificacion.creado_en.desc()).limit(50).all()
-    # Marcar como leídas
-    for n in notifs:
-        n.leido = True
-    db.session.commit()
+    from models import Reserva
+    from datetime import date, timedelta
+    hoy = date.today()
+
+    # Auto-generar alertas de reservas próximas (hoy y mañana)
+    try:
+        manana = hoy + timedelta(days=1)
+        reservas_prox = Reserva.query.filter(
+            Reserva.fecha.in_([hoy, manana]),
+            Reserva.estado.in_(['pendiente', 'confirmada'])
+        ).all()
+        for r in reservas_prox:
+            existe = Notificacion.query.filter_by(
+                destinatario_id=current_user.id,
+                referencia_tipo='reserva',
+                referencia_id=r.id,
+                leido=False
+            ).first()
+            if not existe:
+                cuando = 'HOY' if r.fecha == hoy else 'MAÑANA'
+                db.session.add(Notificacion(
+                    tipo='info',
+                    titulo=f'Reserva {cuando}: {r.nombre_grupo or "Grupo"}',
+                    mensaje=f'{r.num_pax or 0} pax · {r.hora or "sin hora"}',
+                    referencia_id=r.id, referencia_tipo='reserva',
+                    destinatario_id=current_user.id,
+                    creado_por_id=current_user.id,
+                    creado_en=now_peru()
+                ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    mostrar = request.args.get('mostrar', 'pendientes')
+    q = Notificacion.query.filter_by(destinatario_id=current_user.id)
+    if mostrar == 'pendientes':
+        q = q.filter_by(leido=False)
+    notifs = q.order_by(Notificacion.creado_en.desc()).limit(100).all()
+
     return render_template('pedidos/notificaciones.html', notificaciones=notifs, mostrar=mostrar)
 
 

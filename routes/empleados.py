@@ -327,12 +327,21 @@ def asistencia():
                 asist.descuento = desc; asist.observacion = obs
                 asist.registrado_por = current_user.id
             else:
-                db.session.add(Asistencia(
-                    empleado_id=emp.id, fecha=fecha_post, estado=estado,
-                    hora_entrada=hora_e, hora_salida=hora_s, horas_extra=horas_e,
-                    descuento=desc, observacion=obs,
-                    registrado_por=current_user.id, creado_en=now_peru()
-                ))
+                # Verificar que no exista ya (doble check por si asist_map está desactualizado)
+                existente = Asistencia.query.filter_by(
+                    empleado_id=emp.id, fecha=fecha_post).first()
+                if existente:
+                    existente.estado = estado; existente.hora_entrada = hora_e
+                    existente.hora_salida = hora_s; existente.horas_extra = horas_e
+                    existente.descuento = desc; existente.observacion = obs
+                    existente.registrado_por = current_user.id
+                else:
+                    db.session.add(Asistencia(
+                        empleado_id=emp.id, fecha=fecha_post, estado=estado,
+                        hora_entrada=hora_e, hora_salida=hora_s, horas_extra=horas_e,
+                        descuento=desc, observacion=obs,
+                        registrado_por=current_user.id, creado_en=now_peru()
+                    ))
 
         registrar_auditoria(current_user.id, 'ASISTENCIA', 'asistencias', None,
                             f'Fecha: {fecha_post_str}', ip=request.remote_addr)
@@ -370,21 +379,24 @@ def reporte():
         Asistencia.fecha >= desde, Asistencia.fecha <= hasta
     ).all()
 
-    resumen = {}
-    for emp in empleados_activos:
-        asist_emp = [a for a in asistencias if a.empleado_id == emp.id]
-        resumen[emp.id] = {
-            'empleado': emp,
-            'presente': sum(1 for a in asist_emp if a.estado == 'presente'),
-            'falta':    sum(1 for a in asist_emp if a.estado == 'falta'),
-            'tardanza': sum(1 for a in asist_emp if a.estado == 'tardanza'),
-            'libre':    sum(1 for a in asist_emp if a.estado == 'libre'),
-            'horas_extra': sum(a.horas_extra or 0 for a in asist_emp),
-            'descuentos':  sum(a.descuento or 0 for a in asist_emp),
-        }
+    # Construir dias del mes
+    dias = []
+    d = desde
+    while d <= hasta:
+        dias.append(d)
+        d += timedelta(days=1)
+
+    # asist_map keyed por (empleado_id, fecha) — lo que el template espera
+    asist_map = {(a.empleado_id, a.fecha): a for a in asistencias}
+
+    nombres_mes = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
+    nombre_mes = nombres_mes[mes - 1]
 
     return render_template('empleados/reporte.html',
-                           resumen=resumen, mes=mes, anio=anio,
+                           empleados=empleados_activos,
+                           asist_map=asist_map, dias=dias,
+                           mes=mes, anio=anio, nombre_mes=nombre_mes,
                            desde=desde, hasta=hasta, hoy=hoy)
 
 # ─────────────────────────────────

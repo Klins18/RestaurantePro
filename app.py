@@ -36,6 +36,7 @@ def create_app():
     from routes.bienes import bienes_bp
     from routes.pasajeros import pasajeros_bp
     from routes.suministros import suministros_bp
+    from routes.reportes import reportes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -49,6 +50,7 @@ def create_app():
     app.register_blueprint(bienes_bp)
     app.register_blueprint(pasajeros_bp)
     app.register_blueprint(suministros_bp)
+    app.register_blueprint(reportes_bp)
 
     # Context processor: notificaciones no leídas para el sidebar
     @app.context_processor
