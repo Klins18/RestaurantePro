@@ -488,6 +488,34 @@ def aprobar(id):
 # ──────────────────────────────────────
 #  ELIMINAR (solo admin)
 # ──────────────────────────────────────
+@pedidos_bp.route('/<int:id>/editar-items', methods=['POST'])
+@login_required
+@admin_required
+def editar_items_aprobado(id):
+    """Editar precios/cantidades de una lista ya aprobada (sin tocar stock)."""
+    lista = ListaPedido.query.get_or_404(id)
+    cambios = 0
+    for item in lista.items:
+        if not item.producto_nombre.strip():
+            continue
+        sol_str   = request.form.get(f'sol_{item.id}', '').strip()
+        rec_str   = request.form.get(f'rec_{item.id}', '').strip()
+        precio_str= request.form.get(f'precio_{item.id}', '').strip()
+        try:
+            if sol_str:    item.cantidad_solicitada = float(sol_str)
+            if rec_str:    item.cantidad_recibida   = float(rec_str)
+            if precio_str: item.precio_unitario      = float(precio_str)
+            cambios += 1
+        except: pass
+    registrar_auditoria(current_user.id, 'EDITAR_ITEMS_APROBADO',
+                        'listas_pedido', lista.id,
+                        f'{cambios} ítems editados post-aprobación',
+                        ip=request.remote_addr)
+    db.session.commit()
+    flash(f'Precios y cantidades actualizados ({cambios} ítems).', 'success')
+    return redirect(url_for('pedidos.ver', id=id))
+
+
 @pedidos_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
 @admin_required

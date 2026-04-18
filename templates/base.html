@@ -180,7 +180,7 @@
         </div>
         <div class="nav-group-body {% if grp_ventas2 %}open{% endif %}">
             <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if ep=='ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Resumen ventas</a>
-            <a href="{{ url_for('ventas.privados') }}" class="sidebar-link sidebar-sub {% if ep=='ventas.privados' %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Reporte privados</a>
+            <a href="{{ url_for('ventas.pasajeros') }}" class="sidebar-link sidebar-sub {% if ep=='ventas.pasajeros' %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Reporte privados</a>
             <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if ep=='ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Registrar venta</a>
             <a href="{{ url_for('pasajeros.index') }}" class="sidebar-link {% if bp=='pasajeros' and ep=='pasajeros.index' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del día</a>
             <a href="{{ url_for('pasajeros.reservas') }}" class="sidebar-link {% if ep=='pasajeros.reservas' %}active{% endif %}" onclick="closeSidebar()"><span>📅</span> Reservas</a>
@@ -195,7 +195,7 @@
             <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if bp=='pedidos' and ep not in ['pedidos.nueva','pedidos.notificaciones'] %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Listas de pedido</a>
             <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if bp=='compras' and ep != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro compras</a>
             <a href="{{ url_for('pasajeros.gas') }}" class="sidebar-link {% if ep=='pasajeros.gas' %}active{% endif %}" onclick="closeSidebar()"><span>🔴</span> Balones de gas</a>
-            <a href="{{ url_for('suministros.index') }}" class="sidebar-link {% if bp=='suministros' %}active{% endif %}" onclick="closeSidebar()"><span>🥛</span> Leche y pan</a>
+            <a href="{{ url_for('suministros.index') }}" class="sidebar-link {% if bp=='suministros' %}active{% endif %}" onclick="closeSidebar()"><span>🛒</span> Compras diarias</a>
         </div>
 
         <!-- EMPLEADOS -->

@@ -32,11 +32,7 @@ def index():
     except:
         desde = hasta = hoy
 
-    from sqlalchemy.orm import joinedload
-    # joinedload evita N+1: carga empresa en la misma query
-    ventas = VentaDiaria.query.options(
-        joinedload(VentaDiaria.empresa)
-    ).filter(
+    ventas = VentaDiaria.query.filter(
         VentaDiaria.fecha >= desde,
         VentaDiaria.fecha <= hasta
     ).order_by(VentaDiaria.fecha.desc(), VentaDiaria.creado_en.desc()).all()
@@ -122,20 +118,29 @@ def nueva():
             subtotal     = round(total_buffet + total_items, 2)
             total        = subtotal  # sin descuento por ahora
 
+            es_cortesia = bool(tab.get('es_cortesia', False))
+            # Si es cortesía, total = 0 (no genera ingreso)
+            if es_cortesia:
+                total_real = 0
+                obs_extra = '[CORTESÍA/CONSUMO INTERNO] '
+            else:
+                total_real = total
+                obs_extra = ''
+
             venta = VentaDiaria(
                 fecha=fecha,
                 empresa_id=empresa_id,
-                tipo_cliente='privado' if es_privado else 'empresa',
+                tipo_cliente='cortesia' if es_cortesia else ('privado' if es_privado else 'empresa'),
                 nombre_grupo=nombre_grupo,
                 num_pax=num_pax,
                 precio_buffet=precio_buffet,
                 es_privado=es_privado,
-                subtotal=subtotal,
+                subtotal=subtotal if not es_cortesia else 0,
                 descuento=0,
-                total=total,
+                total=total_real,
                 tipo_pago=tipo_pago if es_privado else '',
-                estado_pago='pagado' if es_privado else 'pendiente',
-                observaciones=str(tab.get('observaciones', '') or ''),
+                estado_pago='cortesia' if es_cortesia else ('pagado' if es_privado else 'pendiente'),
+                observaciones=obs_extra + str(tab.get('observaciones', '') or ''),
                 usuario_id=current_user.id,
                 creado_en=now_peru()
             )
@@ -190,11 +195,16 @@ def nueva():
             return redirect(url_for('ventas.index'))
 
     from models import CategoriaCarta
+    from flask import make_response as _mkr
     empresas   = EmpresaTuristica.query.filter_by(activo=True).order_by(EmpresaTuristica.nombre).all()
     categorias = CategoriaCarta.query.filter_by(activo=True).order_by(CategoriaCarta.orden).all()
-    return render_template('ventas/nueva.html',
+    resp = _mkr(render_template('ventas/nueva.html',
         empresas=empresas, categorias=categorias, hoy=date.today(),
-        precio_peruhop=PRECIO_PERUHOP)
+        precio_peruhop=PRECIO_PERUHOP))
+    # No-cache: evita que el botón Atrás muestre la página en caché con datos viejos
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 # ──────────────────────────────────────────────────────────────
@@ -331,66 +341,3 @@ def api_carta():
                 })
         result.append({'id': cat.id, 'nombre': cat.nombre, 'productos': prods})
     return jsonify(result)
-
-# ──────────────────────────────────────
-#  REPORTE MENSUAL DE GRUPOS PRIVADOS
-# ──────────────────────────────────────
-@ventas_bp.route('/privados')
-@login_required
-def privados():
-    hoy = date.today()
-    mes_str  = request.args.get('mes',  hoy.strftime('%Y-%m'))
-    try:
-        anio, mes = int(mes_str.split('-')[0]), int(mes_str.split('-')[1])
-    except:
-        anio, mes = hoy.year, hoy.month
-
-    inicio = date(anio, mes, 1)
-    if mes == 12:
-        fin = date(anio + 1, 1, 1)
-    else:
-        fin = date(anio, mes + 1, 1)
-
-    # Ventas privadas del mes
-    ventas = VentaDiaria.query.filter(
-        VentaDiaria.fecha >= inicio,
-        VentaDiaria.fecha < fin,
-        VentaDiaria.tipo_cliente == 'privado'
-    ).order_by(VentaDiaria.fecha, VentaDiaria.creado_en).all()
-
-    # Calcular totales
-    total_grupos   = len(ventas)
-    total_pax      = sum(v.num_pax or 0 for v in ventas)
-    total_ingresos = sum(v.total or 0 for v in ventas)
-    total_buffet   = sum((v.num_pax or 0) * (v.precio_buffet or 0) for v in ventas)
-    total_consumo  = sum(
-        sum(it.subtotal or 0 for it in v.items) for v in ventas
-    )
-
-    # Por método de pago
-    por_pago = {}
-    for v in ventas:
-        k = v.tipo_pago or 'sin especificar'
-        por_pago[k] = round(por_pago.get(k, 0) + v.total, 2)
-
-    # Serie por día para gráfico
-    serie_dia = {}
-    for v in ventas:
-        k = v.fecha.strftime('%d/%m')
-        serie_dia[k] = round(serie_dia.get(k, 0) + v.total, 2)
-
-    # Meses disponibles (últimos 12)
-    meses = []
-    d = date(hoy.year, hoy.month, 1)
-    for _ in range(12):
-        meses.append(d)
-        d = date(d.year if d.month > 1 else d.year - 1,
-                 d.month - 1 if d.month > 1 else 12, 1)
-    meses.reverse()
-
-    return render_template('ventas/privados.html',
-        ventas=ventas, mes_actual=inicio, meses=meses,
-        total_grupos=total_grupos, total_pax=total_pax,
-        total_ingresos=total_ingresos, total_buffet=total_buffet,
-        total_consumo=total_consumo, por_pago=por_pago,
-        serie_dia=serie_dia, hoy=hoy)
