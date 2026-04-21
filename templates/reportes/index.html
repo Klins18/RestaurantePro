@@ -6,6 +6,18 @@
 {% block content %}
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">
 
+    <a href="{{ url_for('reportes.diario') }}" style="text-decoration:none;">
+        <div class="card" style="padding:20px;border-top:4px solid #0891b2;transition:all 0.15s;"
+             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <div style="font-size:2rem;margin-bottom:10px;">📋</div>
+            <p style="font-weight:700;color:#1e293b;font-size:0.95rem;">Reporte Diario</p>
+            <p style="font-size:0.78rem;color:#64748b;margin-top:4px;">
+                Cuadro de Stock Inicial / Salida / Stock Final por producto. Igual que el reporte manual.
+            </p>
+            <span style="display:inline-block;margin-top:10px;background:#e0f2fe;color:#0369a1;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:6px;">📥 Excel disponible</span>
+        </div>
+    </a>
+
     <a href="{{ url_for('reportes.economico') }}" style="text-decoration:none;">
         <div class="card" style="padding:20px;border-top:4px solid #dc2626;transition:all 0.15s;"
              onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">

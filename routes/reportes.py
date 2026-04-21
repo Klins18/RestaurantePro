@@ -214,3 +214,183 @@ def _export_economico_excel(filas, inicio, fin, total_compras, total_ingresos):
     resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     resp.headers['Content-Disposition'] = f'attachment; filename=reporte_economico_{inicio.strftime("%Y_%m")}.xlsx'
     return resp
+
+
+# ──────────────────────────────────────
+#  REPORTE DIARIO DE VENTAS (Kardex)
+# ──────────────────────────────────────
+@reportes_bp.route('/diario')
+@login_required
+def diario():
+    from models import ProductoCarta, CategoriaCarta, ItemVenta, VentaDiaria, Producto, KardexComedor
+    from sqlalchemy import func
+
+    hoy     = date.today()
+    fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
+    try:
+        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    except:
+        fecha = hoy
+
+    # Todos los productos de carta activos
+    productos = ProductoCarta.query.filter_by(activo=True).order_by(
+        ProductoCarta.categoria_id, ProductoCarta.orden
+    ).all()
+
+    # Ventas del día — cantidades vendidas por producto
+    ventas_dia = db.session.query(
+        ItemVenta.producto_carta_id,
+        func.sum(ItemVenta.cantidad).label('vendido')
+    ).join(VentaDiaria).filter(
+        VentaDiaria.fecha == fecha
+    ).group_by(ItemVenta.producto_carta_id).all()
+
+    vendido_map = {v.producto_carta_id: int(v.vendido or 0) for v in ventas_dia}
+
+    # Construir filas del reporte
+    filas = []
+    for p in productos:
+        vendido    = vendido_map.get(p.id, 0)
+        # Stock actual del producto en almacén (si está vinculado)
+        stock_actual = 0
+        if p.producto_almacen_id and p.descuenta_inventario:
+            prod_alm = Producto.query.get(p.producto_almacen_id)
+            if prod_alm:
+                stock_actual = prod_alm.stock_actual or 0
+        # Stock inicial = stock actual + lo que se vendió hoy
+        stock_inicial = stock_actual + vendido
+        stock_final   = stock_actual
+
+        filas.append({
+            'id':            p.id,
+            'nombre':        p.nombre,
+            'categoria':     p.categoria_carta.nombre if p.categoria_carta else '—',
+            'stock_inicial': stock_inicial,
+            'vendido':       vendido,
+            'stock_final':   stock_final,
+            'precio':        p.precio,
+            'total_venta':   round(vendido * p.precio, 2),
+            'tiene_stock':   bool(p.producto_almacen_id and p.descuenta_inventario),
+        })
+
+    # Solo mostrar productos que tuvieron movimiento O que tienen stock vinculado
+    filas_activas = [f for f in filas if f['vendido'] > 0 or f['tiene_stock']]
+
+    # Totales
+    total_ingresos  = sum(f['total_venta'] for f in filas)
+    total_productos = sum(f['vendido'] for f in filas)
+
+    # Resumen por empresa (para el lado derecho como en la foto)
+    from models import EmpresaTuristica
+    ventas_empresas = db.session.query(
+        VentaDiaria.empresa_id,
+        func.sum(VentaDiaria.total).label('total'),
+        func.sum(VentaDiaria.num_pax).label('pax')
+    ).filter(VentaDiaria.fecha == fecha).group_by(VentaDiaria.empresa_id).all()
+
+    empresas_map = {e.id: e for e in EmpresaTuristica.query.all()}
+    resumen_empresas = []
+    for v in ventas_empresas:
+        nombre = empresas_map[v.empresa_id].nombre if v.empresa_id and v.empresa_id in empresas_map else 'Privado'
+        resumen_empresas.append({
+            'nombre': nombre,
+            'total': float(v.total or 0),
+            'pax': int(v.pax or 0),
+        })
+
+    # Exportar
+    if request.args.get('export') == 'excel':
+        return _export_diario_excel(filas_activas, fecha, resumen_empresas, total_ingresos)
+
+    return render_template('reportes/diario.html',
+        filas=filas, filas_activas=filas_activas,
+        fecha=fecha, fecha_str=fecha_str, hoy=hoy,
+        total_ingresos=total_ingresos, total_productos=total_productos,
+        resumen_empresas=resumen_empresas)
+
+
+def _export_diario_excel(filas, fecha, resumen_empresas, total_ingresos):
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from flask import make_response
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Reporte Diario'
+
+    thin  = Side(style='thin', color='D1D5DB')
+    bord  = Border(left=thin, right=thin, top=thin, bottom=thin)
+    blk   = PatternFill('solid', fgColor='1E293B')
+    white = Font(bold=True, color='FFFFFF', size=10)
+    ctr   = Alignment(horizontal='center', vertical='center')
+
+    # Título
+    ws.merge_cells('A1:F1')
+    ws['A1'] = f'REPORTE DIARIO DE VENTAS — REST. TCO. MARANGANI'
+    ws['A1'].font = Font(bold=True, size=12)
+    ws['A1'].alignment = Alignment(horizontal='center')
+    ws.row_dimensions[1].height = 24
+
+    ws.merge_cells('A2:F2')
+    ws['A2'] = f'Fecha: {fecha.strftime("%d/%m/%Y")}'
+    ws['A2'].alignment = Alignment(horizontal='center')
+    ws['A2'].font = Font(size=10, color='64748B')
+    ws.row_dimensions[2].height = 16
+
+    # Cabecera
+    hdrs  = ['DETALLE', 'STOCK INICIAL', 'SALIDA', 'STOCK FINAL', 'P.U. S/.', 'TOTAL S/.']
+    widths= [28, 14, 12, 14, 10, 12]
+    for col, (h, w) in enumerate(zip(hdrs, widths), 1):
+        c = ws.cell(row=3, column=col, value=h)
+        c.font = white; c.fill = blk; c.alignment = ctr; c.border = bord
+        ws.column_dimensions[get_column_letter(col)].width = w
+    ws.row_dimensions[3].height = 22
+    ws.freeze_panes = 'A4'
+
+    fill_alt = PatternFill('solid', fgColor='F8FAFC')
+    fill_0   = PatternFill('solid', fgColor='FFFFFF')
+    for r, f in enumerate(filas, 4):
+        vals = [f['nombre'], f['stock_inicial'], f['vendido'],
+                f['stock_final'], f['precio'], f['total_venta']]
+        row_fill = fill_alt if r % 2 == 0 else fill_0
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=r, column=col, value=val)
+            c.border = bord
+            c.fill = row_fill
+            c.alignment = Alignment(
+                horizontal='center' if col in (2,3,4) else
+                'right' if col in (5,6) else 'left',
+                vertical='center')
+            if col in (5,6):
+                c.number_format = '"S/."#,##0.00'
+            if col == 3 and val and val > 0:
+                c.font = Font(bold=True, color='DC2626')
+        ws.row_dimensions[r].height = 15
+
+    # Fila total
+    tr = len(filas) + 4
+    ws.cell(row=tr, column=1, value='TOTAL').font = Font(bold=True)
+    ws.cell(row=tr, column=3, value=f'=SUM(C4:C{tr-1})').font = Font(bold=True)
+    ws.cell(row=tr, column=6, value=total_ingresos).font = Font(bold=True, color='166534')
+    ws.cell(row=tr, column=6).number_format = '"S/."#,##0.00'
+    for col in range(1,7):
+        ws.cell(row=tr, column=col).fill = PatternFill('solid', fgColor='F0FDF4')
+        ws.cell(row=tr, column=col).border = bord
+
+    # Hoja 2: resumen por empresa
+    ws2 = wb.create_sheet('Resumen empresas')
+    ws2.column_dimensions['A'].width = 22
+    ws2.column_dimensions['B'].width = 12
+    ws2.column_dimensions['C'].width = 10
+    ws2.append(['EMPRESA', 'TOTAL S/.', 'PAX'])
+    for cell in ws2[1]: cell.font = Font(bold=True); cell.fill = blk; cell.font = white
+    for e in resumen_empresas:
+        ws2.append([e['nombre'], e['total'], e['pax']])
+
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+    resp = make_response(out.read())
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = f'attachment; filename=reporte_diario_{fecha.strftime("%Y%m%d")}.xlsx'
+    return resp

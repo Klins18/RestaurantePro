@@ -75,7 +75,22 @@ LISTAS_PREDEFINIDAS = {
     ],
 }
 
-TIPOS_REQUERIMIENTO = list(LISTAS_PREDEFINIDAS.keys()) + ['LÁCTEOS Y DERIVADOS', 'BEBIDAS', 'OTROS']
+LISTAS_PREDEFINIDAS['COCA COLA / BEBIDAS'] = [
+    # Gaseosas Coca Cola
+    ('GASEOSA 700ML COCA COLA', 'caja'), ('GASEOSA 700ML INKA COLA', 'caja'),
+    ('GASEOSA 700ML FANTA', 'caja'), ('GASEOSA 700ML SPRITE', 'caja'),
+    ('GASEOSA 300ML COCA COLA', 'caja'), ('GASEOSA 300ML INKA COLA ZERO', 'caja'),
+    # Aguas
+    ('AGUA 750ML CON GAS', 'caja'), ('AGUA 750ML SIN GAS', 'caja'),
+    # Cervezas
+    ('CERVEZA CUSQUEÑA DORADA', 'caja'), ('CERVEZA CUSQUEÑA TRIGO', 'caja'),
+    ('CERVEZA CUSQUEÑA NEGRA', 'caja'), ('PILSEN LATA GRANDE', 'caja'),
+    ('PILSEN LATA PEQUEÑA', 'caja'), ('BUDWEISER', 'caja'), ('HEINEKEN', 'caja'),
+    # Vinos
+    ('VINO TINTO', 'botella'), ('VINO BLANCO', 'botella'), ('VINO PEQUEÑO', 'botella'),
+]
+
+TIPOS_REQUERIMIENTO = list(LISTAS_PREDEFINIDAS.keys()) + ['LÁCTEOS Y DERIVADOS', 'OTROS']
 
 # ──────────────────────────────────────
 #  LISTAR
