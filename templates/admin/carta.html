@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Productos de Carta{% endblock %}
+{% block page_title %}Productos de Carta{% endblock %}
+{% block page_subtitle %}Vincula bebidas y productos con el inventario para el reporte diario{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('admin.index') }}" class="btn-secondary btn-sm">← Admin</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Explicación -->
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 18px;margin-bottom:16px;">
+    <p style="font-weight:700;color:#1d4ed8;font-size:0.88rem;margin-bottom:6px;">ℹ️ ¿Cómo funciona el reporte diario?</p>
+    <p style="font-size:0.82rem;color:#1e40af;line-height:1.6;">
+        Para que el <strong>Reporte Diario</strong> muestre Stock Inicial y Stock Final de cada bebida,
+        cada producto de carta debe estar vinculado a su equivalente en el almacén.<br>
+        Marca <strong>✓ Descuenta inventario</strong> y selecciona el producto del almacén correspondiente.
+        Si el producto no existe en almacén, se crea automáticamente al guardar.
+    </p>
+</div>
+
+<!-- Nueva categoría + nuevo producto -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+    <div class="card" style="padding:14px 18px;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.85rem;margin-bottom:10px;">➕ Nueva categoría de carta</p>
+        <form method="POST" action="{{ url_for('admin.nueva_categoria_carta') }}"
+              style="display:flex;gap:8px;">
+            <input type="text" name="nombre" class="input" placeholder="Ej: Jugos, Cafés..." required style="flex:1;">
+            <button type="submit" class="btn-primary btn-sm">Crear</button>
+        </form>
+    </div>
+    <div class="card" style="padding:14px 18px;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.85rem;margin-bottom:10px;">➕ Nuevo producto en carta</p>
+        <form method="POST" action="{{ url_for('admin.nuevo_producto_carta') }}"
+              style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:2;min-width:140px;">
+                <label class="label">Nombre</label>
+                <input type="text" name="nombre" class="input" placeholder="Ej: Gaseosa 700ml" required>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <label class="label">Categoría</label>
+                <select name="categoria_id" class="input" required>
+                    {% for cat in categorias %}
+                    <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="width:80px;">
+                <label class="label">Precio S/.</label>
+                <input type="number" name="precio" class="input" step="any" min="0" value="0">
+            </div>
+            <button type="submit" class="btn-primary btn-sm">Agregar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Lista por categoría -->
+{% for cat in categorias %}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;">
+    <div style="padding:10px 18px;background:#f8fafc;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+        <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">{{ cat.nombre }}</p>
+        <span style="font-size:0.75rem;color:#94a3b8;">{{ cat.productos | selectattr('activo') | list | length }} productos</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:700px;">
+        <thead>
+            <tr style="background:#f1f5f9;">
+                <th class="th">Producto</th>
+                <th class="th" style="text-align:right;">Precio S/.</th>
+                <th class="th" style="text-align:center;">✓ Descuenta inventario</th>
+                <th class="th">Producto en almacén vinculado</th>
+                <th class="th" style="text-align:center;">Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for prod in cat.productos if prod.activo %}
+        <tr style="border-bottom:1px solid #f8fafc;{% if prod.descuenta_inventario %}background:#f0fdf4;{% endif %}">
+            <td class="td" style="font-weight:600;color:#1e293b;">{{ prod.nombre }}</td>
+            <td class="td" style="text-align:right;color:#64748b;">S/.{{ prod.precio }}</td>
+            <td class="td" style="text-align:center;">
+                {% if prod.descuenta_inventario %}
+                <span style="background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:9999px;">✓ Vinculado</span>
+                {% else %}
+                <span style="background:#f1f5f9;color:#94a3b8;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:9999px;">— Sin vincular</span>
+                {% endif %}
+            </td>
+            <td class="td" style="font-size:0.82rem;color:#64748b;">
+                {% if prod.producto_almacen_id %}
+                    {% for p in productos_almacen if p.id == prod.producto_almacen_id %}
+                    <span style="color:#166534;font-weight:600;">{{ p.nombre }}</span>
+                    {% endfor %}
+                {% else %}
+                    <span style="color:#cbd5e1;">No vinculado</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;">
+                <button onclick="abrirModal({{ prod.id }}, '{{ prod.nombre }}', {{ 'true' if prod.descuenta_inventario else 'false' }}, {{ prod.producto_almacen_id or 'null' }})"
+                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;color:#1d4ed8;">
+                    ✏️ Configurar
+                </button>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="padding:16px;text-align:center;color:#94a3b8;font-size:0.82rem;">Sin productos en esta categoría</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Modal configurar vinculación -->
+<div id="modal-vincular" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;">
+    <div class="card" style="width:460px;max-width:95vw;padding:22px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-weight:800;color:#1e293b;font-size:1rem;" id="modal-titulo-carta">Configurar vinculación</p>
+            <button onclick="document.getElementById('modal-vincular').style.display='none'"
+                style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" id="form-vincular" style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="descuenta_inventario" id="chk-descuenta"
+                           style="width:20px;height:20px;accent-color:#10b981;">
+                    <div>
+                        <p style="font-weight:700;color:#166534;font-size:0.88rem;">✓ Descuenta inventario al venderse</p>
+                        <p style="font-size:0.72rem;color:#4ade80;">Activa esto para que aparezca en el reporte diario con stock</p>
+                    </div>
+                </label>
+            </div>
+            <div>
+                <label class="label">Producto en almacén correspondiente</label>
+                <select name="producto_almacen_id" id="sel-almacen" class="input">
+                    <option value="">— Crear automáticamente si no existe —</option>
+                    {% for p in productos_almacen %}
+                    <option value="{{ p.id }}">{{ p.nombre }} ({{ p.unidad_medida }}) — stock: {{ p.stock_actual }}</option>
+                    {% endfor %}
+                </select>
+                <p style="font-size:0.72rem;color:#94a3b8;margin-top:4px;">
+                    Si dejas "Crear automáticamente", el sistema busca o crea el producto en almacén con el mismo nombre.
+                </p>
+            </div>
+            <button type="submit" class="btn-primary" style="text-align:center;">💾 Guardar configuración</button>
+        </form>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function abrirModal(id, nombre, descuenta, almacenId) {
+    document.getElementById('modal-titulo-carta').textContent = '⚙️ Configurar: ' + nombre;
+    document.getElementById('form-vincular').action = '/admin/carta/' + id + '/vincular';
+    document.getElementById('chk-descuenta').checked = descuenta;
+    var sel = document.getElementById('sel-almacen');
+    sel.value = almacenId || '';
+    document.getElementById('modal-vincular').style.display = 'flex';
+}
+</script>
+{% endblock %}
+{% endblock %}

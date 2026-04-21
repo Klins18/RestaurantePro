@@ -306,3 +306,91 @@ def toggle_permiso(usuario_id):
 
     db.session.commit()
     return redirect(url_for('admin.permisos'))
+
+
+# ──────────────────────────────────────────────────────
+#  PRODUCTOS DE CARTA (vinculación con almacén)
+# ──────────────────────────────────────────────────────
+@admin_bp.route('/carta')
+@login_required
+@admin_required
+def carta():
+    from models import CategoriaCarta, ProductoCarta, Producto
+    categorias = CategoriaCarta.query.order_by(CategoriaCarta.orden).all()
+    productos_almacen = Producto.query.filter_by(activo=True).order_by(Producto.nombre).all()
+    return render_template('admin/carta.html',
+                           categorias=categorias,
+                           productos_almacen=productos_almacen)
+
+
+@admin_bp.route('/carta/<int:id>/vincular', methods=['POST'])
+@login_required
+@admin_required
+def vincular_carta(id):
+    from models import ProductoCarta, Producto
+    prod = ProductoCarta.query.get_or_404(id)
+    descuenta = request.form.get('descuenta_inventario') == 'on'
+    alm_id = request.form.get('producto_almacen_id') or None
+
+    # Si marca descuenta pero no selecciona producto de almacén,
+    # crear automáticamente el producto en almacén
+    if descuenta and not alm_id:
+        existente = Producto.query.filter(
+            Producto.nombre.ilike(f'%{prod.nombre}%')
+        ).first()
+        if existente:
+            alm_id = existente.id
+        else:
+            from models import Categoria
+            cat = Categoria.query.filter_by(nombre='Bebidas').first()
+            if not cat:
+                cat = Categoria.query.filter_by(activo=True).first()
+            nuevo_prod = Producto(
+                nombre=prod.nombre,
+                unidad_medida='unid',
+                categoria_id=cat.id if cat else None,
+                stock_actual=0, stock_minimo=0, activo=True
+            )
+            db.session.add(nuevo_prod)
+            db.session.flush()
+            alm_id = nuevo_prod.id
+            flash(f'Producto "{prod.nombre}" creado en almacén.', 'info')
+
+    prod.descuenta_inventario = descuenta
+    prod.producto_almacen_id = int(alm_id) if alm_id else None
+    db.session.commit()
+    flash(f'"{prod.nombre}" actualizado.', 'success')
+    return redirect(url_for('admin.carta'))
+
+
+@admin_bp.route('/carta/categoria/nueva', methods=['POST'])
+@login_required
+@admin_required
+def nueva_categoria_carta():
+    from models import CategoriaCarta
+    nombre = request.form.get('nombre', '').strip()
+    if nombre:
+        orden = db.session.query(db.func.max(CategoriaCarta.orden)).scalar() or 0
+        db.session.add(CategoriaCarta(nombre=nombre, orden=orden+1, activo=True))
+        db.session.commit()
+        flash(f'Categoría "{nombre}" creada.', 'success')
+    return redirect(url_for('admin.carta'))
+
+
+@admin_bp.route('/carta/producto/nuevo', methods=['POST'])
+@login_required
+@admin_required
+def nuevo_producto_carta():
+    from models import ProductoCarta, CategoriaCarta
+    nombre = request.form.get('nombre', '').strip()
+    cat_id = request.form.get('categoria_id')
+    precio = float(request.form.get('precio', 0) or 0)
+    if nombre and cat_id:
+        orden = db.session.query(db.func.max(ProductoCarta.orden)).scalar() or 0
+        db.session.add(ProductoCarta(
+            nombre=nombre, categoria_id=int(cat_id),
+            precio=precio, activo=True, orden=orden+1
+        ))
+        db.session.commit()
+        flash(f'Producto "{nombre}" agregado a la carta.', 'success')
+    return redirect(url_for('admin.carta'))
