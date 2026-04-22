@@ -59,7 +59,12 @@
             <p style="font-weight:700;font-size:1rem;margin-top:2px;">{{ venta.nombre_grupo or (venta.empresa.nombre_completo if venta.empresa else 'Privado') }}</p>
         </div>
         <table style="width:100%;border-collapse:collapse;">
-            <thead><tr><th class="th">#</th><th class="th">Producto</th><th class="th" style="text-align:center;">Cant.</th><th class="th" style="text-align:right;">P.Unit.</th><th class="th" style="text-align:right;">Subtotal</th></tr></thead>
+            <thead><tr>
+                <th class="th">#</th>
+                <th class="th">Producto</th>
+                <th class="th" style="text-align:center;">Cant.</th>
+                <th class="th" style="text-align:right;">P.Unit.</th>
+                <th class="th" style="text-align:right;">Subtotal</th></tr></thead>
             <tbody>
                 {% for item in venta.items %}
                 <tr>
