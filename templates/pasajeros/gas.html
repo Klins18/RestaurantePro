@@ -55,21 +55,24 @@
                 <input type="date" name="fecha_inicio" class="input"></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div>
                 <label class="label">Cantidad *</label>
                 <input type="number" name="cantidad" id="inp-cantidad" class="input"
                        value="1" min="1" step="1" oninput="calcularTotal()">
             </div>
             <div>
-                <label class="label">Peso c/u (kg)</label>
-                <input type="number" name="peso_kg" class="input" value="10" min="1" step="0.5">
+                <label class="label">Presentación</label>
+                <select name="peso_kg" id="sel-presentacion" class="input" onchange="cambiarPresentacion(this.value)">
+                    <option value="10">Balón 10 kg (pequeño)</option>
+                    <option value="45">Balón 45 kg (grande)</option>
+                </select>
             </div>
-            <div>
-                <label class="label">Precio unit. S/.</label>
-                <input type="number" name="precio_unitario" id="inp-precio" class="input"
-                       min="0" step="0.5" value="0" oninput="calcularTotal()">
-            </div>
+        </div>
+        <div>
+            <label class="label">Precio por balón S/. <span style="font-size:0.7rem;color:#94a3b8;">— precio completo del balón, no por kilo</span></label>
+            <input type="number" name="precio_unitario" id="inp-precio" class="input"
+                   min="0" step="0.5" value="0" oninput="calcularTotal()" placeholder="Ej: 57.00">
         </div>
 
         <!-- Total calculado -->
@@ -104,7 +107,7 @@
     <table style="width:100%;border-collapse:collapse;min-width:680px;">
         <thead><tr style="background:#f8fafc;">
             <th class="th">F. Compra</th>
-            <th class="th" style="text-align:center;">Kg</th>
+            <th class="th" style="text-align:center;">Presentación</th>
             <th class="th" style="text-align:right;">P. Unit.</th>
             <th class="th">Proveedor</th>
             <th class="th">Inicio uso</th>
@@ -118,7 +121,11 @@
         <!-- Fila vista -->
         <tr id="fila-{{ b.id }}" style="border-bottom:1px solid #f1f5f9;">
             <td class="td" style="font-size:0.82rem;white-space:nowrap;">{{ b.fecha_compra.strftime('%d/%m/%Y') }}</td>
-            <td class="td" style="text-align:center;font-size:0.82rem;font-weight:700;">{{ b.peso_kg }}kg</td>
+            <td class="td" style="text-align:center;">
+                <span style="background:{% if b.peso_kg >= 45 %}#dbeafe{% else %}#fef3c7{% endif %};color:{% if b.peso_kg >= 45 %}#1d4ed8{% else %}#92400e{% endif %};padding:2px 10px;border-radius:6px;font-size:0.75rem;font-weight:700;">
+                    {{ b.peso_kg|int }}kg
+                </span>
+            </td>
             <td class="td" style="text-align:right;font-size:0.82rem;color:#1d4ed8;font-weight:700;">
                 {% if b.precio %}S/.{{ '%.2f'|format(b.precio) }}{% else %}—{% endif %}
             </td>
@@ -166,9 +173,12 @@
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
                     <div><label class="label">Fecha compra</label>
                         <input type="date" name="fecha_compra" id="edit-fecha-{{ b.id }}" class="input" style="width:140px;"></div>
-                    <div><label class="label">Kg</label>
-                        <input type="number" name="peso_kg" id="edit-kg-{{ b.id }}" class="input" style="width:80px;" step="0.5" min="1"></div>
-                    <div><label class="label">Precio unit. S/.</label>
+                    <div><label class="label">Presentación</label>
+                        <select name="peso_kg" id="edit-kg-{{ b.id }}" class="input" style="width:130px;">
+                            <option value="10">10 kg (pequeño)</option>
+                            <option value="45">45 kg (grande)</option>
+                        </select></div>
+                    <div><label class="label">Precio por balón S/.</label>
                         <input type="number" name="precio_unitario" id="edit-precio-{{ b.id }}" class="input" style="width:100px;" step="0.5" min="0"></div>
                     <div><label class="label">Proveedor</label>
                         <input type="text" name="proveedor" id="edit-prov-{{ b.id }}" class="input" style="width:160px;"></div>
@@ -202,20 +212,33 @@
 <script>
 document.getElementById('inp-fecha-compra').value = new Date().toISOString().split('T')[0];
 
+var PRECIOS_SUGERIDOS = {'10': 0, '45': 0};
+
+function cambiarPresentacion(kg) {
+    var inp = document.getElementById('inp-precio');
+    var actual = parseFloat(inp.value) || 0;
+    if (actual > 0) PRECIOS_SUGERIDOS[document.getElementById('sel-presentacion').value] = actual;
+    if (PRECIOS_SUGERIDOS[kg] > 0) inp.value = PRECIOS_SUGERIDOS[kg];
+    calcularTotal();
+}
+
 function calcularTotal() {
     var cant   = parseFloat(document.getElementById('inp-cantidad').value) || 0;
     var precio = parseFloat(document.getElementById('inp-precio').value) || 0;
-    document.getElementById('disp-total').textContent = 'S/.' + (cant * precio).toFixed(2);
+    var kg     = document.getElementById('sel-presentacion').value;
+    document.getElementById('disp-total').textContent =
+        'S/.' + (cant * precio).toFixed(2) +
+        ' · ' + cant + ' balón' + (cant > 1 ? 'es' : '') + ' de ' + kg + 'kg';
 }
 
 function editarFila(id, fecha, kg, precio, proveedor, obs) {
     document.getElementById('fila-' + id).style.display = 'none';
     document.getElementById('edit-' + id).style.display = '';
-    document.getElementById('edit-fecha-' + id).value   = fecha;
-    document.getElementById('edit-kg-' + id).value      = kg;
-    document.getElementById('edit-precio-' + id).value  = precio;
-    document.getElementById('edit-prov-' + id).value    = proveedor;
-    document.getElementById('edit-obs-' + id).value     = obs;
+    document.getElementById('edit-fecha-' + id).value = fecha;
+    document.getElementById('edit-kg-' + id).value    = (kg >= 45) ? '45' : '10';
+    document.getElementById('edit-precio-' + id).value = precio;
+    document.getElementById('edit-prov-' + id).value   = proveedor;
+    document.getElementById('edit-obs-' + id).value    = obs;
 }
 
 function cancelarEdit(id) {

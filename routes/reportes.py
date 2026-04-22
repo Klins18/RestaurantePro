@@ -237,7 +237,7 @@ def diario():
         ProductoCarta.categoria_id, ProductoCarta.orden
     ).all()
 
-    # Ventas del día — cantidades vendidas por producto
+    # Cantidades salidas por producto (incluye cortesías — descuenta stock)
     ventas_dia = db.session.query(
         ItemVenta.producto_carta_id,
         func.sum(ItemVenta.cantidad).label('vendido')
@@ -247,37 +247,62 @@ def diario():
 
     vendido_map = {v.producto_carta_id: int(v.vendido or 0) for v in ventas_dia}
 
+    # Ingresos reales por producto (EXCLUYE cortesías)
+    ventas_cobradas = db.session.query(
+        ItemVenta.producto_carta_id,
+        func.sum(ItemVenta.cantidad).label('vendido_cobrado'),
+        func.sum(ItemVenta.subtotal).label('ingreso')
+    ).join(VentaDiaria).filter(
+        VentaDiaria.fecha == fecha,
+        VentaDiaria.tipo_cliente != 'cortesia'
+    ).group_by(ItemVenta.producto_carta_id).all()
+
+    cobrado_map = {
+        v.producto_carta_id: {
+            'cantidad': int(v.vendido_cobrado or 0),
+            'ingreso': float(v.ingreso or 0)
+        }
+        for v in ventas_cobradas
+    }
+
     # Construir filas del reporte
     filas = []
     for p in productos:
-        vendido    = vendido_map.get(p.id, 0)
+        vendido        = vendido_map.get(p.id, 0)  # total salidas (incluye cortesías)
+        cobrado        = cobrado_map.get(p.id, {})
+        vendido_cobrado= cobrado.get('cantidad', 0)  # solo ventas reales
+        ingreso_real   = cobrado.get('ingreso', 0)   # ingreso sin cortesías
+        cortesias      = vendido - vendido_cobrado    # unidades de cortesía
+
         # Stock actual del producto en almacén (si está vinculado)
         stock_actual = 0
         if p.producto_almacen_id and p.descuenta_inventario:
             prod_alm = Producto.query.get(p.producto_almacen_id)
             if prod_alm:
                 stock_actual = prod_alm.stock_actual or 0
-        # Stock inicial = stock actual + lo que se vendió hoy
+        # Stock inicial = stock actual + todo lo que salió hoy (ventas + cortesías)
         stock_inicial = stock_actual + vendido
         stock_final   = stock_actual
 
         filas.append({
-            'id':            p.id,
-            'nombre':        p.nombre,
-            'categoria':     p.categoria_carta.nombre if p.categoria_carta else '—',
-            'stock_inicial': stock_inicial,
-            'vendido':       vendido,
-            'stock_final':   stock_final,
-            'precio':        p.precio,
-            'total_venta':   round(vendido * p.precio, 2),
-            'tiene_stock':   bool(p.producto_almacen_id and p.descuenta_inventario),
+            'id':             p.id,
+            'nombre':         p.nombre,
+            'categoria':      p.categoria_carta.nombre if p.categoria_carta else '—',
+            'stock_inicial':  stock_inicial,
+            'vendido':        vendido,           # total salidas
+            'vendido_cobrado':vendido_cobrado,   # solo cobradas
+            'cortesias':      cortesias,         # cortesías del día
+            'stock_final':    stock_final,
+            'precio':         p.precio,
+            'total_venta':    round(ingreso_real, 2),  # solo ingresos reales
+            'tiene_stock':    bool(p.producto_almacen_id and p.descuenta_inventario),
         })
 
     # Solo mostrar productos que tuvieron movimiento O que tienen stock vinculado
     filas_activas = [f for f in filas if f['vendido'] > 0 or f['tiene_stock']]
 
     # Totales
-    total_ingresos  = sum(f['total_venta'] for f in filas)
+    total_ingresos  = sum(f['total_venta'] for f in filas)  # ya excluye cortesías
     total_productos = sum(f['vendido'] for f in filas)
 
     # Resumen por empresa (para el lado derecho como en la foto)
