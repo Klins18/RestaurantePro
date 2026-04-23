@@ -164,7 +164,8 @@ def nueva():
                     descripcion=nombre_it,
                     cantidad=cant,
                     precio_unitario=precio_it,
-                    subtotal=sub_it
+                    # Cortesía: subtotal=0 para que no cuente en ingresos
+                    subtotal=0 if es_cortesia else sub_it
                 ))
 
                 # Descontar inventario si aplica
@@ -285,6 +286,90 @@ def cierre():
 # ──────────────────────────────────────────────────────────────
 #  PASAJEROS POR DÍA (registro de empresas y rutas)
 # ──────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────
+#  EDITAR / ELIMINAR ITEMS DE VENTA (antes del cierre de caja)
+# ──────────────────────────────────────────────────────────────
+@ventas_bp.route('/item/<int:item_id>/editar', methods=['POST'])
+@login_required
+def editar_item_venta(item_id):
+    item  = ItemVenta.query.get_or_404(item_id)
+    venta = item.venta
+    # Solo si NO hay cierre de caja del día
+    cierre = CierreCaja.query.filter_by(fecha=venta.fecha).first()
+    if cierre:
+        flash('No se puede editar: la caja de este día ya está cerrada.', 'error')
+        return redirect(url_for('ventas.index'))
+
+    try:
+        nueva_cant  = float(request.form.get('cantidad', item.cantidad))
+        nuevo_precio = float(request.form.get('precio_unit', item.precio_unit or 0))
+    except:
+        flash('Datos inválidos.', 'error')
+        return redirect(url_for('ventas.index'))
+
+    item.cantidad   = nueva_cant
+    item.precio_unit = nuevo_precio
+    item.subtotal   = round(nueva_cant * nuevo_precio, 2)
+
+    # Recalcular total de la venta
+    venta.total = round(sum(it.subtotal for it in venta.items), 2)
+    db.session.commit()
+    flash('Item actualizado.', 'success')
+    return redirect(url_for('ventas.index'))
+
+
+@ventas_bp.route('/item/<int:item_id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_item_venta(item_id):
+    item  = ItemVenta.query.get_or_404(item_id)
+    venta = item.venta
+    cierre = CierreCaja.query.filter_by(fecha=venta.fecha).first()
+    if cierre:
+        flash('No se puede eliminar: la caja de este día ya está cerrada.', 'error')
+        return redirect(url_for('ventas.index'))
+
+    # Devolver stock si el producto descuenta inventario
+    if item.producto_carta_id:
+        from models import ProductoCarta, Producto as ProdAlm
+        pc = ProductoCarta.query.get(item.producto_carta_id)
+        if pc and pc.descuenta_inventario and pc.producto_almacen_id:
+            prod = ProdAlm.query.get(pc.producto_almacen_id)
+            if prod:
+                prod.stock_actual = (prod.stock_actual or 0) + item.cantidad
+
+    nombre = item.descripcion
+    db.session.delete(item)
+    # Recalcular total
+    db.session.flush()
+    venta.total = round(sum(it.subtotal for it in venta.items), 2)
+    db.session.commit()
+    flash(f'"{nombre}" eliminado de la venta.', 'success')
+    return redirect(url_for('ventas.index'))
+
+
+@ventas_bp.route('/<int:id>/eliminar-venta', methods=['POST'])
+@login_required
+def eliminar_venta(id):
+    venta  = VentaDiaria.query.get_or_404(id)
+    cierre = CierreCaja.query.filter_by(fecha=venta.fecha).first()
+    if cierre:
+        flash('No se puede eliminar: la caja ya está cerrada.', 'error')
+        return redirect(url_for('ventas.index'))
+    # Devolver stock de todos los items
+    from models import ProductoCarta, Producto as ProdAlm
+    for item in venta.items:
+        if item.producto_carta_id:
+            pc = ProductoCarta.query.get(item.producto_carta_id)
+            if pc and pc.descuenta_inventario and pc.producto_almacen_id:
+                prod = ProdAlm.query.get(pc.producto_almacen_id)
+                if prod:
+                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad
+    db.session.delete(venta)
+    db.session.commit()
+    flash('Venta eliminada y stock revertido.', 'success')
+    return redirect(url_for('ventas.index'))
+
 @ventas_bp.route('/pasajeros', methods=['GET', 'POST'])
 @login_required
 def pasajeros():

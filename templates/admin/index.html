@@ -12,6 +12,7 @@
         ("📋","Auditoría",url_for("admin.auditoria"),"Historial de acciones","#64748b"),
         ("🔐","Permisos",url_for("admin.permisos"),"Accesos por empleado","#8b5cf6"),
         ("🥤","Carta & Stock",url_for("admin.carta"),"Vincular bebidas al inventario","#0891b2"),
+        ("🍷","Control Vinos",url_for("admin.registros_botella"),"Botellas, copas y stock","#7c3aed"),
     ] %}
     <a href="{{ item[2] }}" style="text-decoration:none;">
         <div class="card" style="padding:20px;cursor:pointer;transition:all 0.2s;border-left:4px solid {{ item[4] }};" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">

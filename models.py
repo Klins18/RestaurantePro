@@ -288,7 +288,13 @@ class ProductoCarta(db.Model):
     descuenta_inventario = db.Column(db.Boolean, default=False)
     # ID del producto en almacén vinculado (para descuento)
     producto_almacen_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=True)
+    # Campos para vinos (venta por copa y por botella)
+    es_vino            = db.Column(db.Boolean, default=False)
+    copas_por_botella  = db.Column(db.Integer, default=5)   # cuántas copas hace una botella
+    precio_copa        = db.Column(db.Float, default=0)     # precio por copa
+    precio_botella     = db.Column(db.Float, default=0)     # precio botella entera
     variantes = db.relationship('VarianteCarta', backref='producto', lazy=True, cascade='all, delete-orphan')
+    registros_botella  = db.relationship('RegistroBotella', backref='producto_carta', lazy='dynamic')
 
 
 class VarianteCarta(db.Model):
@@ -298,6 +304,22 @@ class VarianteCarta(db.Model):
     producto_id = db.Column(db.Integer, db.ForeignKey('productos_carta.id'), nullable=False)
     nombre = db.Column(db.String(100), nullable=False)     # CocaCola, Inka Cola...
     activo = db.Column(db.Boolean, default=True)
+
+
+class RegistroBotella(db.Model):
+    """Seguimiento de botellas de vino abiertas — confirmar cuándo se vacían."""
+    __tablename__ = 'registros_botella'
+    id                = db.Column(db.Integer, primary_key=True)
+    producto_carta_id = db.Column(db.Integer, db.ForeignKey('productos_carta.id'), nullable=False)
+    fecha             = db.Column(db.Date, nullable=False)
+    copas_vendidas    = db.Column(db.Integer, default=0)   # copas vendidas del día
+    botellas_abiertas = db.Column(db.Integer, default=0)   # botellas abiertas confirmadas
+    botellas_vendidas_enteras = db.Column(db.Integer, default=0)
+    botella_vacia     = db.Column(db.Boolean, default=None)  # None=pendiente confirmar
+    notas             = db.Column(db.String(255))
+    confirmado_por    = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    creado_en         = db.Column(db.DateTime, default=now_peru)
+    usuario_id        = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
 
 
 # ─────────────────────────────────────────
@@ -602,6 +624,47 @@ class RegistroPasajeros(db.Model):
 # ══════════════════════════════════════════════
 #  BALONES DE GAS
 # ══════════════════════════════════════════════
+
+
+# ══════════════════════════════════════════════
+#  CONTROL DE VINOS (botellas y copas)
+# ══════════════════════════════════════════════
+class ConfigVino(db.Model):
+    """Configuración de copas por botella para cada producto de vino."""
+    __tablename__ = 'config_vinos'
+    id                   = db.Column(db.Integer, primary_key=True)
+    producto_carta_id    = db.Column(db.Integer, db.ForeignKey('productos_carta.id'), nullable=False, unique=True)
+    copas_por_botella    = db.Column(db.Integer, default=5)   # cuántas copas hace 1 botella
+    precio_copa          = db.Column(db.Float, default=0)     # precio por copa
+    precio_botella       = db.Column(db.Float, default=0)     # precio botella entera
+    producto_carta       = db.relationship('ProductoCarta',
+                               backref=db.backref('config_vino', uselist=False))
+    creado_en            = db.Column(db.DateTime, default=now_peru)
+
+
+class BotellaAbierta(db.Model):
+    """Botella de vino actualmente abierta (en servicio)."""
+    __tablename__ = 'botellas_abiertas'
+    id                = db.Column(db.Integer, primary_key=True)
+    producto_carta_id = db.Column(db.Integer, db.ForeignKey('productos_carta.id'), nullable=False)
+    fecha_apertura    = db.Column(db.Date, nullable=False)
+    copas_servidas    = db.Column(db.Integer, default=0)    # copas ya servidas de esta botella
+    cerrada           = db.Column(db.Boolean, default=False)  # True = botella vacía, stock bajó
+    cerrada_en        = db.Column(db.DateTime)
+
+    cerrada_por_id    = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario_id        = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+
+    observaciones     = db.Column(db.String(255))
+    creado_en         = db.Column(db.DateTime, default=now_peru)
+
+    producto_carta    = db.relationship('ProductoCarta')
+
+    cerrada_por       = db.relationship('Usuario',foreign_keys=[cerrada_por_id])
+    usuario = db.relationship('Usuario',foreign_keys=[usuario_id])
+    
+  
+
 class BalonGas(db.Model):
     """Registro de compra y uso de cada balón de gas."""
     __tablename__ = 'balones_gas'

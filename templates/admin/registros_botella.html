@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Control de Botellas{% endblock %}
+{% block page_title %}Control de Botellas de Vino{% endblock %}
+{% block page_subtitle %}Confirmación de botellas vacías y reporte de copas{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('admin.carta') }}" class="btn-secondary btn-sm">← Carta & Stock</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Selector de fecha -->
+<div class="card" style="margin-bottom:14px;padding:12px 16px;">
+    <form method="GET" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label class="label" style="margin:0;">Fecha:</label>
+        <input type="date" name="fecha" value="{{ fecha_str }}" class="input"
+               style="width:160px;" onchange="this.form.submit()">
+        <a href="{{ url_for('admin.registros_botella') }}" class="btn-secondary btn-sm">Hoy</a>
+    </form>
+</div>
+
+{% if not vinos %}
+<div class="card" style="padding:40px;text-align:center;color:#94a3b8;">
+    <p style="font-size:2rem;">🍷</p>
+    <p style="margin-top:8px;">No hay productos configurados como vino.</p>
+    <a href="{{ url_for('admin.carta') }}" style="color:#7c3aed;font-weight:600;">Configurar en Carta & Stock →</a>
+</div>
+{% else %}
+
+<!-- Registros del día -->
+{% set reg_map = {} %}
+{% for r in registros %}{% set _ = reg_map.update({r.producto_carta_id: r}) %}{% endfor %}
+
+<div style="display:flex;flex-direction:column;gap:12px;">
+{% for vino in vinos %}
+{% set reg = reg_map.get(vino.id) %}
+<div class="card" style="padding:0;overflow:hidden;border-left:4px solid #7c3aed;">
+    <div style="padding:12px 18px;background:#faf5ff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+            <p style="font-weight:800;color:#7c3aed;font-size:0.95rem;">🍷 {{ vino.nombre }}</p>
+            <p style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">
+                {{ vino.copas_por_botella }} copas/botella ·
+                Copa: S/.{{ vino.precio_copa }} ·
+                Botella: S/.{{ vino.precio_botella }}
+                {% if vino.producto_almacen_id and vino.descuenta_inventario %}
+                {% for p in [vino] %}· <strong>Stock actual: {{ vino.producto_carta.stock_actual if vino.producto_carta else '?' }}</strong>{% endfor %}
+                {% endif %}
+            </p>
+        </div>
+        {% if reg %}
+        <span style="background:{% if reg.botella_vacia %}#dcfce7{% elif reg.botella_vacia == False %}#fef3c7{% else %}#fee2e2{% endif %};
+            color:{% if reg.botella_vacia %}#166534{% elif reg.botella_vacia == False %}#92400e{% else %}#dc2626{% endif %};
+            font-size:0.78rem;font-weight:700;padding:4px 12px;border-radius:8px;">
+            {% if reg.botella_vacia %}✓ Botella vacía confirmada
+            {% elif reg.botella_vacia == False %}Botella aún en uso
+            {% else %}⏳ Pendiente confirmar{% endif %}
+        </span>
+        {% endif %}
+    </div>
+
+    <div style="padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <!-- Resumen de ventas del día -->
+        <div>
+            <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px;">Ventas del día</p>
+            {% if reg %}
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <div style="text-align:center;">
+                    <p style="font-size:1.6rem;font-weight:800;color:#7c3aed;">{{ reg.copas_vendidas }}</p>
+                    <p style="font-size:0.72rem;color:#94a3b8;">copas vendidas</p>
+                </div>
+                {% if reg.botellas_vendidas_enteras > 0 %}
+                <div style="text-align:center;">
+                    <p style="font-size:1.6rem;font-weight:800;color:#1d4ed8;">{{ reg.botellas_vendidas_enteras }}</p>
+                    <p style="font-size:0.72rem;color:#94a3b8;">botella(s) entera(s)</p>
+                </div>
+                {% endif %}
+            </div>
+            {% if reg.copas_vendidas >= vino.copas_por_botella %}
+            <div style="background:#fef3c7;border-radius:6px;padding:6px 10px;margin-top:8px;">
+                <p style="font-size:0.78rem;color:#92400e;font-weight:600;">
+                    ⚠️ Se vendieron {{ reg.copas_vendidas }} copas (≥ {{ vino.copas_por_botella }} = 1 botella). ¿Está vacía?
+                </p>
+            </div>
+            {% endif %}
+            {% if reg.notas %}
+            <p style="font-size:0.75rem;color:#64748b;margin-top:6px;font-style:italic;">📝 {{ reg.notas }}</p>
+            {% endif %}
+            {% else %}
+            <p style="color:#94a3b8;font-size:0.85rem;">Sin movimiento registrado hoy.</p>
+            {% endif %}
+        </div>
+
+        <!-- Formulario de confirmación -->
+        <div>
+            <p style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px;">
+                {% if reg %}Actualizar registro{% else %}Registrar{% endif %}
+            </p>
+            {% if reg %}
+            <!-- Editar registro existente -->
+            <form method="POST" action="{{ url_for('admin.editar_registro_botella', reg_id=reg.id) }}"
+                  style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#dcfce7;padding:8px 12px;border-radius:8px;flex:1;justify-content:center;">
+                        <input type="radio" name="botella_vacia" value="si" {% if reg.botella_vacia %}checked{% endif %}>
+                        <span style="font-weight:700;color:#166534;font-size:0.85rem;">✓ Sí, vacía</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fef3c7;padding:8px 12px;border-radius:8px;flex:1;justify-content:center;">
+                        <input type="radio" name="botella_vacia" value="no" {% if reg.botella_vacia == False %}checked{% endif %}>
+                        <span style="font-weight:700;color:#92400e;font-size:0.85rem;">✗ No, sigue</span>
+                    </label>
+                </div>
+                <input type="text" name="notas" placeholder="Notas opcionales..." value="{{ reg.notas or '' }}"
+                       class="input" style="font-size:0.82rem;">
+                <button type="submit" class="btn-primary btn-sm" style="background:#7c3aed;">💾 Actualizar</button>
+            </form>
+            {% else %}
+            <!-- Crear nuevo registro -->
+            <form method="POST" action="{{ url_for('admin.confirmar_botella') }}"
+                  style="display:flex;flex-direction:column;gap:8px;">
+                <input type="hidden" name="producto_carta_id" value="{{ vino.id }}">
+                <input type="hidden" name="fecha" value="{{ fecha_str }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><label class="label">Copas vendidas</label>
+                        <input type="number" name="copas_vendidas" class="input" min="0" value="0" step="1"></div>
+                    <div><label class="label">Botellas enteras</label>
+                        <input type="number" name="botellas_enteras" class="input" min="0" value="0" step="1"></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#dcfce7;padding:7px 10px;border-radius:8px;flex:1;justify-content:center;">
+                        <input type="radio" name="botella_vacia" value="si">
+                        <span style="font-weight:700;color:#166534;font-size:0.82rem;">✓ Botella vacía</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fef3c7;padding:7px 10px;border-radius:8px;flex:1;justify-content:center;">
+                        <input type="radio" name="botella_vacia" value="no" checked>
+                        <span style="font-weight:700;color:#92400e;font-size:0.82rem;">✗ Sigue en uso</span>
+                    </label>
+                </div>
+                <input type="text" name="notas" placeholder="Notas opcionales..." class="input" style="font-size:0.82rem;">
+                <button type="submit" class="btn-primary btn-sm" style="background:#7c3aed;">🍷 Confirmar</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

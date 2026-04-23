@@ -1,124 +1,154 @@
 {% extends "base.html" %}
-{% block title %}Productos{% endblock %}
-{% block page_title %}Productos de Almacén{% endblock %}
-{% block page_subtitle %}Insumos y materias primas{% endblock %}
+{% block title %}Productos de Almacén{% endblock %}
+{% block page_title %}Inventario de Alimentos{% endblock %}
+{% block page_subtitle %}Agrupado por categoría · edición inline{% endblock %}
+{% block header_actions %}
+<a href="{{ url_for('admin.index') }}" class="btn-secondary btn-sm">← Admin</a>
+{% endblock %}
+
 {% block content %}
+<div style="display:grid;grid-template-columns:1fr 300px;gap:16px;" id="prod-grid">
 
-<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;" id="prod-grid">
-
-<!-- TABLA -->
-<div class="card" style="padding:0;overflow:hidden;">
-    <div class="table-wrap">
-    <table style="width:100%;border-collapse:collapse;min-width:520px;">
-        <thead><tr>
-            <th class="th">Producto</th>
-            <th class="th">Categoría</th>
-            <th class="th">Unidad</th>
-            <th class="th" style="text-align:right;">Stock</th>
-            <th class="th" style="text-align:right;">Mínimo</th>
-            <th class="th" style="text-align:center;">Acciones</th>
-        </tr></thead>
+<!-- PRODUCTOS AGRUPADOS POR CATEGORÍA -->
+<div>
+{% for grupo in por_categoria %}
+{% set cat = grupo.cat %}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;">
+    <!-- Cabecera categoría -->
+    <div style="padding:9px 16px;background:#1e293b;display:flex;align-items:center;justify-content:space-between;">
+        <p style="color:white;font-weight:700;font-size:0.88rem;">
+            {{ cat.nombre if cat else '— Sin categoría —' }}
+        </p>
+        <span style="color:#64748b;font-size:0.72rem;">{{ grupo.productos|length }} productos</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:580px;">
+        <thead>
+            <tr style="background:#f8fafc;">
+                <th class="th">Nombre</th>
+                <th class="th" style="text-align:center;">Unidad</th>
+                <th class="th" style="text-align:right;">Precio S/.</th>
+                <th class="th" style="text-align:right;">Stock</th>
+                <th class="th" style="text-align:right;">Mínimo</th>
+                <th class="th" style="text-align:center;">Acciones</th>
+            </tr>
+        </thead>
         <tbody>
-        {% for p in productos %}
-        <tr id="fila-{{ p.id }}" style="{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}background:#fef2f2;{% endif %}">
-            <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
-            <td class="td" style="font-size:0.82rem;color:#64748b;">{{ p.categoria.nombre if p.categoria else "—" }}</td>
-            <td class="td" style="color:#64748b;font-size:0.875rem;">{{ p.unidad_medida }}</td>
-            <td class="td" style="text-align:right;font-weight:700;color:{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}#dc2626{% else %}#166534{% endif %};">{{ p.stock_actual|round(2) }}</td>
-            <td class="td" style="text-align:right;color:#94a3b8;font-size:0.875rem;">{{ p.stock_minimo|round(2) }}</td>
+        {% for p in grupo.productos %}
+        <!-- Fila vista -->
+        <tr id="fila-{{ p.id }}" style="border-bottom:1px solid #f1f5f9;{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <td class="td" style="font-weight:600;color:#1e293b;">
+                {{ p.nombre }}
+                {% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}
+                <span style="font-size:0.65rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:4px;">⚠ Bajo</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;color:#64748b;font-size:0.82rem;">{{ p.unidad_medida }}</td>
+            <td class="td" style="text-align:right;color:#1d4ed8;font-size:0.82rem;font-weight:600;">
+                {% if p.precio_unitario %}S/.{{ "%.2f"|format(p.precio_unitario) }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
+            </td>
+            <td class="td" style="text-align:right;font-weight:700;color:{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}#dc2626{% else %}#166534{% endif %};">
+                {{ p.stock_actual|round(2) }}
+            </td>
+            <td class="td" style="text-align:right;color:#94a3b8;font-size:0.82rem;">{{ p.stock_minimo|round(2) }}</td>
             <td class="td" style="text-align:center;white-space:nowrap;">
-                <button onclick="editarFila({{ p.id }})"
-                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:0.78rem;font-weight:600;color:#1d4ed8;margin-right:4px;">
+                <button onclick="abrirEditar({{ p.id }}, '{{ p.nombre|replace("'","\\'") }}', '{{ p.unidad_medida }}', {{ p.precio_unitario or 0 }}, {{ p.stock_minimo or 0 }}, {{ p.categoria_id or 'null' }})"
+                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#1d4ed8;">
                     ✏️ Editar
                 </button>
-                <form method="POST" action="{{ url_for('admin.eliminar_producto', id=p.id) }}" style="display:inline;"
-                    onsubmit="return confirm('¿Desactivar {{ p.nombre }}?')">
+                <form method="POST" action="{{ url_for('admin.eliminar_producto', id=p.id) }}" style="margin:0;display:inline;"
+                      onsubmit="return confirm('¿Desactivar {{ p.nombre }}?')">
                     <button type="submit"
-                        style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:0.78rem;font-weight:600;color:#dc2626;">
-                        🗑️
+                        style="background:#fee2e2;border:none;border-radius:6px;padding:3px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#dc2626;">
+                        🗑
                     </button>
                 </form>
             </td>
         </tr>
-        <!-- Fila edición -->
-        <tr id="edit-{{ p.id }}" style="display:none;background:#eff6ff;">
-            <td colspan="6" style="padding:12px 16px;">
-                <form method="POST" action="{{ url_for('admin.editar_producto', id=p.id) }}"
-                    style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-                    <div style="flex:2;min-width:140px;">
-                        <label class="label">Nombre</label>
-                        <input type="text" name="nombre" value="{{ p.nombre }}" class="input" required>
-                    </div>
-                    <div style="flex:2;min-width:130px;">
-                        <label class="label">Categoría</label>
-                        <select name="categoria_id" class="input">
-                            <option value="">Sin categoría</option>
-                            {% for c in categorias %}
-                            <option value="{{ c.id }}" {% if p.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div style="width:90px;">
-                        <label class="label">Unidad</label>
-                        <input type="text" name="unidad_medida" value="{{ p.unidad_medida }}" class="input">
-                    </div>
-                    <div style="width:90px;">
-                        <label class="label">Stock mín.</label>
-                        <input type="number" name="stock_minimo" value="{{ p.stock_minimo }}" class="input" step="0.01" min="0">
-                    </div>
-                    <div style="display:flex;align-items:center;gap:6px;padding-bottom:6px;">
-                        <input type="checkbox" name="activo" id="activo-{{ p.id }}" {% if p.activo %}checked{% endif %} style="width:16px;height:16px;">
-                        <label for="activo-{{ p.id }}" style="font-size:0.82rem;color:#64748b;cursor:pointer;">Activo</label>
-                    </div>
-                    <div style="display:flex;gap:8px;">
-                        <button type="submit" class="btn-primary btn-sm">💾 Guardar</button>
-                        <button type="button" onclick="cancelarEdit({{ p.id }})"
-                            style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:0.82rem;font-weight:600;color:#64748b;">
-                            Cancelar
-                        </button>
-                    </div>
-                </form>
-            </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" style="padding:30px;text-align:center;color:#94a3b8;">Sin productos.</td></tr>
         {% endfor %}
         </tbody>
     </table>
     </div>
 </div>
+{% else %}
+<div class="card" style="padding:40px;text-align:center;color:#94a3b8;">No hay productos activos.</div>
+{% endfor %}
+</div>
 
-<!-- NUEVO PRODUCTO -->
-<div class="card">
-    <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">➕ Nuevo Producto</h3>
-    <form method="POST" action="{{ url_for('admin.nuevo_producto') }}" style="display:flex;flex-direction:column;gap:12px;">
-        <div><label class="label">Nombre *</label><input type="text" name="nombre" class="input" required></div>
+<!-- PANEL LATERAL: agregar nuevo producto -->
+<div>
+<div class="card" style="padding:16px;">
+    <p style="font-weight:700;color:#1e293b;font-size:0.88rem;margin-bottom:14px;">➕ Nuevo producto</p>
+    <form method="POST" action="{{ url_for('admin.nuevo_producto') }}" style="display:flex;flex-direction:column;gap:10px;">
+        <div><label class="label">Nombre *</label>
+            <input type="text" name="nombre" class="input" required placeholder="Ej: Gaseosa 700ml"></div>
         <div><label class="label">Categoría</label>
             <select name="categoria_id" class="input">
-                <option value="">Sin categoría</option>
+                <option value="">— Sin categoría —</option>
                 {% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
-            </select>
+            </select></div>
+        <div><label class="label">Unidad</label>
+            <select name="unidad_medida" class="input">
+                {% for u in unidades %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+            </select></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label class="label">Precio S/.</label>
+                <input type="number" name="precio_unitario" class="input" step="any" min="0" value="0"></div>
+            <div><label class="label">Stock mínimo</label>
+                <input type="number" name="stock_minimo" class="input" step="any" min="0" value="0"></div>
         </div>
-        <div><label class="label">Unidad de Medida</label><input type="text" name="unidad_medida" class="input" placeholder="kg, litros, unidad..."></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div><label class="label">Stock Actual</label><input type="number" name="stock_actual" class="input" step="0.01" value="0"></div>
-            <div><label class="label">Stock Mínimo</label><input type="number" name="stock_minimo" class="input" step="0.01" value="0"></div>
-        </div>
-        <button type="submit" class="btn-primary" style="text-align:center;">Crear Producto</button>
+        <button type="submit" class="btn-primary" style="text-align:center;">Crear producto</button>
     </form>
 </div>
 </div>
 
-<style>@media(max-width:768px){div[id="prod-grid"]{grid-template-columns:1fr!important;}}</style>
+</div>
+
+<!-- MODAL EDITAR PRODUCTO -->
+<div id="modal-editar-prod" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;">
+    <div class="card" style="width:420px;max-width:95vw;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-weight:800;color:#1e293b;font-size:0.95rem;" id="modal-prod-titulo">Editar producto</p>
+            <button onclick="document.getElementById('modal-editar-prod').style.display='none'"
+                style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" id="form-editar-prod" style="display:flex;flex-direction:column;gap:12px;">
+            <div><label class="label">Nombre *</label>
+                <input type="text" name="nombre" id="ep-nombre" class="input" required></div>
+            <div><label class="label">Categoría</label>
+                <select name="categoria_id" id="ep-cat" class="input">
+                    <option value="">— Sin categoría —</option>
+                    {% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
+                </select></div>
+            <div><label class="label">Unidad</label>
+                <select name="unidad_medida" id="ep-unidad" class="input">
+                    {% for u in unidades %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+                </select></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label class="label">Precio unit. S/.</label>
+                    <input type="number" name="precio_unitario" id="ep-precio" class="input" step="any" min="0"></div>
+                <div><label class="label">Stock mínimo</label>
+                    <input type="number" name="stock_minimo" id="ep-min" class="input" step="any" min="0"></div>
+            </div>
+            <button type="submit" class="btn-primary" style="text-align:center;">💾 Guardar cambios</button>
+        </form>
+    </div>
+</div>
+
+<style>div[id="prod-grid"]{} @media(max-width:900px){div[id="prod-grid"]{grid-template-columns:1fr!important;}}</style>
+
 {% block scripts %}
 <script>
-function editarFila(id) {
-    document.getElementById('fila-' + id).style.display = 'none';
-    document.getElementById('edit-' + id).style.display = '';
-}
-function cancelarEdit(id) {
-    document.getElementById('edit-' + id).style.display = 'none';
-    document.getElementById('fila-' + id).style.display = '';
+function abrirEditar(id, nombre, unidad, precio, minimo, catId) {
+    document.getElementById('modal-prod-titulo').textContent = '✏️ Editar: ' + nombre;
+    document.getElementById('form-editar-prod').action = '/admin/productos/' + id + '/editar';
+    document.getElementById('ep-nombre').value  = nombre;
+    document.getElementById('ep-precio').value  = precio;
+    document.getElementById('ep-min').value     = minimo;
+    document.getElementById('ep-unidad').value  = unidad;
+    var sel = document.getElementById('ep-cat');
+    sel.value = catId || '';
+    document.getElementById('modal-editar-prod').style.display = 'flex';
 }
 </script>
 {% endblock %}

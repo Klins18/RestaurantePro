@@ -55,7 +55,8 @@
             <tr style="background:#f8fafc;">
                 <th class="th">DETALLE</th>
                 <th class="th" style="text-align:center;background:#dbeafe;color:#1e40af;">STOCK INICIAL</th>
-                <th class="th" style="text-align:center;background:#fee2e2;color:#991b1b;">SALIDA</th>
+                <th class="th" style="text-align:center;background:#fee2e2;color:#991b1b;">SALIDA TOTAL</th>
+                <th class="th" style="text-align:center;background:#fef3c7;color:#92400e;font-size:0.68rem;">🎁 CORTESÍA</th>
                 <th class="th" style="text-align:center;background:#dcfce7;color:#166534;">STOCK FINAL</th>
                 <th class="th" style="text-align:right;">P.U.</th>
                 <th class="th" style="text-align:right;">TOTAL</th>
@@ -70,8 +71,19 @@
             <td class="td" style="text-align:center;font-weight:700;color:#1d4ed8;">
                 {% if f.tiene_stock %}{{ f.stock_inicial }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
             </td>
-            <td class="td" style="text-align:center;font-weight:800;color:{% if f.vendido > 0 %}#dc2626{% else %}#94a3b8{% endif %};">
-                {% if f.vendido > 0 %}{{ f.vendido }}{% else %}—{% endif %}
+            <td class="td" style="text-align:center;">
+                {% if f.vendido > 0 %}
+                <span style="font-weight:800;font-size:1rem;color:#dc2626;">{{ f.vendido }}</span>
+                <div style="font-size:0.7rem;color:#64748b;margin-top:2px;line-height:1.4;">
+                    <span style="color:#166534;font-weight:600;">{{ f.vendido_cobrado }} cobr.</span>
+                    {% if f.cortesias > 0 %}
+                    + <span style="color:#92400e;font-weight:600;">{{ f.cortesias }}🎁</span>
+                    {% endif %}
+                </div>
+                {% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+            </td>
+            <td class="td" style="text-align:center;color:#92400e;font-size:0.82rem;">
+                {% if f.cortesias > 0 %}<span style="background:#fef3c7;padding:1px 7px;border-radius:5px;">{{ f.cortesias }}</span>{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
             </td>
             <td class="td" style="text-align:center;font-weight:700;color:#166534;">
                 {% if f.tiene_stock %}{{ f.stock_final }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
@@ -126,7 +138,7 @@
     {% endif %}
 
     <!-- Resumen bebidas vendidas -->
-    {% set bebidas = filas_activas | selectattr('vendido', 'gt', 0) | list %}
+    {% set bebidas = filas_activas | selectattr('vendido_cobrado', 'gt', 0) | list %}
     {% if bebidas %}
     <div class="card" style="padding:0;overflow:hidden;">
         <div style="background:#0891b2;padding:10px 14px;">
@@ -135,7 +147,7 @@
         {% for f in bebidas %}
         <div style="padding:7px 14px;border-bottom:1px solid #f8fafc;display:flex;justify-content:space-between;align-items:center;">
             <p style="font-size:0.78rem;color:#1e293b;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">{{ f.nombre }}</p>
-            <span style="font-weight:700;color:#dc2626;font-size:0.82rem;margin-left:6px;flex-shrink:0;">×{{ f.vendido }}</span>
+            <span style="font-weight:700;color:#dc2626;font-size:0.82rem;margin-left:6px;flex-shrink:0;">×{{ f.vendido_cobrado }}{% if f.cortesias > 0 %}<span style="color:#92400e;font-size:0.7rem;"> +{{ f.cortesias }}🎁</span>{% endif %}</span>
         </div>
         {% endfor %}
     </div>

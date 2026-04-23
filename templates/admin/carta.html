@@ -69,6 +69,7 @@
                 <th class="th" style="text-align:right;">Precio S/.</th>
                 <th class="th" style="text-align:center;">✓ Descuenta inventario</th>
                 <th class="th">Producto en almacén vinculado</th>
+                <th class="th" style="text-align:center;">🍷 Vino</th>
                 <th class="th" style="text-align:center;">Acción</th>
             </tr>
         </thead>
@@ -94,9 +95,22 @@
                 {% endif %}
             </td>
             <td class="td" style="text-align:center;">
+                {% if prod.es_vino %}
+                <span style="background:#f3e8ff;color:#7c3aed;font-size:0.72rem;font-weight:700;padding:2px 7px;border-radius:6px;">
+                    🍷 {{ prod.copas_por_botella }} copas
+                </span>
+                {% else %}
+                <span style="color:#e2e8f0;font-size:0.75rem;">—</span>
+                {% endif %}
+            </td>
+            <td class="td" style="text-align:center;white-space:nowrap;">
                 <button onclick="abrirModal({{ prod.id }}, '{{ prod.nombre }}', {{ 'true' if prod.descuenta_inventario else 'false' }}, {{ prod.producto_almacen_id or 'null' }})"
-                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;color:#1d4ed8;">
-                    ✏️ Configurar
+                    style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#1d4ed8;">
+                    ✏️ Stock
+                </button>
+                <button onclick="abrirModalVino({{ prod.id }}, '{{ prod.nombre }}', {{ 'true' if prod.es_vino else 'false' }}, {{ prod.copas_por_botella or 5 }}, {{ prod.precio_copa or 0 }}, {{ prod.precio_botella or 0 }})"
+                    style="background:#f3e8ff;border:1px solid #e9d5ff;border-radius:6px;padding:4px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#7c3aed;margin-left:3px;">
+                    🍷 Vino
                 </button>
             </td>
         </tr>
@@ -145,8 +159,53 @@
     </div>
 </div>
 
+<!-- Modal configurar vino -->
+<div id="modal-vino" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;">
+    <div class="card" style="width:420px;max-width:95vw;padding:22px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="font-weight:800;color:#7c3aed;font-size:0.95rem;" id="modal-vino-titulo">🍷 Configurar vino</p>
+            <button onclick="document.getElementById('modal-vino').style.display='none'"
+                style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+        <form method="POST" id="form-vino" style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 14px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="es_vino" id="chk-es-vino"
+                           style="width:20px;height:20px;accent-color:#7c3aed;">
+                    <div>
+                        <p style="font-weight:700;color:#7c3aed;font-size:0.88rem;">🍷 Este producto se vende por copa y por botella</p>
+                        <p style="font-size:0.72rem;color:#a855f7;">El stock se descuenta en botellas, la venta puede ser por copa</p>
+                    </div>
+                </label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="label">Copas por botella</label>
+                    <input type="number" name="copas_por_botella" id="vino-copas" class="input" min="1" step="1" value="5"></div>
+                <div><label class="label">Precio copa S/.</label>
+                    <input type="number" name="precio_copa" id="vino-precio-copa" class="input" min="0" step="any" value="0"></div>
+            </div>
+            <div><label class="label">Precio botella entera S/.</label>
+                <input type="number" name="precio_botella" id="vino-precio-botella" class="input" min="0" step="any" value="0"></div>
+            <div style="background:#fef9c3;border-radius:8px;padding:10px 12px;font-size:0.78rem;color:#92400e;">
+                ℹ️ Cuando las copas vendidas lleguen a la cantidad configurada, el sistema te preguntará si la botella está vacía. Si confirmas que sí, descuenta 1 botella del stock.
+            </div>
+            <button type="submit" class="btn-primary" style="background:#7c3aed;text-align:center;">💾 Guardar configuración de vino</button>
+        </form>
+    </div>
+</div>
+
 {% block scripts %}
 <script>
+function abrirModalVino(id, nombre, esVino, copas, precioCopa, precioBotella) {
+    document.getElementById('modal-vino-titulo').textContent = '🍷 Configurar: ' + nombre;
+    document.getElementById('form-vino').action = '/admin/carta/' + id + '/configurar-vino';
+    document.getElementById('chk-es-vino').checked = esVino;
+    document.getElementById('vino-copas').value = copas;
+    document.getElementById('vino-precio-copa').value = precioCopa;
+    document.getElementById('vino-precio-botella').value = precioBotella;
+    document.getElementById('modal-vino').style.display = 'flex';
+}
+
 function abrirModal(id, nombre, descuenta, almacenId) {
     document.getElementById('modal-titulo-carta').textContent = '⚙️ Configurar: ' + nombre;
     document.getElementById('form-vincular').action = '/admin/carta/' + id + '/vincular';
