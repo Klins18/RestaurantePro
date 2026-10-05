@@ -13,7 +13,11 @@
         <div><label class="label">Producto *</label>
             <select name="producto_id" class="input" required>
                 <option value="">— Seleccionar —</option>
-                {% for p in productos %}<option value="{{ p.id }}">{{ p.nombre }} ({{ p.unidad_medida }}) — Stock: {{ p.stock_actual }}</option>{% endfor %}
+                {% for categoria, productos_categoria in productos_por_categoria %}
+                <optgroup label="{{ categoria }}">
+                    {% for p in productos_categoria %}<option value="{{ p.id }}">{{ p.nombre }} ({{ p.unidad_medida }}) — Stock: {{ p.stock_actual }}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
             </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">

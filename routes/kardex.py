@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
-from models import db, Producto, ProductoCarta, KardexAlmacen, KardexComedor
+from models import db, Producto, Categoria, ProductoCarta, CategoriaCarta, KardexAlmacen, KardexComedor
+from routes.helpers import agrupar_por_categoria
 from datetime import datetime, date
 import pytz
 
@@ -45,7 +46,9 @@ def almacen():
     fecha_desde = request.args.get('desde', '')
     fecha_hasta = request.args.get('hasta', '')
 
-    productos = Producto.query.filter_by(activo=True).order_by(Producto.nombre).all()
+    productos = Producto.query.filter_by(activo=True).outerjoin(Categoria).order_by(
+        Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
+    ).all()
     registros = []
     producto_sel = None
 
@@ -76,7 +79,7 @@ def almacen():
     valor_total_inv = float(ultima_fila or 0)
 
     return render_template('kardex/almacen.html',
-        productos=productos, registros=registros,
+        productos_por_categoria=agrupar_por_categoria(productos), registros=registros,
         producto_sel=producto_sel,
         desde=fecha_desde, hasta=fecha_hasta,
         valor_total_inv=valor_total_inv)
@@ -93,7 +96,9 @@ def comedor():
     fecha_desde = request.args.get('desde', '')
     fecha_hasta = request.args.get('hasta', '')
 
-    productos = ProductoCarta.query.filter_by(activo=True).order_by(ProductoCarta.nombre).all()
+    productos = ProductoCarta.query.filter_by(activo=True).join(CategoriaCarta).order_by(
+        CategoriaCarta.orden, CategoriaCarta.nombre, ProductoCarta.nombre
+    ).all()
     registros = []
     producto_sel = None
 
@@ -123,7 +128,7 @@ def comedor():
     total_ingresos_mes = sum(r.total_entrada or 0 for r in registros_mes if r.tipo == 'ingreso')
 
     return render_template('kardex/comedor.html',
-        productos=productos, registros=registros,
+        productos_por_categoria=agrupar_por_categoria(productos, 'categoria_carta'), registros=registros,
         producto_sel=producto_sel,
         desde=fecha_desde, hasta=fecha_hasta,
         total_ingresos_mes=total_ingresos_mes)

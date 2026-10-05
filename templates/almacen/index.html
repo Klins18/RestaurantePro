@@ -56,7 +56,15 @@
             <th class="th" style="text-align:center;">Acciones</th>
         </tr></thead>
         <tbody>
+            {% set categoria_actual = namespace(nombre='') %}
             {% for p in productos %}
+            {% set nombre_categoria = p.categoria.nombre if p.categoria else 'Sin categoría' %}
+            {% if nombre_categoria != categoria_actual.nombre %}
+            {% set categoria_actual.nombre = nombre_categoria %}
+            <tr>
+                <td colspan="7" style="padding:8px 14px;background:#eef2f7;color:#334155;font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;">📁 {{ nombre_categoria }}</td>
+            </tr>
+            {% endif %}
             <tr style="{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
                 <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
                 <td class="td" style="font-size:0.82rem;color:#64748b;">{{ p.categoria.nombre if p.categoria else "—" }}</td>

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}Buenos días{% block greeting_name %}, {{ current_user.nombre_completo.split()[0] }}{% endblock %}{% endblock %}
-{% block page_subtitle %}{{ hoy.strftime('%A %d de %B, %Y') if hoy else '' }} · Restaurante Turístico Marangani{% endblock %}
+{% block page_subtitle %}{{ fecha_es }} · Restaurante Turístico Marangani{% endblock %}
 
 {% block content %}
 
 <!-- ══ ACCIONES RÁPIDAS ══ -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
+<div class="dashboard-actions">
     <a href="{{ url_for('ventas.nueva') }}"
        style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px 10px;border-radius:14px;background:#1e293b;color:white;text-decoration:none;text-align:center;transition:all 0.15s;"
        onmouseover="this.style.background='#f59e0b';this.style.transform='translateY(-2px)'"
@@ -38,7 +38,7 @@
 </div>
 
 <!-- ══ MÉTRICAS ══ -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+<div class="dashboard-metrics">
     <div class="card" style="padding:16px;border-left:4px solid #10b981;">
         <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Ventas hoy</p>
         <p style="font-size:1.7rem;font-weight:800;color:#1e293b;line-height:1;">S/.{{ "%.0f"|format(ventas_hoy) }}</p>
@@ -64,7 +64,7 @@
 </div>
 
 <!-- ══ FILA PRINCIPAL ══ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+<div class="dashboard-columns">
 
     <!-- Gráfico 7 días -->
     <div class="card" style="padding:0;overflow:hidden;">
@@ -135,7 +135,7 @@
 </div>
 
 <!-- ══ FILA INFERIOR ══ -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+<div class="dashboard-columns">
 
     <!-- Reservas hoy/mañana -->
     <div class="card" style="padding:0;overflow:hidden;">

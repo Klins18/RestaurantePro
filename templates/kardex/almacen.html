@@ -10,8 +10,12 @@
             <label class="label">Producto</label>
             <select name="producto_id" class="input" onchange="this.form.submit()">
                 <option value="">— Seleccionar producto —</option>
-                {% for p in productos %}
-                <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>{{ p.nombre }} ({{ p.unidad_medida }})</option>
+                {% for categoria, productos_categoria in productos_por_categoria %}
+                <optgroup label="{{ categoria }}">
+                    {% for p in productos_categoria %}
+                    <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>{{ p.nombre }} ({{ p.unidad_medida }})</option>
+                    {% endfor %}
+                </optgroup>
                 {% endfor %}
             </select>
         </div>

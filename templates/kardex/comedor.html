@@ -10,8 +10,12 @@
             <label class="label">Producto de Carta</label>
             <select name="producto_id" class="input" onchange="this.form.submit()">
                 <option value="">— Seleccionar producto —</option>
-                {% for p in productos %}
-                <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>{{ p.nombre }} — S/.{{ '%.2f'|format(p.precio) }}</option>
+                {% for categoria, productos_categoria in productos_por_categoria %}
+                <optgroup label="{{ categoria }}">
+                    {% for p in productos_categoria %}
+                    <option value="{{ p.id }}" {% if producto_sel and producto_sel.id == p.id %}selected{% endif %}>{{ p.nombre }} — S/.{{ '%.2f'|format(p.precio) }}</option>
+                    {% endfor %}
+                </optgroup>
                 {% endfor %}
             </select>
         </div>

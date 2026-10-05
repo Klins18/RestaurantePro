@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Producto, Categoria, MovimientoAlmacen, Proveedor, registrar_auditoria
+from routes.helpers import agrupar_por_categoria
 from datetime import datetime, date, timedelta
 import pytz
 
@@ -31,7 +32,9 @@ def index():
         q = q.filter(Producto.stock_actual <= Producto.stock_minimo,
                      Producto.stock_minimo > 0)
 
-    productos = q.order_by(Producto.nombre).all()
+    productos = q.outerjoin(Categoria).order_by(
+        Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
+    ).all()
     categorias = Categoria.query.filter_by(activo=True).order_by(Categoria.nombre).all()
     alertas = sum(1 for p in Producto.query.filter_by(activo=True).all()
                   if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0)
@@ -103,9 +106,15 @@ def ingreso():
         flash(f'Ingreso de {cantidad} {producto.unidad_medida} de "{producto.nombre}" registrado.', 'success')
         return redirect(url_for('almacen.movimientos'))
 
-    productos = Producto.query.filter_by(activo=True).order_by(Producto.nombre).all()
+    productos = Producto.query.filter_by(activo=True).outerjoin(Categoria).order_by(
+        Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
+    ).all()
     proveedores = Proveedor.query.filter_by(activo=True).order_by(Proveedor.nombre).all()
-    return render_template('almacen/ingreso.html', productos=productos, proveedores=proveedores)
+    return render_template(
+        'almacen/ingreso.html',
+        productos_por_categoria=agrupar_por_categoria(productos),
+        proveedores=proveedores,
+    )
 
 # ──────────────────────────────────────
 #  REGISTRAR EGRESO / SALIDA
@@ -145,8 +154,10 @@ def egreso():
         flash(f'Salida de {cantidad} {producto.unidad_medida} de "{producto.nombre}" registrada.', 'success')
         return redirect(url_for('almacen.movimientos'))
 
-    productos = Producto.query.filter_by(activo=True).order_by(Producto.nombre).all()
-    return render_template('almacen/egreso.html', productos=productos)
+    productos = Producto.query.filter_by(activo=True).outerjoin(Categoria).order_by(
+        Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
+    ).all()
+    return render_template('almacen/egreso.html', productos_por_categoria=agrupar_por_categoria(productos))
 
 # ──────────────────────────────────────
 #  HISTORIAL DE MOVIMIENTOS
@@ -200,13 +211,15 @@ def movimientos():
 
     resumen_lista = sorted(resumen.values(), key=lambda x: x['egresos'], reverse=True)
 
-    productos = Producto.query.filter_by(activo=True).order_by(Producto.nombre).all()
+    productos = Producto.query.filter_by(activo=True).outerjoin(Categoria).order_by(
+        Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
+    ).all()
     return render_template('almacen/movimientos.html',
                            movimientos=movs,
                            total_ingresos=total_ingresos,
                            total_egresos=total_egresos,
                            resumen=resumen_lista,
-                           productos=productos,
+                           productos_por_categoria=agrupar_por_categoria(productos),
                            tipo_filtro=tipo,
                            prod_filtro=producto_id,
                            desde=desde_str, hasta=hasta_str)

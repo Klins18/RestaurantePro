@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for
 from flask_login import login_required, current_user
 from models import db, Producto, ListaPedido, MovimientoAlmacen, VentaDiaria
 from sqlalchemy import func
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 import pytz
 
 main_bp = Blueprint('main', __name__)
@@ -11,7 +11,7 @@ PERU_TZ = pytz.timezone('America/Lima')
 @main_bp.route('/')
 @login_required
 def dashboard():
-    hoy = date.today()
+    hoy = datetime.now(PERU_TZ).date()
 
     # Métricas principales
     total_productos    = Producto.query.filter_by(activo=True).count()
@@ -24,21 +24,28 @@ def dashboard():
     ).count()
 
     # Ventas de hoy
-    ventas_hoy_list  = VentaDiaria.query.filter_by(fecha=hoy).all()
-    ventas_hoy       = sum(v.total or 0 for v in ventas_hoy_list)
-    pax_hoy          = sum(v.num_pax or 0 for v in ventas_hoy_list)
-    num_servicios_hoy = len(ventas_hoy_list)
-
-    # Ventas ayer para comparar
     ayer = hoy - timedelta(days=1)
-    ventas_ayer = sum(v.total or 0 for v in VentaDiaria.query.filter_by(fecha=ayer).all())
+    inicio_serie = hoy - timedelta(days=6)
+    totales_por_dia = dict(
+        db.session.query(VentaDiaria.fecha, func.coalesce(func.sum(VentaDiaria.total), 0))
+        .filter(VentaDiaria.fecha.between(inicio_serie, hoy))
+        .group_by(VentaDiaria.fecha)
+        .all()
+    )
+    ventas_hoy = float(totales_por_dia.get(hoy, 0))
+    ventas_ayer = float(totales_por_dia.get(ayer, 0))
+    resumen_hoy = db.session.query(
+        func.coalesce(func.sum(VentaDiaria.num_pax), 0),
+        func.count(VentaDiaria.id),
+    ).filter_by(fecha=hoy).one()
+    pax_hoy, num_servicios_hoy = int(resumen_hoy[0]), resumen_hoy[1]
     variacion_ventas = ((ventas_hoy - ventas_ayer) / ventas_ayer * 100) if ventas_ayer > 0 else 0
 
     # Serie últimos 7 días para mini-gráfico
     serie_7dias = []
     for i in range(6, -1, -1):
         d = hoy - timedelta(days=i)
-        total_dia = sum(v.total or 0 for v in VentaDiaria.query.filter_by(fecha=d).all())
+        total_dia = float(totales_por_dia.get(d, 0))
         serie_7dias.append({'fecha': d.strftime('%d/%m'), 'total': round(total_dia, 2)})
 
     # Últimos movimientos
@@ -92,6 +99,7 @@ def dashboard():
         empleado_actual=empleado_actual,
         reservas_proximas=reservas_proximas,
         hoy=hoy,
+        fecha_es=f"{['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][hoy.weekday()]} {hoy.day} de {['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][hoy.month - 1]}, {hoy.year}",
     )
 
 

@@ -22,8 +22,12 @@
         <div><label class="label">Producto</label>
             <select name="producto" class="input" style="width:210px;">
                 <option value="">Todos los productos</option>
-                {% for p in productos %}
-                <option value="{{ p.id }}" {% if prod_filtro == p.id|string %}selected{% endif %}>{{ p.nombre }}</option>
+                {% for categoria, productos_categoria in productos_por_categoria %}
+                <optgroup label="{{ categoria }}">
+                    {% for p in productos_categoria %}
+                    <option value="{{ p.id }}" {% if prod_filtro == p.id|string %}selected{% endif %}>{{ p.nombre }}</option>
+                    {% endfor %}
+                </optgroup>
                 {% endfor %}
             </select>
         </div>

@@ -18,7 +18,7 @@ def login():
         flash('Usuario o contraseña incorrectos', 'error')
     return render_template('login.html')
 
-@auth_bp.route('/logout')
+@auth_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
     registrar_auditoria(current_user.id, 'LOGOUT', ip=request.remote_addr)

@@ -108,12 +108,17 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .dashboard-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:20px; }
+        .dashboard-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+        .dashboard-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-bottom:14px; }
         @media (max-width: 1024px) {
             .grid-4 { grid-template-columns: repeat(2, 1fr); }
             .grid-3 { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 640px) {
             .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+            .dashboard-actions, .dashboard-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .dashboard-columns { grid-template-columns:1fr; }
             .card { padding: 14px; }
             .btn-primary, .btn-secondary, .btn-danger, .btn-success { padding: 8px 14px; font-size: 0.82rem; }
         }
@@ -234,9 +239,11 @@
             </div>
         </div>
         <a href="{{ url_for('empleados.mi_password') }}" style="font-size:0.78rem;color:#94a3b8;text-decoration:none;">🔑 Cambiar contraseña</a>
-        <a href="{{ url_for('auth.logout') }}" style="display:flex;align-items:center;gap:7px;color:#475569;font-size:0.8rem;text-decoration:none;padding:6px 0;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
-            <span>🚪</span> Cerrar sesión
-        </a>
+        <form method="POST" action="{{ url_for('auth.logout') }}" style="margin:0;">
+            <button type="submit" style="display:flex;align-items:center;gap:7px;color:#475569;font-size:0.8rem;text-decoration:none;padding:6px 0;background:none;border:0;cursor:pointer;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
+                <span>🚪</span> Cerrar sesión
+            </button>
+        </form>
     </div>
 </aside>
 
