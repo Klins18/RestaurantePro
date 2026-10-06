@@ -3,8 +3,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import (db, VentaDiaria, ItemVenta, EmpresaTuristica, ProductoCarta,
-                    VarianteCarta, KardexComedor, CierreCaja, Producto,
+                    VarianteCarta, CierreCaja, Producto,
                     MovimientoAlmacen, registrar_auditoria)
+from services.kardex import registrar_kardex
 from sqlalchemy import func
 from datetime import datetime, date, timedelta
 import pytz
@@ -12,6 +13,22 @@ import pytz
 ventas_bp = Blueprint('ventas', __name__, url_prefix='/ventas')
 PERU_TZ = pytz.timezone('America/Lima')
 PRECIO_PERUHOP = 35.0   # S/. por pax
+
+
+def registrar_ajuste_stock_venta(producto, cantidad, tipo, referencia, concepto):
+    if cantidad <= 0:
+        return
+    producto.stock_actual = max(0, (producto.stock_actual or 0) - cantidad) if tipo == 'egreso' \
+        else (producto.stock_actual or 0) + cantidad
+    db.session.add(MovimientoAlmacen(
+        tipo=tipo, producto_id=producto.id, cantidad=cantidad,
+        motivo=concepto, referencia=referencia,
+        usuario_id=current_user.id, fecha_hora=now_peru(),
+    ))
+    registrar_kardex(
+        producto.id, tipo, cantidad, current_user.id,
+        concepto=concepto, referencia=referencia, fecha=now_peru(),
+    )
 
 def now_peru():
     return datetime.now(PERU_TZ).replace(tzinfo=None)
@@ -147,7 +164,7 @@ def nueva():
             db.session.add(venta)
             db.session.flush()
 
-            for it in items:
+            for item_index, it in enumerate(items, 1):
                 nombre_it  = str(it.get('nombre', '')).strip()
                 if not nombre_it:
                     continue
@@ -157,7 +174,7 @@ def nueva():
                 p_carta_id = int(it['prod_id']) if it.get('prod_id') else None
                 v_id       = int(it['var_id'])  if it.get('var_id')  else None
 
-                db.session.add(ItemVenta(
+                item_venta = ItemVenta(
                     venta_id=venta.id,
                     producto_carta_id=p_carta_id,
                     variante_id=v_id,
@@ -166,7 +183,8 @@ def nueva():
                     precio_unitario=precio_it,
                     # Cortesía: subtotal=0 para que no cuente en ingresos
                     subtotal=0 if es_cortesia else sub_it
-                ))
+                )
+                db.session.add(item_venta)
 
                 # Descontar inventario si aplica
                 if p_carta_id:
@@ -174,13 +192,11 @@ def nueva():
                     if pc and pc.descuenta_inventario and pc.producto_almacen_id:
                         pa = Producto.query.get(pc.producto_almacen_id)
                         if pa:
-                            pa.stock_actual = max(0, (pa.stock_actual or 0) - cant)
-                            db.session.add(MovimientoAlmacen(
-                                tipo='egreso', producto_id=pa.id, cantidad=cant,
-                                motivo=f'Venta #{venta.id} — {nombre_it}',
-                                referencia=f'VENTA-{venta.id}',
-                                usuario_id=current_user.id, fecha_hora=now_peru()
-                            ))
+                            referencia_mov = f'VENTA-{venta.id}-ITEM-{item_index}'
+                            registrar_ajuste_stock_venta(
+                                pa, cant, 'egreso', referencia_mov,
+                                f'Venta #{venta.id} — {nombre_it}',
+                            )
 
             registrar_auditoria(current_user.id, 'NUEVA_VENTA', 'ventas_diarias', venta.id,
                 f'Total: S/.{total:.2f} · Pax: {num_pax}', ip=request.remote_addr)
@@ -308,6 +324,20 @@ def editar_item_venta(item_id):
         flash('Datos inválidos.', 'error')
         return redirect(url_for('ventas.index'))
 
+    cantidad_anterior = float(item.cantidad or 0)
+    diferencia = nueva_cant - cantidad_anterior
+    if diferencia and item.producto_carta_id:
+        pc = ProductoCarta.query.get(item.producto_carta_id)
+        if pc and pc.descuenta_inventario and pc.producto_almacen_id:
+            prod = Producto.query.get(pc.producto_almacen_id)
+            if prod:
+                tipo_mov = 'egreso' if diferencia > 0 else 'ingreso'
+                registrar_ajuste_stock_venta(
+                    prod, abs(diferencia), tipo_mov,
+                    f'VENTA-{venta.id}-EDICION-ITEM-{item.id}-{int(now_peru().timestamp())}',
+                    f'Ajuste por edición de venta #{venta.id} — {item.descripcion}',
+                )
+
     item.cantidad   = nueva_cant
     item.precio_unit = nuevo_precio
     item.subtotal   = round(nueva_cant * nuevo_precio, 2)
@@ -336,7 +366,11 @@ def eliminar_item_venta(item_id):
         if pc and pc.descuenta_inventario and pc.producto_almacen_id:
             prod = ProdAlm.query.get(pc.producto_almacen_id)
             if prod:
-                prod.stock_actual = (prod.stock_actual or 0) + item.cantidad
+                registrar_ajuste_stock_venta(
+                    prod, float(item.cantidad or 0), 'ingreso',
+                    f'VENTA-{venta.id}-ANULACION-ITEM-{item.id}',
+                    f'Reversión por eliminar producto de venta #{venta.id} — {item.descripcion}',
+                )
 
     nombre = item.descripcion
     db.session.delete(item)
@@ -364,7 +398,11 @@ def eliminar_venta(id):
             if pc and pc.descuenta_inventario and pc.producto_almacen_id:
                 prod = ProdAlm.query.get(pc.producto_almacen_id)
                 if prod:
-                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad
+                    registrar_ajuste_stock_venta(
+                        prod, float(item.cantidad or 0), 'ingreso',
+                        f'VENTA-{venta.id}-ANULACION-ITEM-{item.id}',
+                        f'Reversión por anular venta #{venta.id} — {item.descripcion}',
+                    )
     db.session.delete(venta)
     db.session.commit()
     flash('Venta eliminada y stock revertido.', 'success')

@@ -24,6 +24,7 @@
             <div><label class="label">Cantidad *</label><input type="number" name="cantidad" class="input" step="any" min="0.001" required placeholder="0.00"></div>
             <div><label class="label">Fecha</label><input type="date" name="fecha" class="input" value="{{ hoy }}"></div>
         </div>
+        <div><label class="label">Costo unitario (opcional)</label><input type="number" name="costo_unitario" class="input" step="0.0001" min="0" placeholder="Déjalo vacío si aún no lo sabes"><p style="font-size:.74rem;color:#64748b;margin-top:4px;">Si lo dejas vacío, se registra la cantidad con costo pendiente.</p></div>
         <div><label class="label">Motivo</label><input type="text" name="motivo" class="input" placeholder="Compra, donación, ajuste..."></div>
         <div><label class="label">Referencia</label><input type="text" name="referencia" class="input" placeholder="N° factura, orden..."></div>
         <div><label class="label">Observaciones</label><textarea name="observaciones" class="input" rows="2" placeholder="Notas adicionales..."></textarea></div>

@@ -1,9 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Kardex Almacén{% endblock %}
-{% block page_title %}Kardex Valorizado — Almacén{% endblock %}
-{% block page_subtitle %}Precio Promedio Ponderado · Insumos y Materia Prima{% endblock %}
+{% block page_title %}Kardex de Alimentos y Consumibles{% endblock %}
+{% block page_subtitle %}Movimientos y valoración del inventario consumible{% endblock %}
 
 {% block content %}
+<div class="card" style="margin-bottom:14px;padding:12px 16px;color:#475569;font-size:.84rem;">
+    Este Kardex reúne compras, recepciones de pedidos, ingresos y egresos manuales, y salidas por ventas. Las entradas sin precio se marcan como <strong>costo pendiente</strong>; su valor de saldo, si existe un promedio anterior, es estimado.
+</div>
 <div class="card" style="margin-bottom:18px;">
     <form method="GET" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <div style="flex:2;min-width:200px;">
@@ -28,10 +31,10 @@
 
 {% if producto_sel and registros %}
 <div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;">
-    {% set ultimo = registros[-1] %}
-    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Stock Actual</p><p style="font-size:1.8rem;font-weight:700;color:#1e293b;">{{ ultimo.cant_saldo|round(2) }}</p><p style="font-size:0.78rem;color:#94a3b8;">{{ producto_sel.unidad_medida }}</p></div>
-    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Precio Promedio</p><p style="font-size:1.8rem;font-weight:700;color:#f59e0b;">S/.{{ '%.4f'|format(ultimo.precio_saldo) }}</p><p style="font-size:0.78rem;color:#94a3b8;">por unidad</p></div>
-    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Valor en Stock</p><p style="font-size:1.8rem;font-weight:700;color:#10b981;">S/.{{ '%.2f'|format(ultimo.total_saldo) }}</p><p style="font-size:0.78rem;color:#94a3b8;">total valorizado</p></div>
+    {% set ultimo = saldo_actual %}
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Saldo actual</p><p style="font-size:1.8rem;font-weight:700;color:#1e293b;">{{ ultimo.cant_saldo|round(2) }}</p><p style="font-size:0.78rem;color:#94a3b8;">{{ producto_sel.unidad_medida }}</p></div>
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Costo promedio registrado</p><p style="font-size:1.8rem;font-weight:700;color:#f59e0b;">S/.{{ '%.4f'|format(ultimo.precio_saldo) }}</p><p style="font-size:0.78rem;color:#94a3b8;">por unidad, puede ser estimado</p></div>
+    <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Valor de saldo</p><p style="font-size:1.8rem;font-weight:700;color:#10b981;">S/.{{ '%.2f'|format(ultimo.total_saldo) }}</p><p style="font-size:0.78rem;color:#94a3b8;">estimado si hay costos pendientes</p></div>
     <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Movimientos</p><p style="font-size:1.8rem;font-weight:700;color:#6366f1;">{{ registros|length }}</p><p style="font-size:0.78rem;color:#94a3b8;">en el período</p></div>
 </div>
 {% endif %}
@@ -77,8 +80,8 @@
                     {% if r.referencia %}<br><span style="font-size:0.75rem;color:#94a3b8;">{{ r.referencia }}</span>{% endif %}
                 </td>
                 <td class="td" style="text-align:right;color:#2563eb;{% if not r.cant_entrada %}color:#e2e8f0;{% endif %}">{{ r.cant_entrada|round(3) if r.cant_entrada else '—' }}</td>
-                <td class="td" style="text-align:right;color:#2563eb;{% if not r.cant_entrada %}color:#e2e8f0;{% endif %}">{{ 'S/.%.4f'|format(r.precio_entrada) if r.cant_entrada else '—' }}</td>
-                <td class="td" style="text-align:right;font-weight:600;color:#2563eb;{% if not r.cant_entrada %}color:#e2e8f0;{% endif %}">{{ 'S/.%.2f'|format(r.total_entrada) if r.cant_entrada else '—' }}</td>
+                <td class="td" style="text-align:right;color:#2563eb;{% if not r.cant_entrada %}color:#e2e8f0;{% endif %}">{% if r.cant_entrada %}{% if r.costo_conocido %}S/.{{ '%.4f'|format(r.precio_entrada) }}{% else %}<span style="color:#b45309;">Pendiente</span>{% endif %}{% else %}—{% endif %}</td>
+                <td class="td" style="text-align:right;font-weight:600;color:#2563eb;{% if not r.cant_entrada %}color:#e2e8f0;{% endif %}">{% if r.cant_entrada %}{% if r.costo_conocido %}S/.{{ '%.2f'|format(r.total_entrada) }}{% else %}Est. S/.{{ '%.2f'|format(r.total_entrada) }}{% endif %}{% else %}—{% endif %}</td>
                 <td class="td" style="text-align:right;color:#dc2626;{% if not r.cant_salida %}color:#e2e8f0;{% endif %}">{{ r.cant_salida|round(3) if r.cant_salida else '—' }}</td>
                 <td class="td" style="text-align:right;color:#dc2626;{% if not r.cant_salida %}color:#e2e8f0;{% endif %}">{{ 'S/.%.4f'|format(r.precio_salida) if r.cant_salida else '—' }}</td>
                 <td class="td" style="text-align:right;font-weight:600;color:#dc2626;{% if not r.cant_salida %}color:#e2e8f0;{% endif %}">{{ 'S/.%.2f'|format(r.total_salida) if r.cant_salida else '—' }}</td>
@@ -87,7 +90,7 @@
                 <td class="td" style="text-align:right;font-weight:700;color:#166534;">S/.{{ '%.2f'|format(r.total_saldo) }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">No hay movimientos en este período.</td></tr>
+            <tr><td colspan="11" style="padding:40px;text-align:center;color:#94a3b8;">No hay movimientos valorizados para este producto y período. Las recepciones sin costo aparecen en Movimientos del almacén.</td></tr>
             {% endfor %}
         </tbody>
     </table>

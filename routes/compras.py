@@ -2,10 +2,11 @@ import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
-from models import db, Compra, ItemCompra, Proveedor, Producto, KardexAlmacen, registrar_auditoria
+from models import db, Compra, ItemCompra, Proveedor, Producto, MovimientoAlmacen, registrar_auditoria
 from datetime import datetime, date
 import pytz
 from werkzeug.utils import secure_filename
+from services.kardex import registrar_kardex
 
 compras_bp = Blueprint('compras', __name__, url_prefix='/compras')
 PERU_TZ = pytz.timezone('America/Lima')
@@ -152,32 +153,15 @@ def nueva():
             if prod_id:
                 prod = Producto.query.get(prod_id)
                 if prod:
-                    # Obtener último saldo del kardex
-                    ultimo = KardexAlmacen.query.filter_by(producto_id=prod.id)\
-                        .order_by(KardexAlmacen.id.desc()).first()
-                    cant_saldo_prev = ultimo.cant_saldo if ultimo else 0
-                    total_saldo_prev = ultimo.total_saldo if ultimo else 0
-
-                    nueva_cant = cant_saldo_prev + cant
-                    nuevo_total = total_saldo_prev + subtotal_item
-                    precio_prom = nuevo_total / nueva_cant if nueva_cant > 0 else precio
-
-                    k = KardexAlmacen(
-                        producto_id=prod.id,
-                        fecha=datetime.combine(fecha, datetime.min.time()),
-                        tipo='ingreso',
+                    if precio > 0:
+                        prod.costo_unitario = precio
+                    registrar_kardex(
+                        prod.id, 'ingreso', cant, current_user.id,
                         concepto=f"Compra - {compra.tipo_comprobante or ''} {compra.serie_comprobante or ''}-{compra.numero_comprobante or ''}".strip(),
                         referencia=f"{compra.serie_comprobante}-{compra.numero_comprobante}" if compra.numero_comprobante else '',
-                        cant_entrada=cant,
-                        precio_entrada=precio,
-                        total_entrada=subtotal_item,
-                        cant_saldo=nueva_cant,
-                        precio_saldo=round(precio_prom, 4),
-                        total_saldo=round(nuevo_total, 2),
-                        usuario_id=current_user.id,
-                        compra_id=compra.id
+                        fecha=datetime.combine(fecha, datetime.min.time()),
+                        precio_unitario=precio, compra_id=compra.id,
                     )
-                    db.session.add(k)
                     prod.stock_actual += cant
 
         registrar_auditoria(current_user.id, 'NUEVA_COMPRA', 'compras', compra.id,
@@ -229,6 +213,47 @@ def anular(id):
         flash('Solo el administrador puede anular compras.', 'error')
         return redirect(url_for('compras.ver', id=id))
     compra = Compra.query.get_or_404(id)
+    if compra.estado == 'anulado':
+        flash('Esta compra ya estaba anulada.', 'warning')
+        return redirect(url_for('compras.ver', id=id))
+
+    cantidades_por_producto = {}
+    for item in compra.items:
+        if item.producto_id:
+            cantidades_por_producto[item.producto_id] = (
+                cantidades_por_producto.get(item.producto_id, 0) + (item.cantidad or 0)
+            )
+    for producto_id, cantidad in cantidades_por_producto.items():
+        producto = Producto.query.get(producto_id)
+        if producto and (producto.stock_actual or 0) < cantidad:
+            flash(
+                f'No se puede anular: quedan {producto.stock_actual or 0} '
+                f'{producto.unidad_medida} de "{producto.nombre}" y la compra agregó {cantidad}. '
+                'Regulariza el inventario antes de anularla.',
+                'error',
+            )
+            return redirect(url_for('compras.ver', id=id))
+
+    for item in compra.items:
+        if not item.producto_id:
+            continue
+        producto = Producto.query.get(item.producto_id)
+        if not producto:
+            continue
+        producto.stock_actual = (producto.stock_actual or 0) - (item.cantidad or 0)
+        referencia = f'COMPRA-{compra.id}-ANULACION-ITEM-{item.id}'
+        db.session.add(MovimientoAlmacen(
+            tipo='egreso', producto_id=producto.id,
+            cantidad=item.cantidad, unidad_medida=item.unidad,
+            motivo=f'Anulación de compra #{compra.id}: {item.descripcion}',
+            referencia=referencia, proveedor_id=compra.proveedor_id,
+            usuario_id=current_user.id, fecha_hora=now_peru(),
+        ))
+        registrar_kardex(
+            producto.id, 'egreso', item.cantidad, current_user.id,
+            concepto=f'Anulación de compra #{compra.id}: {item.descripcion}',
+            referencia=referencia, fecha=now_peru(),
+        )
     compra.estado = 'anulado'
     registrar_auditoria(current_user.id, 'ANULAR_COMPRA', 'compras', id, ip=request.remote_addr)
     db.session.commit()

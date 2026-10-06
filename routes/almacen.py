@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Producto, Categoria, MovimientoAlmacen, Proveedor, registrar_auditoria
+from services.kardex import registrar_kardex
 from routes.helpers import agrupar_por_categoria
 from datetime import datetime, date, timedelta
 import pytz
@@ -84,8 +85,31 @@ def ingreso():
         except:
             flash('Cantidad inválida', 'error')
             return redirect(request.url)
+        if cantidad <= 0:
+            flash('La cantidad debe ser mayor que cero.', 'error')
+            return redirect(request.url)
+
+        costo_raw = request.form.get('costo_unitario', '').strip()
+        try:
+            costo_unitario = float(costo_raw) if costo_raw else None
+            if costo_unitario is not None and costo_unitario < 0:
+                raise ValueError
+        except ValueError:
+            flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+            return redirect(request.url)
+        fecha_mov = now_peru()
+        fecha_raw = request.form.get('fecha', '').strip()
+        if fecha_raw:
+            try:
+                fecha_elegida = datetime.strptime(fecha_raw, '%Y-%m-%d').date()
+                fecha_mov = datetime.combine(fecha_elegida, fecha_mov.time())
+            except ValueError:
+                flash('La fecha ingresada no es válida.', 'error')
+                return redirect(request.url)
 
         producto = Producto.query.get_or_404(producto_id)
+        if costo_unitario is not None and costo_unitario > 0:
+            producto.costo_unitario = costo_unitario
         producto.stock_actual += cantidad
 
         db.session.add(MovimientoAlmacen(
@@ -97,9 +121,15 @@ def ingreso():
             referencia=request.form.get('referencia', ''),
             proveedor_id=request.form.get('proveedor_id') or None,
             usuario_id=current_user.id,
-            fecha_hora=now_peru(),
+            fecha_hora=fecha_mov,
             observaciones=request.form.get('observaciones', '')
         ))
+        registrar_kardex(
+            producto.id, 'ingreso', cantidad, current_user.id,
+            concepto=request.form.get('motivo', '').strip() or 'Ingreso manual',
+            referencia=request.form.get('referencia', '').strip(),
+            fecha=fecha_mov, precio_unitario=costo_unitario,
+        )
         registrar_auditoria(current_user.id, 'INGRESO_ALMACEN', 'movimientos_almacen',
                             None, f'{producto.nombre} | +{cantidad}', ip=request.remote_addr)
         db.session.commit()
@@ -114,6 +144,7 @@ def ingreso():
         'almacen/ingreso.html',
         productos_por_categoria=agrupar_por_categoria(productos),
         proveedores=proveedores,
+        hoy=date.today(),
     )
 
 # ──────────────────────────────────────
@@ -129,6 +160,9 @@ def egreso():
             cantidad = float(request.form.get('cantidad', '0'))
         except:
             flash('Cantidad inválida', 'error')
+            return redirect(request.url)
+        if cantidad <= 0:
+            flash('La cantidad debe ser mayor que cero.', 'error')
             return redirect(request.url)
 
         producto = Producto.query.get_or_404(producto_id)
@@ -148,6 +182,12 @@ def egreso():
             fecha_hora=now_peru(),
             observaciones=request.form.get('observaciones', '')
         ))
+        registrar_kardex(
+            producto.id, 'egreso', cantidad, current_user.id,
+            concepto=request.form.get('motivo', '').strip() or 'Egreso manual',
+            referencia=request.form.get('referencia', '').strip(),
+            fecha=now_peru(),
+        )
         registrar_auditoria(current_user.id, 'EGRESO_ALMACEN', 'movimientos_almacen',
                             None, f'{producto.nombre} | -{cantidad}', ip=request.remote_addr)
         db.session.commit()

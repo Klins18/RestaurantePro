@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Kardex de Bienes{% endblock %}
+{% block page_title %}Kardex de Bienes{% endblock %}
+{% block page_subtitle %}Utensilios, mobiliario y equipos · cantidades, estado y costos opcionales{% endblock %}
+
+{% block content %}
+<div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;">
+    <div class="card"><p style="font-size:.72rem;color:#64748b;">Bienes activos</p><p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ cantidad_bienes }}</p></div>
+    <div class="card"><p style="font-size:.72rem;color:#64748b;">Unidades actuales</p><p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ total_unidades }}</p></div>
+    <div class="card"><p style="font-size:.72rem;color:#64748b;">Valor con costo registrado</p><p style="font-size:1.4rem;font-weight:800;color:#166534;">S/. {{ '%.2f'|format(valor_registrado) }}</p></div>
+    <div class="card"><p style="font-size:.72rem;color:#64748b;">Pendientes de costo</p><p style="font-size:1.6rem;font-weight:800;color:{% if bienes_sin_costo %}#d97706{% else %}#166534{% endif %};">{{ bienes_sin_costo }}</p></div>
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+    <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div style="flex:2;min-width:210px;">
+            <label class="label">Bien</label>
+            <select name="bien_id" class="input">
+                <option value="">Todos los bienes</option>
+                {% for grupo, lista in bienes_por_categoria %}
+                <optgroup label="{{ grupo }}">
+                    {% for b in lista %}<option value="{{ b.id }}" {% if bien_sel and bien_sel.id == b.id %}selected{% endif %}>{{ b.nombre }}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+        <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input"></div>
+        <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input"></div>
+        <button type="submit" class="btn-primary">🔍 Filtrar</button>
+        {% if bien_sel or desde or hasta %}<a href="{{ url_for('kardex.bienes') }}" class="btn-secondary">Limpiar</a>{% endif %}
+    </form>
+    <p style="font-size:.76rem;color:#64748b;margin-top:9px;">El costo es opcional. Puedes agregarlo o regularizarlo editando el bien; el Kardex guardará ese cambio.</p>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;gap:8px;align-items:center;">
+        <h2 style="font-size:.95rem;font-weight:700;color:#1e293b;">Historial de movimientos</h2>
+        <span style="font-size:.78rem;color:#64748b;">{{ registros|length }} registro(s){% if registros|length == 500 %} · máximo 500{% endif %}</span>
+    </div>
+    <div class="table-wrap">
+        <table style="width:100%;border-collapse:collapse;min-width:1050px;">
+            <thead><tr>
+                <th class="th">Fecha</th><th class="th">Bien</th><th class="th">Movimiento</th>
+                <th class="th" style="text-align:right;">Bueno +</th><th class="th" style="text-align:right;">Bueno −</th>
+                <th class="th" style="text-align:right;">Malo +</th><th class="th" style="text-align:right;">Malo −</th>
+                <th class="th" style="text-align:right;">Saldo bueno</th><th class="th" style="text-align:right;">Saldo malo</th>
+                <th class="th" style="text-align:right;">Total</th><th class="th" style="text-align:right;">Costo unit.</th>
+                <th class="th" style="text-align:right;">Valor saldo</th><th class="th">Motivo / Usuario</th>
+            </tr></thead>
+            <tbody>
+                {% for r in registros %}
+                <tr>
+                    <td class="td" style="white-space:nowrap;">{{ r.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td class="td"><strong>{{ r.bien_nombre }}</strong><br><span style="font-size:.72rem;color:#64748b;">{{ r.bien.area }} · {{ r.bien.categoria.nombre if r.bien.categoria else 'Sin categoría' }}</span></td>
+                    <td class="td">{% if r.tipo == 'saldo_inicial' %}Saldo inicial{% elif r.tipo == 'ingreso' %}Ingreso{% elif r.tipo == 'baja' %}Baja{% elif r.tipo == 'regularizacion_costo' %}Regularización de costo{% else %}Ajuste{% endif %}</td>
+                    <td class="td" style="text-align:right;color:#166534;">{{ r.bueno_entrada or '—' }}</td>
+                    <td class="td" style="text-align:right;color:#dc2626;">{{ r.bueno_salida or '—' }}</td>
+                    <td class="td" style="text-align:right;color:#d97706;">{{ r.malo_entrada or '—' }}</td>
+                    <td class="td" style="text-align:right;color:#dc2626;">{{ r.malo_salida or '—' }}</td>
+                    <td class="td" style="text-align:right;font-weight:700;">{{ r.saldo_bueno }}</td>
+                    <td class="td" style="text-align:right;">{{ r.saldo_malo }}</td>
+                    <td class="td" style="text-align:right;font-weight:800;">{{ r.saldo_total }}</td>
+                    <td class="td" style="text-align:right;">{% if r.costo_unitario is not none %}S/. {{ '%.2f'|format(r.costo_unitario) }}{% else %}<span style="color:#d97706;">Pendiente</span>{% endif %}</td>
+                    <td class="td" style="text-align:right;">{% if r.valor_saldo is not none %}S/. {{ '%.2f'|format(r.valor_saldo) }}{% else %}—{% endif %}</td>
+                    <td class="td"><span>{{ r.motivo or '—' }}</span><br><span style="font-size:.72rem;color:#64748b;">{{ r.usuario.nombre_completo if r.usuario else 'Sistema' }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="13" style="padding:36px;text-align:center;color:#64748b;">No hay movimientos para los filtros elegidos.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

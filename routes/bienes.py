@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models import db, Bien, CategoriaBien, registrar_auditoria
-from datetime import date
+from models import db, Bien, KardexBienes, CategoriaBien, registrar_auditoria
+from datetime import date, datetime
 import pytz
 
 bienes_bp = Blueprint('bienes', __name__, url_prefix='/bienes')
@@ -170,26 +170,72 @@ CAT_COLORS = {
     "Utensilios":  "#fef9c3", "Otros":      "#f1f5f9",
 }
 
+
+def registrar_kardex_bien(bien, tipo, bueno_antes=0, malo_antes=0,
+                          total_antes=0, costo_antes=None, motivo='',
+                          usuario_id=None, fecha=None, saldo_bueno=None,
+                          saldo_malo=None, saldo_total=None):
+    bueno_despues = int(bien.estado_bueno or 0) if saldo_bueno is None else saldo_bueno
+    malo_despues = int(bien.estado_malo or 0) if saldo_malo is None else saldo_malo
+    total_despues = int(bien.total or 0) if saldo_total is None else saldo_total
+    valor_antes = total_antes * costo_antes if costo_antes is not None else None
+    valor_despues = total_despues * bien.costo_unitario if bien.costo_unitario is not None else None
+    if valor_despues is None:
+        valor_ajuste = None
+    elif valor_antes is None:
+        valor_ajuste = valor_despues
+    else:
+        valor_ajuste = round(valor_despues - valor_antes, 2)
+    db.session.add(KardexBienes(
+        bien_id=bien.id,
+        bien_nombre=bien.nombre,
+        fecha=fecha or datetime.now(PERU_TZ).replace(tzinfo=None),
+        tipo=tipo,
+        motivo=motivo,
+        bueno_entrada=max(bueno_despues - bueno_antes, 0),
+        bueno_salida=max(bueno_antes - bueno_despues, 0),
+        malo_entrada=max(malo_despues - malo_antes, 0),
+        malo_salida=max(malo_antes - malo_despues, 0),
+        saldo_bueno=bueno_despues,
+        saldo_malo=malo_despues,
+        saldo_total=total_despues,
+        costo_unitario=bien.costo_unitario,
+        valor_ajuste=valor_ajuste,
+        valor_saldo=round(valor_despues, 2) if valor_despues is not None else None,
+        usuario_id=usuario_id,
+    ))
+
 # ─── SEMILLA automática ────────────────────────────────────────────────────
 def seed_bienes():
-    if Bien.query.count() > 0:
-        return
-    hoy = date.today()
-    cats_cache = {}
-    for area, cat_nombre, nombre, bueno, malo, total, obs in SEED_BIENES:
-        key = f"{area}|{cat_nombre}"
-        if key not in cats_cache:
-            cat = CategoriaBien.query.filter_by(nombre=cat_nombre, area=area).first()
-            if not cat:
-                cat = CategoriaBien(nombre=cat_nombre, area=area)
-                db.session.add(cat)
-                db.session.flush()
-            cats_cache[key] = cat
-        cat = cats_cache[key]
-        b = Bien(categoria_id=cat.id, nombre=nombre, area=area,
-                 estado_bueno=bueno, estado_malo=malo, total=total,
-                 observaciones=obs, fecha_registro=hoy)
-        db.session.add(b)
+    if Bien.query.count() == 0:
+        hoy = date.today()
+        cats_cache = {}
+        for area, cat_nombre, nombre, bueno, malo, total, obs in SEED_BIENES:
+            key = f"{area}|{cat_nombre}"
+            if key not in cats_cache:
+                cat = CategoriaBien.query.filter_by(nombre=cat_nombre, area=area).first()
+                if not cat:
+                    cat = CategoriaBien(nombre=cat_nombre, area=area)
+                    db.session.add(cat)
+                    db.session.flush()
+                cats_cache[key] = cat
+            cat = cats_cache[key]
+            db.session.add(Bien(
+                categoria_id=cat.id, nombre=nombre, area=area,
+                estado_bueno=bueno, estado_malo=malo, total=total,
+                observaciones=obs, fecha_registro=hoy,
+            ))
+        db.session.flush()
+
+    # Los bienes existentes reciben un saldo de apertura al habilitar este Kardex.
+    bienes = Bien.query.filter_by(activo=True).all()
+    for bien in bienes:
+        if not KardexBienes.query.filter_by(bien_id=bien.id).first():
+            registrar_kardex_bien(
+                bien, 'saldo_inicial', bueno_antes=0, malo_antes=0, total_antes=0,
+                motivo='Saldo al habilitar el Kardex de bienes',
+                usuario_id=bien.usuario_id,
+            )
     db.session.commit()
 
 
@@ -235,15 +281,29 @@ def nuevo():
         malo    = int(request.form.get('estado_malo', 0) or 0)
         total   = int(request.form.get('total', 0) or 0) or (bueno + malo)
         obs     = request.form.get('observaciones', '').strip()
+        costo_raw = request.form.get('costo_unitario', '').strip()
+        try:
+            costo_unitario = float(costo_raw) if costo_raw else None
+            if costo_unitario is not None and costo_unitario < 0:
+                raise ValueError
+        except ValueError:
+            flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+            return redirect(request.url)
 
         if not nombre or not cat_id:
             flash('Nombre y categoría son obligatorios.', 'error')
         else:
             b = Bien(categoria_id=cat_id, nombre=nombre, area=area,
                      estado_bueno=bueno, estado_malo=malo, total=total,
+                     costo_unitario=costo_unitario,
                      observaciones=obs, fecha_registro=date.today(),
                      usuario_id=current_user.id)
             db.session.add(b)
+            db.session.flush()
+            registrar_kardex_bien(
+                b, 'ingreso', motivo='Alta inicial en inventario',
+                usuario_id=current_user.id,
+            )
             db.session.commit()
             flash(f'"{nombre}" agregado al inventario.', 'success')
             return redirect(url_for('bienes.index', area=area))
@@ -258,6 +318,19 @@ def nuevo():
 def editar(id):
     bien = Bien.query.get_or_404(id)
     if request.method == 'POST':
+        bueno_antes = int(bien.estado_bueno or 0)
+        malo_antes = int(bien.estado_malo or 0)
+        total_antes = int(bien.total or 0)
+        costo_antes = bien.costo_unitario
+        costo_raw = request.form.get('costo_unitario', '').strip()
+        try:
+            costo_nuevo = float(costo_raw) if costo_raw else costo_antes
+            if costo_nuevo is not None and costo_nuevo < 0:
+                raise ValueError
+        except ValueError:
+            flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+            return redirect(request.url)
+
         bien.categoria_id  = request.form.get('categoria_id')
         bien.nombre        = request.form.get('nombre', '').strip()
         bien.area          = request.form.get('area', '')
@@ -265,6 +338,23 @@ def editar(id):
         bien.estado_malo   = int(request.form.get('estado_malo', 0) or 0)
         bien.total         = int(request.form.get('total', 0) or 0)
         bien.observaciones = request.form.get('observaciones', '').strip()
+        bien.costo_unitario = costo_nuevo
+        cambio_cantidad = (
+            bueno_antes != bien.estado_bueno or malo_antes != bien.estado_malo
+            or total_antes != bien.total
+        )
+        cambio_costo = costo_antes != bien.costo_unitario
+        if cambio_cantidad or cambio_costo:
+            tipo_movimiento = 'ajuste' if cambio_cantidad else 'regularizacion_costo'
+            motivo = request.form.get('motivo_kardex', '').strip()
+            if not motivo:
+                motivo = 'Costo actualizado' if cambio_costo and not cambio_cantidad else 'Ajuste desde edición del inventario'
+            registrar_kardex_bien(
+                bien, tipo_movimiento,
+                bueno_antes=bueno_antes, malo_antes=malo_antes,
+                total_antes=total_antes, costo_antes=costo_antes,
+                motivo=motivo, usuario_id=current_user.id,
+            )
         db.session.commit()
         flash('Bien actualizado.', 'success')
         return redirect(url_for('bienes.index', area=bien.area))
@@ -277,6 +367,15 @@ def editar(id):
 @login_required
 def eliminar(id):
     bien = Bien.query.get_or_404(id)
+    registrar_kardex_bien(
+        bien, 'baja',
+        bueno_antes=int(bien.estado_bueno or 0),
+        malo_antes=int(bien.estado_malo or 0),
+        total_antes=int(bien.total or 0),
+        costo_antes=bien.costo_unitario,
+        motivo='Baja del inventario', usuario_id=current_user.id,
+        saldo_bueno=0, saldo_malo=0, saldo_total=0,
+    )
     bien.activo = False
     db.session.commit()
     flash(f'"{bien.nombre}" eliminado.', 'success')

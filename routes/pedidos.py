@@ -3,7 +3,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
-from models import db, ListaPedido, ItemPedido, ComprobantePedido, Usuario, Producto, MovimientoAlmacen, KardexAlmacen, Notificacion, registrar_auditoria
+from models import db, ListaPedido, ItemPedido, ComprobantePedido, Usuario, Producto, MovimientoAlmacen, Notificacion, registrar_auditoria
+from services.kardex import registrar_kardex
 from datetime import datetime, date
 import pytz
 
@@ -328,38 +329,50 @@ def verificar(id):
                     item.producto_id = prod.id
 
                 if prod:
-                    prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
-                    mov = MovimientoAlmacen(
-                        tipo='ingreso',
-                        producto_id=prod.id,
-                        cantidad=item.cantidad_recibida,
-                        motivo=f'Verificación pedido #{lista.id}: {lista.titulo}',
-                        referencia=f'PEDIDO-{lista.id}',
-                        usuario_id=current_user.id,
-                        fecha_hora=now_peru()
+                    if item.precio_unitario and item.precio_unitario > 0:
+                        prod.costo_unitario = item.precio_unitario
+                    ref_item = f'PEDIDO-{lista.id}-ITEM-{item.id}'
+                    movimientos_item = MovimientoAlmacen.query.filter(
+                        MovimientoAlmacen.producto_id == prod.id,
+                        db.or_(MovimientoAlmacen.referencia == ref_item,
+                               MovimientoAlmacen.referencia.like(f'{ref_item}-AJUSTE-%')),
+                    ).all()
+                    if not movimientos_item:
+                        legacy = MovimientoAlmacen.query.filter_by(
+                            producto_id=prod.id, referencia=f'PEDIDO-{lista.id}'
+                        ).filter(
+                            MovimientoAlmacen.motivo.contains(item.producto_nombre[:10])
+                        ).first()
+                        if legacy:
+                            movimientos_item = [legacy]
+                    recibido_registrado = sum(
+                        m.cantidad if m.tipo == 'ingreso' else -m.cantidad
+                        for m in movimientos_item
                     )
-                    db.session.add(mov)
-
-                    precio_compra = item.precio_unitario or 0
-                    if precio_compra > 0:
-                        ultimo_k = KardexAlmacen.query.filter_by(producto_id=prod.id)\
-                            .order_by(KardexAlmacen.id.desc()).first()
-                        cant_prev  = ultimo_k.cant_saldo  if ultimo_k else 0
-                        total_prev = ultimo_k.total_saldo if ultimo_k else 0
-                        nueva_cant  = cant_prev + item.cantidad_recibida
-                        nuevo_total = total_prev + (item.cantidad_recibida * precio_compra)
-                        precio_prom = nuevo_total / nueva_cant if nueva_cant > 0 else precio_compra
-                        k = KardexAlmacen(
-                            producto_id=prod.id,
-                            fecha=datetime.combine(lista.fecha, datetime.min.time()),
-                            tipo='ingreso', concepto=f'Verificación pedido #{lista.id}',
-                            referencia=f'PEDIDO-{lista.id}',
-                            cant_entrada=item.cantidad_recibida, precio_entrada=precio_compra,
-                            total_entrada=round(item.cantidad_recibida * precio_compra, 2),
-                            cant_saldo=round(nueva_cant, 4), precio_saldo=round(precio_prom, 4),
-                            total_saldo=round(nuevo_total, 2), usuario_id=current_user.id
+                    diferencia = round(item.cantidad_recibida - recibido_registrado, 4)
+                    if abs(diferencia) > 0.0001:
+                        tipo_mov = 'ingreso' if diferencia > 0 else 'egreso'
+                        cantidad_mov = abs(diferencia)
+                        referencia_ajuste = ref_item if not movimientos_item else (
+                            f'{ref_item}-AJUSTE-{int(now_peru().timestamp())}'
                         )
-                        db.session.add(k)
+                        prod.stock_actual = max(
+                            0, (prod.stock_actual or 0) + diferencia
+                        )
+                        db.session.add(MovimientoAlmacen(
+                            tipo=tipo_mov, producto_id=prod.id,
+                            cantidad=cantidad_mov,
+                            motivo=f'Ajuste de recepción pedido #{lista.id}: {lista.titulo}',
+                            referencia=referencia_ajuste, lista_pedido_id=lista.id,
+                            usuario_id=current_user.id, fecha_hora=now_peru()
+                        ))
+                        registrar_kardex(
+                            prod.id, tipo_mov, cantidad_mov, current_user.id,
+                            concepto=f'Recepción/ajuste pedido #{lista.id}: {lista.titulo}',
+                            referencia=referencia_ajuste,
+                            fecha=now_peru() if movimientos_item else datetime.combine(lista.fecha, datetime.min.time()),
+                            precio_unitario=item.precio_unitario if tipo_mov == 'ingreso' else None,
+                        )
 
         lista.estado = 'en_verificacion'
         lista.verificado_por_id = current_user.id
@@ -439,10 +452,12 @@ def aprobar(id):
     for item in lista.items:
         if item.verificado and item.cantidad_recibida and item.cantidad_recibida > 0:
             # Verificar si ya se hizo el movimiento durante la verificación
-            mov_existente = MovimientoAlmacen.query.filter_by(
-                referencia=f'PEDIDO-{lista.id}'
-            ).filter(
-                MovimientoAlmacen.motivo.contains(item.producto_nombre[:10])
+            ref_item = f'PEDIDO-{lista.id}-ITEM-{item.id}'
+            mov_existente = MovimientoAlmacen.query.filter(
+                db.or_(MovimientoAlmacen.referencia == ref_item,
+                       MovimientoAlmacen.referencia.like(f'{ref_item}-AJUSTE-%'),
+                       db.and_(MovimientoAlmacen.referencia == f'PEDIDO-{lista.id}',
+                               MovimientoAlmacen.motivo.contains(item.producto_nombre[:10])))
             ).first()
 
             if not mov_existente:
@@ -455,17 +470,26 @@ def aprobar(id):
                         Producto.nombre.ilike(f'%{item.producto_nombre.strip()}%')
                     ).first()
                 if prod:
+                    if item.precio_unitario and item.precio_unitario > 0:
+                        prod.costo_unitario = item.precio_unitario
                     prod.stock_actual = (prod.stock_actual or 0) + item.cantidad_recibida
-                    mov = MovimientoAlmacen(
+                    db.session.add(MovimientoAlmacen(
                         tipo='ingreso',
                         producto_id=prod.id,
                         cantidad=item.cantidad_recibida,
                         motivo=f'Aprobación pedido #{lista.id}: {lista.titulo}',
-                        referencia=f'PEDIDO-{lista.id}',
+                        referencia=ref_item,
+                        lista_pedido_id=lista.id,
                         usuario_id=current_user.id,
                         fecha_hora=now_peru()
+                    ))
+                    registrar_kardex(
+                        prod.id, 'ingreso', item.cantidad_recibida, current_user.id,
+                        concepto=f'Recepción pedido #{lista.id}: {lista.titulo}',
+                        referencia=ref_item,
+                        fecha=datetime.combine(lista.fecha, datetime.min.time()),
+                        precio_unitario=item.precio_unitario,
                     )
-                    db.session.add(mov)
                     items_actualizados += 1
 
     lista.estado = 'aprobado'

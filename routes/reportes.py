@@ -222,7 +222,7 @@ def _export_economico_excel(filas, inicio, fin, total_compras, total_ingresos):
 @reportes_bp.route('/diario')
 @login_required
 def diario():
-    from models import ProductoCarta, CategoriaCarta, ItemVenta, VentaDiaria, Producto, KardexComedor
+    from models import ProductoCarta, CategoriaCarta, ItemVenta, VentaDiaria, Producto
     from sqlalchemy import func
 
     hoy     = date.today()

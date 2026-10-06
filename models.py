@@ -60,6 +60,7 @@ class Producto(db.Model):
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
     stock_actual = db.Column(db.Float, default=0)
     stock_minimo = db.Column(db.Float, default=0)
+    costo_unitario = db.Column(db.Float, nullable=True)
     activo = db.Column(db.Boolean, default=True)
     creado_en = db.Column(db.DateTime, default=now_peru)
 
@@ -215,6 +216,7 @@ class KardexAlmacen(db.Model):
     cant_entrada = db.Column(db.Float, default=0)
     precio_entrada = db.Column(db.Float, default=0)
     total_entrada = db.Column(db.Float, default=0)
+    costo_conocido = db.Column(db.Boolean, nullable=False, default=True)
 
     # SALIDA
     cant_salida = db.Column(db.Float, default=0)
@@ -234,7 +236,7 @@ class KardexAlmacen(db.Model):
 
 
 class KardexComedor(db.Model):
-    """Kardex valorizado para COMEDOR (productos de venta)"""
+    """Tabla legada sin uso; se conserva para no borrar el historial existente."""
     __tablename__ = 'kardex_comedor'
     id = db.Column(db.Integer, primary_key=True)
     producto_carta_id = db.Column(db.Integer, db.ForeignKey('productos_carta.id'), nullable=False)
@@ -575,12 +577,38 @@ class Bien(db.Model):
     estado_bueno    = db.Column(db.Integer, default=0)
     estado_malo     = db.Column(db.Integer, default=0)
     total           = db.Column(db.Integer, default=0)
+    costo_unitario  = db.Column(db.Float, nullable=True)
     observaciones   = db.Column(db.String(255))
     activo          = db.Column(db.Boolean, default=True)
     fecha_registro  = db.Column(db.Date)
     creado_en       = db.Column(db.DateTime, default=now_peru)
     actualizado_en  = db.Column(db.DateTime, default=now_peru, onupdate=now_peru)
     usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    usuario         = db.relationship('Usuario')
+
+
+class KardexBienes(db.Model):
+    """Historial cuantitativo de altas, ajustes y bajas de bienes físicos."""
+    __tablename__ = 'kardex_bienes'
+    id              = db.Column(db.Integer, primary_key=True)
+    bien_id         = db.Column(db.Integer, db.ForeignKey('bienes.id'), nullable=False)
+    bien_nombre     = db.Column(db.String(200), nullable=False)
+    fecha           = db.Column(db.DateTime, default=now_peru, nullable=False)
+    tipo            = db.Column(db.String(20), nullable=False)  # saldo_inicial | ingreso | ajuste | baja
+    motivo          = db.Column(db.String(255))
+    bueno_entrada   = db.Column(db.Integer, default=0, nullable=False)
+    bueno_salida    = db.Column(db.Integer, default=0, nullable=False)
+    malo_entrada    = db.Column(db.Integer, default=0, nullable=False)
+    malo_salida     = db.Column(db.Integer, default=0, nullable=False)
+    saldo_bueno     = db.Column(db.Integer, default=0, nullable=False)
+    saldo_malo      = db.Column(db.Integer, default=0, nullable=False)
+    saldo_total     = db.Column(db.Integer, default=0, nullable=False)
+    costo_unitario  = db.Column(db.Float, nullable=True)
+    valor_ajuste    = db.Column(db.Float, nullable=True)
+    valor_saldo     = db.Column(db.Float, nullable=True)
+    usuario_id      = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+
+    bien            = db.relationship('Bien')
     usuario         = db.relationship('Usuario')
 
 # ══════════════════════════════════════════════
@@ -819,6 +847,7 @@ Index('ix_asist_emp_fecha',    Asistencia.empleado_id, Asistencia.fecha)
 Index('ix_kardex_alm_prod',    KardexAlmacen.producto_id)
 Index('ix_kardex_alm_fecha',   KardexAlmacen.fecha)
 Index('ix_kardex_com_prod',    KardexComedor.producto_carta_id)
+Index('ix_kardex_bien_prod_fecha', KardexBienes.bien_id, KardexBienes.fecha)
 
 # Auditoría — consultada por fecha
 Index('ix_auditoria_fecha',    Auditoria.fecha_hora)

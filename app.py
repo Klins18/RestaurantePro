@@ -85,6 +85,44 @@ def init_db(app):
     with app.app_context():
         db.create_all()
 
+        # Añade el costo opcional a inventarios físicos ya existentes.
+        from sqlalchemy import inspect
+        columnas_bienes = {col['name'] for col in inspect(db.engine).get_columns('bienes')}
+        if 'costo_unitario' not in columnas_bienes:
+            with db.engine.begin() as conexion:
+                conexion.exec_driver_sql(
+                    'ALTER TABLE bienes ADD COLUMN costo_unitario FLOAT NULL'
+                )
+
+        columnas_productos = {col['name'] for col in inspect(db.engine).get_columns('productos')}
+        if 'costo_unitario' not in columnas_productos:
+            with db.engine.begin() as conexion:
+                conexion.exec_driver_sql(
+                    'ALTER TABLE productos ADD COLUMN costo_unitario FLOAT NULL'
+                )
+
+        columnas_kardex = {col['name'] for col in inspect(db.engine).get_columns('kardex_almacen')}
+        if 'costo_conocido' not in columnas_kardex:
+            with db.engine.begin() as conexion:
+                conexion.exec_driver_sql(
+                    'ALTER TABLE kardex_almacen ADD COLUMN costo_conocido BOOLEAN NOT NULL DEFAULT 1'
+                )
+
+        from services.kardex import crear_saldos_iniciales
+        crear_saldos_iniciales()
+
+        # Recupera el último costo conocido desde las compras históricas.
+        from models import ItemCompra, Compra, Producto
+        for producto in Producto.query.filter(Producto.costo_unitario.is_(None)).all():
+            ultima_compra = ItemCompra.query.join(Compra).filter(
+                ItemCompra.producto_id == producto.id,
+                ItemCompra.precio_unitario > 0,
+                Compra.estado != 'anulado',
+            ).order_by(Compra.fecha.desc(), Compra.id.desc(), ItemCompra.id.desc()).first()
+            if ultima_compra:
+                producto.costo_unitario = ultima_compra.precio_unitario
+        db.session.commit()
+
         # Admin
         admin = Usuario.query.filter_by(username=app.config['ADMIN_USERNAME']).first()
         if not admin:
@@ -193,8 +231,10 @@ def hacer_backup(app):
     print(f"✅ Backup: {backup_name}")
 
 
+app = create_app()
+
+
 if __name__ == '__main__':
-    app = create_app()
     init_db(app)
     hacer_backup(app)
 

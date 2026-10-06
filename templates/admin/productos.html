@@ -27,7 +27,7 @@
             <tr style="background:#f8fafc;">
                 <th class="th">Nombre</th>
                 <th class="th" style="text-align:center;">Unidad</th>
-                <th class="th" style="text-align:right;">Precio S/.</th>
+                <th class="th" style="text-align:right;">Último costo unit.</th>
                 <th class="th" style="text-align:right;">Stock</th>
                 <th class="th" style="text-align:right;">Mínimo</th>
                 <th class="th" style="text-align:center;">Acciones</th>
@@ -45,14 +45,14 @@
             </td>
             <td class="td" style="text-align:center;color:#64748b;font-size:0.82rem;">{{ p.unidad_medida }}</td>
             <td class="td" style="text-align:right;color:#1d4ed8;font-size:0.82rem;font-weight:600;">
-                {% if p.precio_unitario %}S/.{{ "%.2f"|format(p.precio_unitario) }}{% else %}<span style="color:#e2e8f0;">—</span>{% endif %}
+                {% if p.costo_unitario is not none %}S/.{{ "%.2f"|format(p.costo_unitario) }}{% else %}<span style="color:#94a3b8;">Pendiente</span>{% endif %}
             </td>
             <td class="td" style="text-align:right;font-weight:700;color:{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}#dc2626{% else %}#166534{% endif %};">
                 {{ p.stock_actual|round(2) }}
             </td>
             <td class="td" style="text-align:right;color:#94a3b8;font-size:0.82rem;">{{ p.stock_minimo|round(2) }}</td>
             <td class="td" style="text-align:center;white-space:nowrap;">
-                <button onclick="abrirEditar({{ p.id }}, '{{ p.nombre|replace("'","\\'") }}', '{{ p.unidad_medida }}', {{ p.precio_unitario or 0 }}, {{ p.stock_minimo or 0 }}, {{ p.categoria_id or 'null' }})"
+                <button onclick="abrirEditar({{ p.id }}, '{{ p.nombre|replace("'","\\'") }}', '{{ p.unidad_medida }}', {{ p.costo_unitario or 0 }}, {{ p.stock_minimo or 0 }}, {{ p.categoria_id or 'null' }})"
                     style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 9px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#1d4ed8;">
                     ✏️ Editar
                 </button>
@@ -92,8 +92,8 @@
                 {% for u in unidades %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
             </select></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div><label class="label">Precio S/.</label>
-                <input type="number" name="precio_unitario" class="input" step="any" min="0" value="0"></div>
+                <div><label class="label">Último costo de compra (S/.)</label>
+                    <input type="number" name="costo_unitario" class="input" step="any" min="0" placeholder="Opcional"><small style="color:#64748b;font-size:.68rem;">Es costo de almacén, separado del precio de venta.</small></div>
             <div><label class="label">Stock mínimo</label>
                 <input type="number" name="stock_minimo" class="input" step="any" min="0" value="0"></div>
         </div>
@@ -125,8 +125,8 @@
                     {% for u in unidades %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
                 </select></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <div><label class="label">Precio unit. S/.</label>
-                    <input type="number" name="precio_unitario" id="ep-precio" class="input" step="any" min="0"></div>
+                <div><label class="label">Último costo de compra (S/.)</label>
+                    <input type="number" name="costo_unitario" id="ep-costo" class="input" step="any" min="0"></div>
                 <div><label class="label">Stock mínimo</label>
                     <input type="number" name="stock_minimo" id="ep-min" class="input" step="any" min="0"></div>
             </div>
@@ -139,11 +139,11 @@
 
 {% block scripts %}
 <script>
-function abrirEditar(id, nombre, unidad, precio, minimo, catId) {
+function abrirEditar(id, nombre, unidad, costo, minimo, catId) {
     document.getElementById('modal-prod-titulo').textContent = '✏️ Editar: ' + nombre;
     document.getElementById('form-editar-prod').action = '/admin/productos/' + id + '/editar';
     document.getElementById('ep-nombre').value  = nombre;
-    document.getElementById('ep-precio').value  = precio;
+    document.getElementById('ep-costo').value   = costo;
     document.getElementById('ep-min').value     = minimo;
     document.getElementById('ep-unidad').value  = unidad;
     var sel = document.getElementById('ep-cat');

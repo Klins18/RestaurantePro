@@ -4,6 +4,7 @@
 {% block page_subtitle %}Equipos, muebles, menajería y utensilios{% endblock %}
 {% block header_actions %}
 <a href="{{ url_for('bienes.nuevo') }}" class="btn-primary btn-sm">+ Nuevo bien</a>
+<a href="{{ url_for('kardex.bienes') }}" class="btn-secondary btn-sm">🗂️ Kardex</a>
 <a href="{{ url_for('bienes.categorias') }}" class="btn-secondary btn-sm">📁 Categorías</a>
 {% endblock %}
 
@@ -94,7 +95,7 @@
         </p>
     </div>
     <div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;min-width:680px;">
+    <table style="width:100%;border-collapse:collapse;min-width:900px;">
         <thead><tr style="background:#f8fafc;">
             <th class="th" style="width:32px;">#</th>
             <th class="th">Descripción del bien</th>
@@ -103,6 +104,8 @@
             <th class="th" style="text-align:center;">Bueno</th>
             <th class="th" style="text-align:center;">Malo</th>
             <th class="th" style="text-align:center;font-weight:800;">Total</th>
+            <th class="th" style="text-align:right;">Costo unit.</th>
+            <th class="th" style="text-align:right;">Valor conocido</th>
             <th class="th">Observaciones</th>
             <th class="th" style="text-align:center;">Acciones</th>
         </tr></thead>
@@ -112,7 +115,7 @@
         {% if b.area != area_actual.val %}
         {% set area_actual.val = b.area %}
         <tr>
-            <td colspan="9" style="background:#1e293b;padding:7px 16px;">
+            <td colspan="11" style="background:#1e293b;padding:7px 16px;">
                 <span style="color:white;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;">
                     {{ {'ALMACÉN':'🏪','COMEDOR':'🍽️','COCINA':'👨‍🍳'}[b.area] }} {{ b.area }}
                 </span>
@@ -135,6 +138,8 @@
                 {{ b.estado_malo if b.estado_malo > 0 else '—' }}
             </td>
             <td class="td" style="text-align:center;font-size:1.05rem;font-weight:800;color:#1e293b;">{{ b.total }}</td>
+            <td class="td" style="text-align:right;white-space:nowrap;">{% if b.costo_unitario is not none %}S/. {{ '%.2f'|format(b.costo_unitario) }}{% else %}<span style="color:#d97706;">Pendiente</span>{% endif %}</td>
+            <td class="td" style="text-align:right;white-space:nowrap;">{% if b.costo_unitario is not none %}S/. {{ '%.2f'|format((b.total or 0) * b.costo_unitario) }}{% else %}—{% endif %}</td>
             <td class="td" style="font-size:0.75rem;color:#64748b;font-style:italic;">{{ b.observaciones or '—' }}</td>
             <td class="td" style="text-align:center;">
                 <div style="display:flex;gap:5px;justify-content:center;">

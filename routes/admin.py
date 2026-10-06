@@ -189,6 +189,7 @@ def nuevo_producto():
     unidad = request.form.get('unidad_medida', 'unidad')
     cat_id = request.form.get('categoria_id') or None
     stock_min_str = request.form.get('stock_minimo', '0')
+    costo_raw = request.form.get('costo_unitario', '').strip()
 
     if not nombre:
         flash('El nombre es obligatorio.', 'error')
@@ -199,8 +200,17 @@ def nuevo_producto():
     except:
         stock_min = 0
 
+    try:
+        costo_unitario = float(costo_raw) if costo_raw else None
+        if costo_unitario is not None and costo_unitario < 0:
+            raise ValueError
+    except ValueError:
+        flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+        return redirect(url_for('admin.productos'))
+
     prod = Producto(nombre=nombre, unidad_medida=unidad,
-                    categoria_id=cat_id, stock_minimo=stock_min)
+                    categoria_id=cat_id, stock_minimo=stock_min,
+                    costo_unitario=costo_unitario)
     db.session.add(prod)
     db.session.commit()
     flash(f'Producto "{nombre}" creado.', 'success')
@@ -216,8 +226,15 @@ def editar_producto(id):
     prod.categoria_id = request.form.get('categoria_id') or None
     try: prod.stock_minimo = float(request.form.get('stock_minimo', 0))
     except: pass
-    try: prod.precio_unitario = float(request.form.get('precio_unitario', 0) or 0)
-    except: pass
+    costo_raw = request.form.get('costo_unitario', '').strip()
+    try:
+        costo = float(costo_raw) if costo_raw else None
+        if costo is not None and costo < 0:
+            raise ValueError
+        prod.costo_unitario = costo
+    except ValueError:
+        flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+        return redirect(url_for('admin.productos'))
     prod.activo = request.form.get('activo', 'on') == 'on'
     db.session.commit()
     flash(f'Producto "{prod.nombre}" actualizado.', 'success')
