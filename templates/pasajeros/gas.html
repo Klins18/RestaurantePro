@@ -13,7 +13,7 @@
 {% block content %}
 
 <!-- Métricas -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+<div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;">
     <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
         <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:3px;">En uso</p>
         <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ en_uso|length }}</p>

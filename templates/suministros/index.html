@@ -29,7 +29,7 @@
         <a href="{{ url_for('suministros.detalle', pid=p.id) }}" class="btn-secondary btn-sm">📋 Ver historial</a>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid #f1f5f9;">
+    <div class="mobile-stack" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-bottom:1px solid #f1f5f9;">
         <!-- Acumulado sin pagar -->
         <div style="padding:14px 18px;border-right:1px solid #f1f5f9;">
             <p style="font-size:0.68rem;font-weight:700;color:#d97706;text-transform:uppercase;margin-bottom:4px;">⏳ Pendiente de pago</p>

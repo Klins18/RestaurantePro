@@ -27,7 +27,7 @@
 </div>
 
 {% if producto_sel and registros %}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+<div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;">
     {% set ultimo = registros[-1] %}
     {% set total_ingresos = registros|selectattr('tipo','equalto','ingreso')|list %}
     {% set total_ventas = registros|selectattr('tipo','equalto','venta')|list %}

@@ -27,7 +27,7 @@
 </div>
 
 {% if producto_sel and registros %}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+<div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;">
     {% set ultimo = registros[-1] %}
     <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Stock Actual</p><p style="font-size:1.8rem;font-weight:700;color:#1e293b;">{{ ultimo.cant_saldo|round(2) }}</p><p style="font-size:0.78rem;color:#94a3b8;">{{ producto_sel.unidad_medida }}</p></div>
     <div class="card" style="padding:16px;"><p style="font-size:0.75rem;color:#64748b;">Precio Promedio</p><p style="font-size:1.8rem;font-weight:700;color:#f59e0b;">S/.{{ '%.4f'|format(ultimo.precio_saldo) }}</p><p style="font-size:0.78rem;color:#94a3b8;">por unidad</p></div>

@@ -7,12 +7,12 @@
 {% block content %}
 <!-- Filtro de fechas -->
 <div class="card" style="margin-bottom:18px;">
-    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+    <form method="GET" id="ventas-filter-form" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
         <div><label class="label">Desde</label><input type="date" name="desde" value="{{ desde }}" class="input" style="width:150px;"></div>
         <div><label class="label">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" class="input" style="width:150px;"></div>
         <button type="submit" class="btn-primary">🔍 Filtrar</button>
         <a href="{{ url_for('ventas.index') }}" class="btn-secondary">Hoy</a>
-        <div style="margin-left:auto;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:12px;padding:10px 20px;color:white;">
+        <div id="ventas-filter-total" style="margin-left:auto;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:12px;padding:10px 20px;color:white;">
             <p style="font-size:0.75rem;opacity:0.85;">Total del período</p>
             <p style="font-size:1.6rem;font-weight:700;">S/.{{ '%.2f'|format(total_periodo) }}</p>
         </div>
@@ -33,7 +33,7 @@
 </div>
 
 <!-- Gráficos -->
-<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:20px;">
+<div class="ventas-charts-grid" style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:20px;">
     <!-- Línea: ventas diarias -->
     <div class="card">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;">📈 Ventas Diarias (S/.)</h3>
@@ -56,7 +56,7 @@
 </div>
 
 <!-- Top productos + tabla de ventas -->
-<div style="display:grid;grid-template-columns:320px 1fr;gap:18px;">
+<div class="ventas-detail-grid" style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;">
     <!-- Top productos -->
     <div class="card">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">🏆 Top Productos</h3>
@@ -82,7 +82,7 @@
             <h3 style="font-weight:700;color:#1e293b;">Ventas del Período</h3>
             <span style="font-size:0.82rem;color:#94a3b8;">{{ ventas|length }} registros</span>
         </div>
-        <div style="max-height:520px;overflow-y:auto;">
+        <div id="ventas-rows" style="max-height:520px;overflow-y:auto;">
         {% for v in ventas %}
         {% set es_hoy = (v.fecha == hoy) %}
         {% set tiene_cierre = cierre_hoy and es_hoy %}
@@ -221,4 +221,24 @@ new Chart(ctxEmpresa, {
     }
 });
 </script>
+<style>
+@media (max-width: 768px) {
+    .ventas-charts-grid,
+    .ventas-detail-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+    .ventas-charts-grid > *,
+    .ventas-detail-grid > * {
+        min-width: 0;
+    }
+    #ventas-filter-total {
+        flex: 1 0 100%;
+        margin-left: 0 !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+}
+</style>
 {% endblock %}

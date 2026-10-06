@@ -5,7 +5,7 @@
 {% block header_actions %}<a href="{{ url_for('compras.index') }}" class="btn-secondary">← Volver</a>{% endblock %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:300px 1fr;gap:20px;">
+<div class="mobile-stack" style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;">
     <!-- Info lateral -->
     <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card">
@@ -60,7 +60,7 @@
             <p style="font-size:0.7rem;color:#64748b;text-transform:uppercase;">DETALLE DE COMPRA</p>
             <p style="font-weight:700;font-size:1rem;margin-top:2px;">{{ compra.proveedor.nombre if compra.proveedor else compra.proveedor_nombre or 'Sin proveedor' }}</p>
         </div>
-        <table style="width:100%;border-collapse:collapse;">
+        <div class="table-wrap"><table style="width:100%;border-collapse:collapse;min-width:680px;">
             <thead>
                 <tr>
                     <th class="th">#</th>
@@ -89,7 +89,7 @@
                     <td style="padding:12px 16px;text-align:right;font-weight:700;font-size:1.1rem;color:#166534;">S/.{{ '%.2f'|format(compra.total) }}</td>
                 </tr>
             </tfoot>
-        </table>
+        </table></div>
         {% if compra.observaciones %}
         <div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #f1f5f9;">
             <p style="font-size:0.78rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Observaciones</p>

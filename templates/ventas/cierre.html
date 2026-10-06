@@ -4,7 +4,7 @@
 {% block page_subtitle %}Resumen de medios de pago del día{% endblock %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:1fr 340px;gap:16px;" id="cierre-grid">
+<div class="mobile-stack" style="display:grid;grid-template-columns:1fr 340px;gap:16px;" id="cierre-grid">
 
 <!-- VENTAS DEL DÍA -->
 <div>
@@ -165,7 +165,7 @@
 </div>
 
 <style>
-@media(max-width:768px){ .cierre-grid{grid-template-columns:1fr!important;} }
+@media(max-width:768px){ #cierre-grid{grid-template-columns:minmax(0,1fr)!important;} }
 </style>
 {% block scripts %}
 <script>

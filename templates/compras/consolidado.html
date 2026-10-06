@@ -22,7 +22,7 @@
 </div>
 
 <!-- Tarjetas resumen -->
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px;">
+<div class="mobile-stack" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px;">
     <div class="card" style="padding:16px;border-left:4px solid #dc2626;">
         <p style="font-size:0.68rem;font-weight:700;color:#dc2626;text-transform:uppercase;margin-bottom:4px;">Total gastado</p>
         <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">S/.{{ "%.2f"|format(total_periodo) }}</p>
@@ -45,7 +45,7 @@
 </div>
 
 <!-- Gráfico + Top proveedores -->
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:18px;">
+<div class="mobile-stack" style="display:grid;grid-template-columns:2fr minmax(0,1fr);gap:14px;margin-bottom:18px;">
 
     <div class="card" style="padding:0;overflow:hidden;">
         <div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;">

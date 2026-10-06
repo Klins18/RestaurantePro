@@ -31,7 +31,7 @@
 </div>
 
 <!-- Tarjetas resumen por mes -->
-<div style="display:grid;grid-template-columns:repeat({{ meses_sel|length }},1fr);gap:12px;margin-bottom:18px;">
+<div class="mobile-two-col" style="display:grid;grid-template-columns:repeat({{ meses_sel|length }},minmax(0,1fr));gap:12px;margin-bottom:18px;">
     {% for mes in meses_sel %}
     {% set info = datos_mes[mes] %}
     <div class="card" style="padding:14px 16px;border-top:4px solid
