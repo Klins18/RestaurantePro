@@ -1,17 +1,61 @@
 import os
-import shutil
+import secrets
+import hmac
 from datetime import datetime
-from flask import Flask
+from flask import Flask, abort, request, session
 from flask_login import LoginManager
+from flask_migrate import Migrate
 from config import Config
 from models import db, Usuario, Categoria, registrar_auditoria
 import pytz
 
-def create_app():
+def create_app(test_config=None):
     app = Flask(__name__)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
+
+    clave = app.config.get('SECRET_KEY')
+    if not clave or len(clave) < 32 or clave in {
+        'dev-secret-key-change-in-production',
+        'tu-clave-super-secreta-cambiar-esto',
+    }:
+        raise RuntimeError('Configura una SECRET_KEY aleatoria de al menos 32 caracteres antes de iniciar la aplicación.')
 
     db.init_app(app)
+    Migrate(app, db)
+
+    @app.before_request
+    def protect_state_changes():
+        if request.path.startswith('/static/uploads/'):
+            abort(404)
+        if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+            sent = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+            expected = session.get('_csrf_token')
+            if not sent or not expected or not hmac.compare_digest(str(sent), str(expected)):
+                abort(400, description='Token de seguridad inválido o vencido. Recarga la página e inténtalo de nuevo.')
+
+    @app.context_processor
+    def inject_csrf_token():
+        def csrf_token():
+            token = session.get('_csrf_token')
+            if not token:
+                token = secrets.token_urlsafe(32)
+                session['_csrf_token'] = token
+            return token
+        return {'csrf_token': csrf_token}
+
+    @app.context_processor
+    def inject_permission_check():
+        from routes.decorators import tiene_permiso
+        return {'tiene_permiso': tiene_permiso}
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+        response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        return response
 
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'
@@ -21,7 +65,8 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(Usuario, int(user_id))
+        usuario = db.session.get(Usuario, int(user_id))
+        return usuario if usuario and usuario.activo else None
 
     # Blueprints
     from routes.auth import auth_bp
@@ -36,6 +81,7 @@ def create_app():
     from routes.bienes import bienes_bp
     from routes.pasajeros import pasajeros_bp
     from routes.suministros import suministros_bp
+    from routes.operaciones import operaciones_bp
     from routes.reportes import reportes_bp
 
     app.register_blueprint(auth_bp)
@@ -50,6 +96,7 @@ def create_app():
     app.register_blueprint(bienes_bp)
     app.register_blueprint(pasajeros_bp)
     app.register_blueprint(suministros_bp)
+    app.register_blueprint(operaciones_bp)
     app.register_blueprint(reportes_bp)
 
     # Context processor: notificaciones no leídas para el sidebar
@@ -84,6 +131,10 @@ def create_app():
 def init_db(app):
     with app.app_context():
         db.create_all()
+        # create_all no altera índices en tablas existentes: materialízalos tras actualizar el modelo.
+        for tabla in db.metadata.sorted_tables:
+            for indice in tabla.indexes:
+                indice.create(bind=db.engine, checkfirst=True)
 
         # Añade el costo opcional a inventarios físicos ya existentes.
         from sqlalchemy import inspect
@@ -124,16 +175,22 @@ def init_db(app):
         db.session.commit()
 
         # Admin
-        admin = Usuario.query.filter_by(username=app.config['ADMIN_USERNAME']).first()
+        admin_username = app.config.get('ADMIN_USERNAME')
+        admin_password = app.config.get('ADMIN_PASSWORD')
+        if not admin_username:
+            raise RuntimeError('Define ADMIN_USERNAME antes de inicializar la base.')
+        admin = Usuario.query.filter_by(username=admin_username).first()
         if not admin:
+            if not admin_password or len(admin_password) < 8:
+                raise RuntimeError('Para crear el primer administrador, define ADMIN_PASSWORD con al menos 8 caracteres.')
             admin = Usuario(
-                username=app.config['ADMIN_USERNAME'],
+                username=admin_username,
                 nombre_completo='Administrador',
                 rol='administrador', activo=True
             )
-            admin.set_password(app.config['ADMIN_PASSWORD'])
+            admin.set_password(admin_password)
             db.session.add(admin)
-            print(f"✅ Usuario admin creado: {app.config['ADMIN_USERNAME']}")
+            print(f"Usuario administrador creado: {admin_username}")
 
         # Categorías almacén
         for nombre in ['Verdura Fresca','Frutas / Bombonera','Carnes',
@@ -211,24 +268,45 @@ def init_db(app):
             from routes.bienes import seed_bienes
             seed_bienes()
         except Exception as e:
+            db.session.rollback()
             print(f"  Aviso seed bienes: {e}")
 
-        print("✅ Base de datos inicializada.")
+        print("Base de datos inicializada.")
 
 
 def hacer_backup(app):
-    db_path = 'restaurante_pro.db'
-    if not os.path.exists(db_path):
-        return
-    os.makedirs('backups', exist_ok=True)
-    peru_tz = pytz.timezone('America/Lima')
-    ahora = datetime.now(peru_tz)
-    backup_name = f"backups/restaurante_pro_{ahora.strftime('%Y%m%d_%H%M%S')}.db"
-    shutil.copy2(db_path, backup_name)
-    backups = sorted([f for f in os.listdir('backups') if f.endswith('.db')])
-    while len(backups) > 10:
-        os.remove(os.path.join('backups', backups.pop(0)))
-    print(f"✅ Backup: {backup_name}")
+    from sqlalchemy.engine import make_url
+    with app.app_context():
+        url = make_url(db.engine.url)
+        if not url.drivername.startswith('sqlite') or url.database in (None, ':memory:'):
+            app.logger.warning('Backup local omitido: la base configurada no es un archivo SQLite.')
+            return None
+        db_path = os.path.abspath(url.database)
+        if not os.path.isfile(db_path):
+            app.logger.warning('No existe el archivo de base de datos para respaldar: %s', db_path)
+            return None
+        backup_dir = os.path.join(app.instance_path, 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        ahora = datetime.now(pytz.timezone('America/Lima'))
+        backup_name = os.path.join(backup_dir, f"restaurante_pro_{ahora.strftime('%Y%m%d_%H%M%S_%f')}.db")
+        source = db.engine.raw_connection()
+        target = None
+        try:
+            import sqlite3
+            target = sqlite3.connect(backup_name)
+            source.backup(target)
+        finally:
+            if target is not None:
+                target.close()
+            source.close()
+        backups = sorted(
+            os.path.join(backup_dir, name) for name in os.listdir(backup_dir)
+            if name.endswith('.db')
+        )
+        while len(backups) > 10:
+            os.remove(backups.pop(0))
+        app.logger.info('Backup SQLite creado: %s', backup_name)
+        return backup_name
 
 
 app = create_app()
@@ -242,11 +320,11 @@ if __name__ == '__main__':
     port = app.config['FLASK_PORT']
 
     print("\n" + "="*55)
-    print("🍽️  RESTOPRO v2.0")
+    print("RESTOPRO v2.0")
     print("="*55)
-    print(f"📍 Local:     http://localhost:{port}")
-    print(f"📡 Red WiFi:  http://<TU_IP>:{port}")
-    print(f"👤 Admin:     {app.config['ADMIN_USERNAME']}")
+    print(f"Local:       http://localhost:{port}")
+    print(f"Red WiFi:    http://<TU_IP>:{port}")
+    print(f"Admin:       {app.config['ADMIN_USERNAME']}")
     print("="*55 + "\n")
 
     app.run(host=host, port=port, debug=False)

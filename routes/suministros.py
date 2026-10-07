@@ -1,15 +1,18 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
+import uuid
+import math
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, current_app
 from flask_login import login_required, current_user
 from routes.decorators import permiso_required
 from models import db, ProductoRecurrente, EntregaDiaria, PagoProveedor, registrar_auditoria
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename
 import pytz
+from services.units import normalize_unit
 
 suministros_bp = Blueprint('suministros', __name__, url_prefix='/suministros')
 PERU_TZ = pytz.timezone('America/Lima')
-UPLOAD_FOLDER = 'static/uploads/vouchers'
+UPLOAD_FOLDER = 'uploads/vouchers'
 ALLOWED = {'pdf', 'png', 'jpg', 'jpeg', 'webp'}
 
 def now_peru():
@@ -19,10 +22,10 @@ def guardar_voucher(file):
     if file and file.filename and '.' in file.filename:
         ext = file.filename.rsplit('.', 1)[1].lower()
         if ext in ALLOWED:
-            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S_')
-            filename = ts + secure_filename(file.filename)
-            file.save(os.path.join(UPLOAD_FOLDER, filename))
+            folder = os.path.join(current_app.instance_path, UPLOAD_FOLDER)
+            os.makedirs(folder, exist_ok=True)
+            filename = f'{uuid.uuid4().hex}.{ext}'
+            file.save(os.path.join(folder, filename))
             return filename
     return None
 
@@ -35,7 +38,7 @@ def guardar_voucher(file):
 @permiso_required('compras')
 def index():
     productos = ProductoRecurrente.query.filter_by(activo=True).all()
-    hoy = date.today()
+    hoy = now_peru().date()
 
     resumen = []
     for p in productos:
@@ -93,12 +96,19 @@ def nuevo_producto():
         if not nombre:
             flash('El nombre es obligatorio.', 'error')
             return redirect(request.url)
+        try:
+            precio_unitario = float(request.form.get('precio_unitario', 0) or 0)
+            if precio_unitario < 0 or not math.isfinite(precio_unitario):
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            flash('El precio debe ser un monto válido y no negativo.', 'error')
+            return redirect(request.url)
         p = ProductoRecurrente(
             nombre=nombre,
-            unidad=request.form.get('unidad', 'litros'),
+            unidad=normalize_unit(request.form.get('unidad', 'l')),
             proveedor_nombre=request.form.get('proveedor_nombre', '').strip(),
             proveedor_tel=request.form.get('proveedor_tel', '').strip(),
-            precio_unitario=float(request.form.get('precio_unitario', 0) or 0),
+            precio_unitario=precio_unitario,
         )
         db.session.add(p)
         db.session.commit()
@@ -115,14 +125,20 @@ def nuevo_producto():
 @permiso_required('compras')
 def registrar_entrega(pid):
     prod = ProductoRecurrente.query.get_or_404(pid)
-    fecha_str = request.form.get('fecha', date.today().isoformat())
+    fecha_str = request.form.get('fecha', now_peru().date().isoformat())
     try:
         fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
     except:
-        fecha = date.today()
+        fecha = now_peru().date()
 
-    cantidad = float(request.form.get('cantidad', 0) or 0)
-    precio   = float(request.form.get('precio_unitario', prod.precio_unitario) or 0)
+    try:
+        cantidad = float(request.form.get('cantidad', 0) or 0)
+        precio = float(request.form.get('precio_unitario', prod.precio_unitario) or 0)
+        if cantidad <= 0 or precio < 0 or not all(map(math.isfinite, (cantidad, precio))):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('La cantidad debe ser mayor que cero y el precio válido y no negativo.', 'error')
+        return redirect(url_for('suministros.detalle', pid=pid))
 
     existente = EntregaDiaria.query.filter_by(producto_id=pid, fecha=fecha).first()
     if existente:
@@ -152,7 +168,7 @@ def registrar_entrega(pid):
 @permiso_required('compras')
 def detalle(pid):
     prod = ProductoRecurrente.query.get_or_404(pid)
-    hoy = date.today()
+    hoy = now_peru().date()
 
     # Rango a mostrar (por defecto mes actual)
     desde_str = request.args.get('desde', hoy.replace(day=1).isoformat())
@@ -230,6 +246,9 @@ def registrar_pago(pid):
     except:
         flash('Fechas de período inválidas.', 'error')
         return redirect(url_for('suministros.detalle', pid=pid))
+    if desde > hasta:
+        flash('La fecha inicial no puede ser posterior a la fecha final.', 'error')
+        return redirect(url_for('suministros.detalle', pid=pid))
 
     # Calcular acumulado del período
     acum = db.session.query(
@@ -242,12 +261,18 @@ def registrar_pago(pid):
     ).first()
     cant_total = round(acum[0] or 0, 2)
     monto_total = round(acum[1] or 0, 2)
-    monto_pagado = float(request.form.get('monto_pagado', monto_total) or monto_total)
+    try:
+        monto_pagado = float(request.form.get('monto_pagado', monto_total) or monto_total)
+        if monto_pagado < 0 or not math.isfinite(monto_pagado):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('El monto pagado debe ser válido y no negativo.', 'error')
+        return redirect(url_for('suministros.detalle', pid=pid))
     fecha_pago_str = request.form.get('fecha_pago', '')
     try:
         fecha_pago = datetime.strptime(fecha_pago_str, '%Y-%m-%d').date()
     except:
-        fecha_pago = date.today()
+        fecha_pago = now_peru().date()
 
     pago = PagoProveedor(
         producto_id=pid,
@@ -279,5 +304,10 @@ def registrar_pago(pid):
 # ────────────────────────────────────────
 @suministros_bp.route('/voucher/<filename>')
 @login_required
+@permiso_required('compras')
 def voucher(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    safe_name = secure_filename(filename)
+    private_folder = os.path.join(current_app.instance_path, UPLOAD_FOLDER)
+    legacy_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'vouchers')
+    folder = private_folder if os.path.isfile(os.path.join(private_folder, safe_name)) else legacy_folder
+    return send_from_directory(folder, safe_name, as_attachment=True)

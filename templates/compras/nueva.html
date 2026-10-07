@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% block title %}Nueva Compra{% endblock %}
 {% block page_title %}Registrar Nueva Compra{% endblock %}
-{% block page_subtitle %}Con comprobante, tipo de pago y detalle de productos{% endblock %}
+{% block page_subtitle %}Registra el comprobante. Vincula al inventario solo lo que todavía no ingresó por una recepción de pedido.{% endblock %}
 
 {% block content %}
 <form method="POST" action="{{ url_for('compras.nueva') }}" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="mobile-stack" style="display:grid;grid-template-columns:1fr 1.7fr;gap:20px;">
 
     <!-- Panel izquierdo -->
@@ -16,13 +17,13 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <div><label class="label">Fecha *</label><input type="date" name="fecha" class="input" value="{{ hoy }}" required></div>
                 <div>
-                    <label class="label">Proveedor (en lista)</label>
+                    <label class="label">Proveedor registrado</label>
                     <select name="proveedor_id" class="input" id="sel-proveedor" onchange="autoProveedor(this)">
-                        <option value="">— Seleccionar o escribir abajo —</option>
+                        <option value="">— Elige uno o escribe un proveedor nuevo abajo —</option>
                         {% for p in proveedores %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
                     </select>
                 </div>
-                <div><label class="label">Proveedor (nombre libre)</label><input type="text" name="proveedor_nombre" id="input-proveedor" class="input" placeholder="Si no está en la lista..."></div>
+                <div><label class="label">Nombre del proveedor</label><input type="text" name="proveedor_nombre" id="input-proveedor" class="input" placeholder="Obligatorio si no eliges un proveedor registrado"></div>
                 <div>
                     <label class="label">Observaciones</label>
                     <textarea name="observaciones" class="input" rows="2" placeholder="Notas..."></textarea>
@@ -92,7 +93,7 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
                         <label class="label" style="margin:0;">IGV (18%)</label>
-                        <label style="font-size:0.75rem;color:#94a3b8;"><input type="checkbox" id="chk-igv" onchange="calcularTotales()"> Incluye IGV</label>
+                    <label style="font-size:0.75rem;color:#64748b;"><input type="checkbox" id="chk-igv" onchange="calcularTotales()"> Los precios de los artículos ya incluyen IGV</label>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span style="color:#64748b;font-size:0.875rem;">S/.</span>
@@ -120,9 +121,12 @@
                 <p style="font-weight:700;">📦 Detalle de Productos Comprados</p>
                 <button type="button" onclick="agregarItem()" class="btn-primary" style="padding:7px 14px;font-size:0.82rem;">+ Agregar ítem</button>
             </div>
+            <div style="padding:9px 14px;background:#fffbeb;color:#92400e;font-size:.78rem;border-bottom:1px solid #fde68a;">
+                Si ya recibiste estos productos desde una <strong>lista de pedido</strong>, esa recepción ingresó el stock: deja el vínculo como <strong>No afecta existencias</strong> para no contarlo dos veces.
+            </div>
             <div style="overflow-x:auto;">
             <div style="min-width:600px;padding:12px 16px;background:#f8fafc;display:grid;grid-template-columns:1fr 80px 80px 90px 90px 36px;gap:8px;">
-                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Descripción</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Artículo / vínculo con inventario</span>
                 <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Cant.</span>
                 <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;">Unidad</span>
                 <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;text-align:right;">P.Unit.</span>
@@ -131,11 +135,9 @@
             </div>
             <div id="items-container" style="padding:8px 16px;min-width:600px;min-height:200px;">
                 <div id="msg-vacio" style="text-align:center;padding:40px;color:#94a3b8;font-size:0.875rem;">
-                    Haz clic en "+ Agregar ítem" para comenzar
+                    Agrega los artículos de la compra. Vincula con inventario solo lo que deba aumentar existencias.
                 </div>
             </div>
-            <!-- Vincular a producto de almacén (oculto) -->
-            <div id="items-prod-links" style="display:none;"></div>
             </div>
         </div>
     </div>
@@ -147,15 +149,30 @@
 <script type="application/json" id="productos-data">
 {{ productos_json | tojson | safe }}
 </script>
+<datalist id="unidades-comunes">
+    {% for unidad in unidad_options %}<option value="{{ unidad.value }}" label="{{ unidad.label }}">{% endfor %}
+</datalist>
 <script>
 const productosAlmacen = JSON.parse(document.getElementById('productos-data').textContent)
-    .map(p => ({id: p.id, nombre: p.nombre, unidad: p.unidad_medida}));
+    .map(p => ({id: p.id, nombre: p.nombre, unidad: p.unidad, categoria: p.categoria, stock: p.stock}));
 
 let itemCount = 0;
 
 function autoProveedor(sel) {
     const opt = sel.options[sel.selectedIndex];
-    if (opt.value) document.getElementById('input-proveedor').value = opt.text;
+    document.getElementById('input-proveedor').value = opt.value ? opt.text : '';
+}
+
+document.getElementById('input-proveedor').addEventListener('input', function() {
+    const select = document.getElementById('sel-proveedor');
+    const opcion = select.options[select.selectedIndex];
+    if (select.value && this.value.trim() !== opcion.text.trim()) select.value = '';
+});
+
+function escaparHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[ch]));
 }
 
 function mostrarArchivo(input) {
@@ -168,28 +185,29 @@ function agregarItem() {
     const id = 'item_' + itemCount;
     document.getElementById('msg-vacio').style.display = 'none';
 
-    const optsProductos = '<option value="">— sin vincular —</option>' +
-        productosAlmacen.map(p => `<option value="${p.id}" data-unidad="${p.unidad}">${p.nombre}</option>`).join('');
+    const optsProductos = '<option value="">No afecta existencias (ya ingresó o no se controla)</option>' +
+        productosAlmacen.map(p => `<option value="${p.id}">${escaparHtml(p.nombre)} · ${escaparHtml(p.categoria)} · stock ${escaparHtml(p.stock)} ${escaparHtml(p.unidad)}</option>`).join('');
 
     const div = document.createElement('div');
     div.id = id;
     div.style.cssText = 'min-width:568px;display:grid;grid-template-columns:1fr 80px 80px 90px 90px 36px;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9;align-items:center;';
     div.innerHTML = `
         <div>
-            <input type="text" name="item_desc[]" required placeholder="Descripción del producto..."
+            <input type="text" name="item_desc[]" required placeholder="Nombre del artículo..."
                 style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:0.82rem;width:100%;box-sizing:border-box;"
                 list="lista-productos-${itemCount}">
             <datalist id="lista-productos-${itemCount}">
-                ${productosAlmacen.map(p => `<option value="${p.nombre}">`).join('')}
+                ${productosAlmacen.map(p => `<option value="${escaparHtml(p.nombre)}">`).join('')}
             </datalist>
-            <select name="item_producto_id[]" style="display:none;">
+            <label style="display:block;margin-top:5px;font-size:.68rem;color:#64748b;">¿Esta compra debe aumentar el stock?</label>
+            <select name="item_producto_id[]" aria-label="Vincular artículo con un producto de inventario" style="width:100%;margin-top:3px;border:1px solid #cbd5e1;border-radius:7px;padding:6px;font-size:.76rem;background:white;">
                 ${optsProductos}
             </select>
         </div>
         <input type="number" name="item_cant[]" required min="0.001" step="0.001" value="1" placeholder="0"
             style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;text-align:center;"
             oninput="calcSubtotal('${id}');calcularTotales()">
-        <input type="text" name="item_unidad[]" placeholder="kg,uni..."
+        <input type="text" name="item_unidad[]" placeholder="Ej.: kg, caja" list="unidades-comunes" title="Usa la unidad del producto vinculado; kilo y kilogramo se guardan como kg."
             style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;">
         <input type="number" name="item_precio[]" required min="0" step="0.0001" value="0" placeholder="0.00"
             style="border:1px solid #e2e8f0;border-radius:8px;padding:7px 8px;font-size:0.82rem;width:100%;box-sizing:border-box;text-align:right;"
@@ -200,6 +218,26 @@ function agregarItem() {
             style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px;width:30px;height:30px;font-weight:700;font-size:1rem;cursor:pointer;">×</button>
     `;
     document.getElementById('items-container').appendChild(div);
+
+    const descripcion = div.querySelector('[name="item_desc[]"]');
+    const productoSelect = div.querySelector('[name="item_producto_id[]"]');
+    const unidad = div.querySelector('[name="item_unidad[]"]');
+    const sincronizarUnidad = producto => {
+        unidad.readOnly = Boolean(producto);
+        if (producto) unidad.value = producto.unidad || '';
+    };
+    productoSelect.addEventListener('change', () => {
+        const p = productosAlmacen.find(item => String(item.id) === productoSelect.value);
+        if (p) {
+            descripcion.value = p.nombre;
+        }
+        sincronizarUnidad(p);
+    });
+    descripcion.addEventListener('input', () => {
+        const match = productosAlmacen.find(item => item.nombre.trim().toLocaleLowerCase() === descripcion.value.trim().toLocaleLowerCase());
+        productoSelect.value = match ? String(match.id) : '';
+        sincronizarUnidad(match);
+    });
 }
 
 function calcSubtotal(id) {

@@ -35,7 +35,7 @@ def almacen():
     producto_sel = None
 
     if producto_id:
-        producto_sel = Producto.query.get(producto_id)
+        producto_sel = db.session.get(Producto, producto_id)
         q = KardexAlmacen.query.filter_by(producto_id=producto_id)
         if fecha_desde:
             try:

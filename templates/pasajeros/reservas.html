@@ -44,6 +44,7 @@
                 style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#1d4ed8;">💳 Pago</button>
             {% if r.estado == 'pendiente' %}
             <form method="POST" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="accion" value="completar">
                 <input type="hidden" name="reserva_id" value="{{ r.id }}">
                 <button type="submit" style="background:#dcfce7;color:#166534;border:none;border-radius:8px;padding:5px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;">✓ Atendido</button>
@@ -116,6 +117,7 @@
                     <button onclick="abrirPago({{ r.id }}, {{ r.num_pax or 0 }}, {{ r.precio_buffet or 0 }}, {{ r.monto_anticipado or 0 }}, '{{ r.tipo_pago or '' }}')"
                         style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">💳 Pago</button>
                     <form method="POST" style="margin:0;" onsubmit="return confirm('¿Cancelar esta reserva?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="accion" value="cancelar">
                         <input type="hidden" name="reserva_id" value="{{ r.id }}">
                         <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;width:100%;">✕ Cancelar</button>
@@ -182,6 +184,7 @@
     <div class="card" style="width:460px;max-width:95vw;padding:22px;margin:20px auto;">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;" id="modal-titulo-res">Nueva Reserva</h3>
         <form method="POST" action="{{ url_for('pasajeros.reservas') }}" style="display:flex;flex-direction:column;gap:11px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="accion" id="res-accion" value="nuevo">
             <input type="hidden" name="reserva_id" id="res-id">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -237,6 +240,7 @@
         </div>
         <form method="POST" action="{{ url_for('pasajeros.reservas') }}"
               enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="accion" value="pago">
             <input type="hidden" name="reserva_id" id="pago-id">
             <!-- Resumen -->

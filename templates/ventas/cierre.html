@@ -98,19 +98,44 @@
 
 <!-- FORMULARIO CIERRE -->
 <div>
-    {% if cierre %}
+    {% if cierre and not cierre.abierta %}
     <div style="background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
         <span style="font-size:1.1rem;">✅</span>
         <div>
-            <p style="font-size:0.8rem;font-weight:700;color:#166534;">Cierre registrado</p>
-            <p style="font-size:0.72rem;color:#15803d;">{{ cierre.creado_en.strftime('%H:%M') if cierre.creado_en else '' }} — Puedes actualizarlo.</p>
+            <p style="font-size:0.8rem;font-weight:700;color:#166534;">Caja cerrada</p>
+            <p style="font-size:0.72rem;color:#15803d;">{{ cierre.creado_en.strftime('%H:%M') if cierre.creado_en else '' }} — Total declarado: S/.{{ '%.2f'|format(cierre.total_cobrado or 0) }}</p>
+            {% if cierre.observaciones %}<p style="font-size:0.72rem;color:#15803d;margin-top:3px;">Nota: {{ cierre.observaciones }}</p>{% endif %}
         </div>
     </div>
+    {% elif cierre and cierre.abierta %}
+    <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:12px 14px;margin-bottom:12px;">
+        <p style="font-size:0.82rem;font-weight:800;color:#9a3412;">⚠️ Caja reabierta para correcciones</p>
+        <p style="font-size:0.75rem;color:#9a3412;margin-top:4px;">Motivo: {{ cierre.motivo_reapertura or '—' }}</p>
+        <p style="font-size:0.72rem;color:#9a3412;margin-top:2px;">Reabierta {{ cierre.reabierta_en.strftime('%d/%m/%Y %H:%M') if cierre.reabierta_en else '' }}{% if cierre.reabierta_por %} por {{ cierre.reabierta_por.nombre_completo }}{% endif %}. Registra las ventas pendientes y realiza un nuevo cierre.</p>
+    </div>
+    {% if not current_user.es_admin() %}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin-bottom:12px;color:#1e40af;font-size:.78rem;">La caja está abierta para registrar ventas. Solo Administración puede volver a cerrarla.</div>
+    {% endif %}
     {% endif %}
 
+    {% if cierre and not cierre.abierta and current_user.es_admin() %}
+    <details style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:11px 14px;margin-bottom:12px;">
+        <summary style="cursor:pointer;font-size:.82rem;font-weight:800;color:#9a3412;">Reabrir caja para registrar o corregir ventas</summary>
+        <p style="font-size:.75rem;color:#7c2d12;margin:8px 0;">Las ventas del día volverán a habilitarse. Después deberás revisar los medios de pago y cerrar nuevamente.</p>
+        <form method="POST" action="{{ url_for('ventas.reabrir_cierre', cierre_id=cierre.id) }}" onsubmit="return confirm('¿Reabrir la caja del {{ fecha.strftime('%d/%m/%Y') }}? La acción quedará registrada en auditoría.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="label" for="motivo-reapertura">Motivo (obligatorio)</label>
+            <textarea id="motivo-reapertura" name="motivo" class="input" rows="3" minlength="10" maxlength="500" required placeholder="Ej.: Se cerró por error antes de registrar una venta pendiente."></textarea>
+            <button type="submit" style="width:100%;margin-top:8px;padding:9px;border:0;border-radius:8px;background:#c2410c;color:white;font-weight:700;cursor:pointer;">Reabrir caja</button>
+        </form>
+    </details>
+    {% endif %}
+
+    {% if not cierre or cierre.abierta or current_user.es_admin() %}
     <div class="card">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;font-size:0.92rem;">💰 Medios de Pago</h3>
-        <form method="POST" action="{{ url_for('ventas.cierre') }}" style="display:flex;flex-direction:column;gap:11px;">
+        <form method="POST" action="{{ url_for('ventas.cierre') }}" style="display:flex;flex-direction:column;gap:11px;" onsubmit="return confirmarCierre();">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
 
             {% set fields = [
@@ -126,7 +151,7 @@
                     <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:0.85rem;color:#94a3b8;font-weight:700;">S/.</span>
                     <input type="number" name="{{ fname }}" id="inp-{{ fname }}"
                         value="{{ cierre[fname] if cierre else 0 }}"
-                        min="0" step="0.50"
+                        min="0" step="0.01"
                         style="border:2px solid #e2e8f0;border-radius:9px;padding:8px 10px 8px 36px;font-size:1rem;width:100%;box-sizing:border-box;outline:none;font-weight:700;"
                         onfocus="this.style.borderColor='{{ fcolor }}'"
                         onfocusout="this.style.borderColor='#e2e8f0'"
@@ -151,16 +176,24 @@
             </div>
 
             <div>
-                <label class="label">Observaciones</label>
+                <label class="label">{% if cierre and not cierre.abierta %}Motivo de corrección (obligatorio){% else %}Observaciones{% endif %}</label>
                 <textarea name="observaciones" class="input" rows="2"
-                    placeholder="Notas del cierre...">{{ cierre.observaciones if cierre else '' }}</textarea>
+                    {% if cierre and not cierre.abierta %}required minlength="10" maxlength="500"{% endif %}
+                    placeholder="{% if cierre and not cierre.abierta %}Explica por qué modificas el cierre...{% else %}Notas del cierre...{% endif %}">{% if not cierre or cierre.abierta %}{{ cierre.observaciones if cierre else '' }}{% endif %}</textarea>
             </div>
 
             <button type="submit" class="btn-primary" style="text-align:center;padding:11px;font-size:0.95rem;">
-                {{ '🔄 Actualizar Cierre' if cierre else '✅ Cerrar Caja' }}
+                {% if cierre and cierre.abierta %}🔒 Cerrar Caja Nuevamente{% elif cierre %}🔄 Actualizar Cierre{% else %}✅ Cerrar Caja{% endif %}
             </button>
         </form>
     </div>
+    {% elif cierre %}
+    <div class="card" style="border:1px solid #bbf7d0;background:#f0fdf4;">
+        <p style="font-size:.86rem;font-weight:800;color:#166534;">Cierre final registrado</p>
+        <p style="font-size:.8rem;color:#166534;margin-top:6px;">Efectivo S/.{{ '%.2f'|format(cierre.efectivo or 0) }} · Tarjeta S/.{{ '%.2f'|format(cierre.tarjeta or 0) }} · Yape S/.{{ '%.2f'|format(cierre.yape or 0) }} · Transferencia S/.{{ '%.2f'|format(cierre.transferencia or 0) }}</p>
+        <p style="font-size:.85rem;font-weight:800;color:#166534;margin-top:5px;">Total cobrado: S/.{{ '%.2f'|format(cierre.total_cobrado or 0) }}</p>
+    </div>
+    {% endif %}
 </div>
 </div>
 
@@ -170,6 +203,14 @@
 {% block scripts %}
 <script>
 const TOTAL_VENTAS = {{ total_ventas }};
+const CAJA_REABIERTA = {{ 'true' if cierre and cierre.abierta else 'false' }};
+const CAJA_YA_CERRADA = {{ 'true' if cierre and not cierre.abierta else 'false' }};
+function confirmarCierre() {
+    const totalDeclarado = ['efectivo','tarjeta','yape','transferencia']
+        .reduce((s, campo) => s + (parseFloat(document.getElementById('inp-' + campo).value) || 0), 0);
+    const accion = CAJA_REABIERTA ? 'cerrar nuevamente' : (CAJA_YA_CERRADA ? 'actualizar el cierre' : 'cerrar');
+    return confirm(`Vas a ${accion} la caja del {{ fecha.strftime('%d/%m/%Y') }}.\nVentas registradas: S/.${TOTAL_VENTAS.toFixed(2)}\nTotal declarado por medios de pago: S/.${totalDeclarado.toFixed(2)}\n\nVerifica los importes antes de continuar.`);
+}
 function calcularCierre() {
     const ef = parseFloat(document.getElementById('inp-efectivo').value)||0;
     const ta = parseFloat(document.getElementById('inp-tarjeta').value)||0;

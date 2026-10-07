@@ -44,6 +44,7 @@
                 <p style="font-size:0.78rem;color:#64748b;">Rol: {{ empleado.usuario.rol }} · {% if empleado.usuario.activo %}Activo{% else %}Inactivo{% endif %}</p>
             </div>
             <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="margin-left:auto;" onsubmit="return confirm('¿Desvincular cuenta?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="accion" value="desvincular">
                 <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">Desvincular</button>
             </form>
@@ -52,7 +53,8 @@
         {% if current_user.rol in ['admin','supervisor'] %}
         <p style="font-size:0.78rem;font-weight:600;color:#64748b;margin-bottom:6px;">Cambiar contraseña del empleado:</p>
         <form method="POST" action="{{ url_for('empleados.cambiar_password', id=empleado.id) }}" style="display:flex;gap:8px;">
-            <input type="password" name="nueva_password" class="input" placeholder="Nueva contraseña..." minlength="3" style="flex:1;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="password" name="nueva_password" class="input" placeholder="Nueva contraseña..." minlength="8" style="flex:1;">
             <button type="submit" style="background:#1e293b;color:white;border:none;border-radius:9px;padding:8px 14px;font-size:0.8rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔑 Cambiar</button>
         </form>
         {% endif %}
@@ -61,6 +63,7 @@
         <!-- Vincular existente -->
         <p style="font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:6px;">Vincular cuenta existente:</p>
         <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="display:flex;gap:8px;margin-bottom:14px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="accion" value="vincular">
             <select name="usuario_id" class="input" style="flex:1;">
                 <option value="">— Selecciona usuario —</option>
@@ -73,9 +76,10 @@
         <!-- Crear nueva cuenta -->
         <p style="font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:6px;">O crear cuenta nueva:</p>
         <form method="POST" action="{{ url_for('empleados.vincular_usuario', id=empleado.id) }}" style="display:flex;flex-direction:column;gap:8px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="accion" value="crear">
             <input type="text" name="username" class="input" placeholder="Nombre de usuario..." required>
-            <input type="password" name="password" class="input" placeholder="Contraseña..." required minlength="3">
+            <input type="password" name="password" class="input" placeholder="Contraseña..." required minlength="8">
             <select name="rol" class="input">
                 <option value="empleado">Empleado</option>
                 <option value="supervisor">Supervisor</option>

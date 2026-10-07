@@ -1,8 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 import os
+import uuid
+import math
 from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
-from models import db, RegistroPasajeros, EmpresaTuristica, BalonGas, Reserva, VentaDiaria
+from routes.decorators import permiso_required
+from models import db, RegistroPasajeros, EmpresaTuristica, Reserva, VentaDiaria
 from datetime import date, datetime, timedelta
 import pytz
 
@@ -19,10 +22,11 @@ def guardar_voucher_reserva(file):
     if file and file.filename and '.' in file.filename:
         ext = file.filename.rsplit('.',1)[1].lower()
         if ext in ALLOWED_EXT:
-            os.makedirs(UPLOAD_RESERVAS, exist_ok=True)
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S_')
-            fname = ts + secure_filename(file.filename)
-            file.save(os.path.join(UPLOAD_RESERVAS, fname))
+            from flask import current_app
+            folder = os.path.join(current_app.instance_path, 'uploads', 'reservas')
+            os.makedirs(folder, exist_ok=True)
+            fname = f'{uuid.uuid4().hex}.{ext}'
+            file.save(os.path.join(folder, fname))
             return fname
     return None
 
@@ -32,6 +36,7 @@ def hoy_peru():
 # ─── PASAJEROS ──────────────────────────────────────────────
 @pasajeros_bp.route('/', methods=['GET', 'POST'])
 @login_required
+@permiso_required('reservas')
 def index():
     hoy = hoy_peru()
     fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
@@ -46,8 +51,16 @@ def index():
         if accion == 'nuevo':
             empresa_id    = request.form.get('empresa_id') or None
             nombre_grupo  = request.form.get('nombre_grupo', '').strip()
-            num_pax       = int(request.form.get('num_pax', 0) or 0)
-            precio_buffet = float(request.form.get('precio_buffet', 0) or 0)
+            try:
+                num_pax = int(request.form.get('num_pax', 0) or 0)
+                precio_buffet = float(request.form.get('precio_buffet', 0) or 0)
+                if num_pax < 1 or precio_buffet < 0 or not math.isfinite(precio_buffet):
+                    raise ValueError
+                if empresa_id and not db.session.get(EmpresaTuristica, empresa_id):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                flash('Pasajeros, precio o empresa inválidos.', 'error')
+                return redirect(url_for('pasajeros.index', fecha=fecha_str))
             ruta          = request.form.get('ruta', '').strip()
             obs           = request.form.get('observaciones', '').strip()
             fecha_reg     = request.form.get('fecha', hoy.strftime('%Y-%m-%d'))
@@ -68,12 +81,23 @@ def index():
             flash(f'Registrado: {num_pax} pax.', 'success')
 
         elif accion == 'editar':
-            reg_id = int(request.form.get('reg_id'))
+            try:
+                reg_id = int(request.form.get('reg_id'))
+                num_pax = int(request.form.get('num_pax', 0) or 0)
+                precio_buffet = float(request.form.get('precio_buffet', 0) or 0)
+                empresa_id = request.form.get('empresa_id') or None
+                if num_pax < 1 or precio_buffet < 0 or not math.isfinite(precio_buffet):
+                    raise ValueError
+                if empresa_id and not db.session.get(EmpresaTuristica, empresa_id):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                flash('Pasajeros, precio o empresa inválidos.', 'error')
+                return redirect(url_for('pasajeros.index', fecha=fecha_str))
             reg = RegistroPasajeros.query.get_or_404(reg_id)
-            reg.empresa_id    = request.form.get('empresa_id') or None
+            reg.empresa_id    = empresa_id
             reg.nombre_grupo  = request.form.get('nombre_grupo', '').strip()
-            reg.num_pax       = int(request.form.get('num_pax', 0) or 0)
-            reg.precio_buffet = float(request.form.get('precio_buffet', 0) or 0)
+            reg.num_pax       = num_pax
+            reg.precio_buffet = precio_buffet
             reg.ruta          = request.form.get('ruta', '').strip()
             reg.observaciones = request.form.get('observaciones', '').strip()
             db.session.commit()
@@ -84,6 +108,8 @@ def index():
             db.session.delete(reg)
             db.session.commit()
             flash('Registro eliminado.', 'success')
+        else:
+            flash('Acción de pasajeros inválida.', 'error')
 
         return redirect(url_for('pasajeros.index', fecha=fecha_str))
 
@@ -97,9 +123,8 @@ def index():
         key = r.empresa.nombre if r.empresa else (r.nombre_grupo or 'Privado')
         color = r.empresa.color if r.empresa else '#10b981'
         if key not in resumen:
-            resumen[key] = {'pax': 0, 'color': color, 'ingresos': 0}
+            resumen[key] = {'pax': 0, 'color': color}
         resumen[key]['pax'] += r.num_pax or 0
-        resumen[key]['ingresos'] += (r.num_pax or 0) * (r.precio_buffet or 0)
         total_pax += r.num_pax or 0
 
     return render_template('pasajeros/index.html',
@@ -107,184 +132,18 @@ def index():
         fecha=fecha, hoy=hoy, resumen=resumen, total_pax=total_pax)
 
 
-# ─── BALONES DE GAS ─────────────────────────────────────────
+# Compatibilidad con enlaces guardados anteriores.
 @pasajeros_bp.route('/gas', methods=['GET', 'POST'])
 @login_required
-def gas():
-    if request.method == 'POST':
-        accion = request.form.get('accion', 'nuevo')
-
-        if accion == 'nuevo':
-            def parse_date(s):
-                try: return datetime.strptime(s, '%Y-%m-%d').date()
-                except: return None
-            cantidad      = max(1, int(request.form.get('cantidad', 1) or 1))
-            precio_unit   = float(request.form.get('precio_unitario', 0) or 0)
-            peso          = float(request.form.get('peso_kg', 10) or 10)
-            estado_ini    = request.form.get('estado', 'disponible')
-            fecha_c       = parse_date(request.form.get('fecha_compra')) or date.today()
-            fecha_ini     = parse_date(request.form.get('fecha_inicio'))
-            proveedor     = request.form.get('proveedor', '').strip()
-            obs           = request.form.get('observaciones', '').strip()
-            for _ in range(cantidad):
-                b = BalonGas(
-                    fecha_compra  = fecha_c,
-                    fecha_inicio  = fecha_ini,
-                    proveedor     = proveedor,
-                    precio        = precio_unit,
-                    peso_kg       = peso,
-                    estado        = estado_ini,
-                    observaciones = obs,
-                    usuario_id    = current_user.id,
-                    creado_en     = now_peru()
-                )
-                db.session.add(b)
-            db.session.commit()
-            total = round(cantidad * precio_unit, 2)
-            flash(f'{cantidad} balón(es) registrado(s). Total: S/.{total:.2f}', 'success')
-
-        elif accion == 'usar':
-            b = BalonGas.query.get_or_404(int(request.form.get('balon_id')))
-            b.estado       = 'en_uso'
-            b.fecha_inicio = date.today()
-            db.session.commit()
-            flash('Balón marcado como en uso.', 'success')
-
-        elif accion == 'agotar':
-            b = BalonGas.query.get_or_404(int(request.form.get('balon_id')))
-            b.estado   = 'agotado'
-            b.fecha_fin = date.today()
-            if b.fecha_inicio:
-                b.dias_uso = (b.fecha_fin - b.fecha_inicio).days or 1
-            db.session.commit()
-            flash(f'Balón cerrado. Duró {b.dias_uso or "?"} días.', 'success')
-
-        elif accion == 'editar':
-            def parse_date2(s):
-                try: return datetime.strptime(s, '%Y-%m-%d').date()
-                except: return None
-            b = BalonGas.query.get_or_404(int(request.form.get('balon_id')))
-            b.fecha_compra  = parse_date2(request.form.get('fecha_compra')) or b.fecha_compra
-            b.proveedor     = request.form.get('proveedor', '').strip()
-            b.precio        = float(request.form.get('precio_unitario', 0) or 0)
-            b.peso_kg       = float(request.form.get('peso_kg', 10) or 10)
-            b.observaciones = request.form.get('observaciones', '').strip()
-            db.session.commit()
-            flash('Balón actualizado.', 'success')
-
-        return redirect(url_for('pasajeros.gas'))
-
-    # Exportar a Excel (.xlsx)
-    if request.args.get('export') == 'excel':
-        import io
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from flask import make_response
-
-        balones_exp = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
-        wb = Workbook()
-        ws = wb.active
-        ws.title = 'Balones de Gas'
-
-        # Estilos
-        hdr_font  = Font(bold=True, color='FFFFFF', size=11)
-        hdr_fill  = PatternFill('solid', fgColor='1E293B')
-        hdr_align = Alignment(horizontal='center', vertical='center')
-        thin = Side(style='thin', color='D1D5DB')
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        headers = ['Fecha Compra', 'Peso (kg)', 'Precio Unit. S/.', 'Total S/.',
-                   'Proveedor', 'Inicio Uso', 'Fin Uso', 'Días Uso', 'Estado', 'Observaciones']
-        col_widths = [14, 10, 14, 12, 22, 12, 12, 10, 12, 30]
-
-        # Título
-        ws.merge_cells('A1:J1')
-        ws['A1'] = 'REGISTRO DE BALONES DE GAS — Restaurante Turístico Marangani'
-        ws['A1'].font = Font(bold=True, size=13, color='1E293B')
-        ws['A1'].alignment = Alignment(horizontal='center')
-        ws.row_dimensions[1].height = 28
-
-        # Cabecera
-        for col, (h, w) in enumerate(zip(headers, col_widths), 1):
-            cell = ws.cell(row=2, column=col, value=h)
-            cell.font = hdr_font
-            cell.fill = hdr_fill
-            cell.alignment = hdr_align
-            cell.border = border
-            ws.column_dimensions[cell.column_letter].width = w
-        ws.row_dimensions[2].height = 20
-
-        # Datos
-        estado_labels = {'disponible': 'Disponible', 'en_uso': 'En uso', 'agotado': 'Agotado'}
-        fill_uso  = PatternFill('solid', fgColor='FEF3C7')
-        fill_disp = PatternFill('solid', fgColor='DBEAFE')
-        fill_agot = PatternFill('solid', fgColor='F1F5F9')
-
-        for row_idx, b in enumerate(balones_exp, 3):
-            total = round((b.precio or 0), 2)
-            valores = [
-                b.fecha_compra.strftime('%d/%m/%Y'),
-                b.peso_kg,
-                round(b.precio, 2) if b.precio else 0,
-                total,
-                b.proveedor or '',
-                b.fecha_inicio.strftime('%d/%m/%Y') if b.fecha_inicio else '',
-                b.fecha_fin.strftime('%d/%m/%Y') if b.fecha_fin else '',
-                b.dias_uso or '',
-                estado_labels.get(b.estado, b.estado),
-                b.observaciones or ''
-            ]
-            fill_row = fill_uso if b.estado == 'en_uso' else (fill_disp if b.estado == 'disponible' else fill_agot)
-            for col, val in enumerate(valores, 1):
-                cell = ws.cell(row=row_idx, column=col, value=val)
-                cell.border = border
-                cell.alignment = Alignment(vertical='center',
-                    horizontal='right' if col in (2,3,4,8) else 'center' if col in (6,7,9) else 'left')
-                if col in (1,5,6,7,9,10):
-                    cell.fill = fill_row
-                ws.row_dimensions[row_idx].height = 16
-
-        # Totales al pie
-        n = len(balones_exp) + 3
-        ws.cell(row=n, column=1, value='TOTAL').font = Font(bold=True)
-        ws.cell(row=n, column=4,
-            value=f'=SUM(D3:D{n-1})').font = Font(bold=True, color='166534')
-        ws.cell(row=n, column=4).number_format = '"S/."#,##0.00'
-
-        # Congelar cabecera
-        ws.freeze_panes = 'A3'
-
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        resp = make_response(output.read())
-        resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        resp.headers['Content-Disposition'] = 'attachment; filename=balones_gas.xlsx'
-        return resp
-
-    balones = BalonGas.query.order_by(BalonGas.fecha_compra.desc()).all()
-
-    # Estadísticas: promedio de días de duración
-    agotados = [b for b in balones if b.estado == 'agotado' and b.dias_uso]
-    prom_dias = round(sum(b.dias_uso for b in agotados) / len(agotados), 1) if agotados else None
-    en_uso    = [b for b in balones if b.estado == 'en_uso']
-    # Proyección: si hay uno en uso, cuántos días le quedan aprox
-    dias_transcurridos = None
-    dias_restantes_prom = None
-    if en_uso and prom_dias and en_uso[0].fecha_inicio:
-        dias_transcurridos  = (date.today() - en_uso[0].fecha_inicio).days
-        dias_restantes_prom = max(0, round(prom_dias - dias_transcurridos, 1))
-
-    return render_template('pasajeros/gas.html',
-        balones=balones, prom_dias=prom_dias, en_uso=en_uso,
-        dias_transcurridos=dias_transcurridos,
-        dias_restantes_prom=dias_restantes_prom,
-        hoy=date.today())
+@permiso_required('gas')
+def gas_legacy():
+    return redirect(url_for('operaciones.gas'), code=307 if request.method == 'POST' else 301)
 
 
 # ─── RESERVAS ───────────────────────────────────────────────
 @pasajeros_bp.route('/reservas', methods=['GET', 'POST'])
 @login_required
+@permiso_required('reservas')
 def reservas():
     if request.method == 'POST':
         accion = request.form.get('accion', 'nuevo')
@@ -294,17 +153,28 @@ def reservas():
             except: return None
 
         if accion in ('nuevo', 'editar'):
+            try:
+                num_pax = int(request.form.get('num_pax', 0) or 0)
+                precio_buffet = float(request.form.get('precio_buffet', 0) or 0)
+                estado = request.form.get('estado', 'pendiente')
+                if num_pax < 0 or precio_buffet < 0 or not math.isfinite(precio_buffet):
+                    raise ValueError
+                if estado not in {'pendiente', 'confirmada', 'cancelada', 'completada', 'postergada'}:
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                flash('Pasajeros, precio o estado inválidos.', 'error')
+                return redirect(url_for('pasajeros.reservas'))
             datos = dict(
                 fecha         = parse_date(request.form.get('fecha')),
                 hora          = request.form.get('hora', '').strip(),
                 nombre_grupo  = request.form.get('nombre_grupo', '').strip(),
-                num_pax       = int(request.form.get('num_pax', 0) or 0),
-                precio_buffet = float(request.form.get('precio_buffet', 0) or 0),
+                num_pax       = num_pax,
+                precio_buffet = precio_buffet,
                 empresa_id    = request.form.get('empresa_id') or None,
                 empresa_libre = request.form.get('empresa_libre', '').strip(),
                 numero_file   = request.form.get('numero_file', '').strip(),
                 observaciones = request.form.get('observaciones', '').strip(),
-                estado        = request.form.get('estado', 'pendiente'),
+                estado        = estado,
             )
             if not datos['fecha']:
                 flash('La fecha es obligatoria.', 'error')
@@ -322,8 +192,17 @@ def reservas():
 
         elif accion == 'pago':
             r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
-            monto_ant = float(request.form.get('monto_anticipado', 0) or 0)
+            try:
+                monto_ant = float(request.form.get('monto_anticipado', 0) or 0)
+                if monto_ant < 0 or not math.isfinite(monto_ant):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                flash('El adelanto debe ser un monto válido y no negativo.', 'error')
+                return redirect(url_for('pasajeros.reservas'))
             total_esp = round((r.num_pax or 0) * (r.precio_buffet or 0), 2)
+            if monto_ant > total_esp:
+                flash('El adelanto supera el total de la reserva. Revisa el monto.', 'error')
+                return redirect(url_for('pasajeros.reservas'))
             saldo = round(total_esp - monto_ant, 2)
             archivo = guardar_voucher_reserva(request.files.get('archivo_voucher'))
             r.monto_anticipado = monto_ant
@@ -350,9 +229,16 @@ def reservas():
             flash('Reserva marcada como completada.', 'success')
 
         elif accion == 'eliminar':
+            if not current_user.es_admin():
+                flash('Solo administración puede eliminar reservas. Puedes cancelarlas para conservar el historial.', 'error')
+                return redirect(url_for('pasajeros.reservas'))
             r = Reserva.query.get_or_404(int(request.form.get('reserva_id')))
             db.session.delete(r)
             flash('Reserva eliminada.', 'success')
+
+        else:
+            flash('Acción de reserva inválida.', 'error')
+            return redirect(url_for('pasajeros.reservas'))
 
         db.session.commit()
         return redirect(url_for('pasajeros.reservas'))
@@ -410,12 +296,19 @@ def reservas():
 # ─── API: alertas de reservas (para el header) ──────────────
 @pasajeros_bp.route('/reservas/voucher/<filename>')
 @login_required
+@permiso_required('reservas')
 def reserva_voucher(filename):
-    return send_from_directory(UPLOAD_RESERVAS, filename)
+    from flask import current_app
+    safe_name = secure_filename(filename)
+    private_folder = os.path.join(current_app.instance_path, 'uploads', 'reservas')
+    legacy_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'reservas')
+    folder = private_folder if os.path.isfile(os.path.join(private_folder, safe_name)) else legacy_folder
+    return send_from_directory(folder, safe_name, as_attachment=True)
 
 
 @pasajeros_bp.route('/api/alertas')
 @login_required
+@permiso_required('reservas')
 def api_alertas():
     hoy = hoy_peru()
     count = Reserva.query.filter(

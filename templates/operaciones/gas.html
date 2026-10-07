@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 {% block title %}Balones de Gas{% endblock %}
 {% block page_title %}Control de Gas{% endblock %}
-{% block page_subtitle %}Registro de compra y duración de balones{% endblock %}
+{% block page_subtitle %}Control de compra, disponibilidad y duración de balones{% endblock %}
 {% block header_actions %}
-<a href="{{ url_for('pasajeros.gas', export='excel') }}"
+<a href="{{ url_for('operaciones.gas', export='excel') }}"
    style="background:#166534;color:white;padding:6px 12px;border-radius:10px;text-decoration:none;font-size:0.8rem;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
-   📥 Exportar CSV
+   📥 Exportar Excel
 </a>
-<a href="{{ url_for('pasajeros.index') }}" class="btn-secondary btn-sm">← Pasajeros</a>
+<a href="{{ url_for('main.dashboard') }}" class="btn-secondary btn-sm">← Inicio</a>
 {% endblock %}
 
 {% block content %}
@@ -16,12 +16,12 @@
 <div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;">
     <div class="card" style="padding:14px;border-left:4px solid #f59e0b;">
         <p style="font-size:0.68rem;font-weight:700;color:#f59e0b;text-transform:uppercase;margin-bottom:3px;">En uso</p>
-        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ en_uso|length }}</p>
+        <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ en_uso_count }}</p>
     </div>
     <div class="card" style="padding:14px;border-left:4px solid #6366f1;">
         <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;margin-bottom:3px;">Disponibles</p>
         <p style="font-size:1.8rem;font-weight:800;color:#1e293b;">
-            {{ balones | selectattr('estado','eq','disponible') | list | length }}
+            {{ disponibles_count }}
         </p>
     </div>
     <div class="card" style="padding:14px;border-left:4px solid #3b82f6;">
@@ -45,7 +45,8 @@
 <!-- Formulario de registro -->
 <div class="card" style="padding:16px;">
     <h3 style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:14px;">🔴 Registrar compra de balones</h3>
-    <form method="POST" action="{{ url_for('pasajeros.gas') }}" style="display:flex;flex-direction:column;gap:10px;" id="form-nuevo">
+    <form method="POST" action="{{ url_for('operaciones.gas') }}" style="display:flex;flex-direction:column;gap:10px;" id="form-nuevo">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="accion" value="nuevo">
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -100,7 +101,7 @@
 <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
         <p style="font-weight:700;color:#1e293b;font-size:0.9rem;">Historial de balones</p>
-        <span style="font-size:0.78rem;color:#94a3b8;">{{ balones|length }} registros</span>
+        <span style="font-size:0.78rem;color:#94a3b8;">{{ balones_total }} registros</span>
     </div>
     {% if balones %}
     <div style="overflow-x:auto;">
@@ -150,13 +151,15 @@
                     style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:600;cursor:pointer;color:#1d4ed8;margin-right:3px;">✏️</button>
                 <!-- Usar / Agotar -->
                 {% if b.estado == 'disponible' %}
-                <form method="POST" style="margin:0;display:inline;">
+                <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Confirmas poner en uso este balón de {{ b.peso_kg }} kg? Solo puede haber un balón en uso a la vez.');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="accion" value="usar">
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
                     <button type="submit" style="background:#fef3c7;color:#92400e;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">Usar</button>
                 </form>
                 {% elif b.estado == 'en_uso' %}
                 <form method="POST" style="margin:0;display:inline;" onsubmit="return confirm('¿Marcar como agotado?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="accion" value="agotar">
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
                     <button type="submit" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;font-weight:700;cursor:pointer;">Agotar</button>
@@ -167,8 +170,9 @@
         <!-- Fila edición (oculta) -->
         <tr id="edit-{{ b.id }}" style="display:none;background:#eff6ff;">
             <td colspan="9" style="padding:10px 14px;">
-                <form method="POST" action="{{ url_for('pasajeros.gas') }}"
+                <form method="POST" action="{{ url_for('operaciones.gas') }}"
                       style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="accion" value="editar">
                     <input type="hidden" name="balon_id" value="{{ b.id }}">
                     <div><label class="label">Fecha compra</label>
@@ -196,6 +200,13 @@
         </tbody>
     </table>
     </div>
+    {% if pagina.pages > 1 %}
+    <div style="display:flex;justify-content:center;gap:10px;align-items:center;padding:12px;">
+        {% if pagina.has_prev %}<a class="btn-secondary btn-sm" href="{{ url_for('operaciones.gas', page=pagina.prev_num) }}">Anterior</a>{% endif %}
+        <span style="color:#64748b;font-size:.85rem;">Página {{ pagina.page }} de {{ pagina.pages }}</span>
+        {% if pagina.has_next %}<a class="btn-secondary btn-sm" href="{{ url_for('operaciones.gas', page=pagina.next_num) }}">Siguiente</a>{% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <div style="padding:40px;text-align:center;color:#94a3b8;">
         <p style="font-size:2rem;margin-bottom:8px;">🔴</p>

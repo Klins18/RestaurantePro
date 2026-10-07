@@ -63,6 +63,7 @@
             <td class="td" style="text-align:center;">
                 <form method="POST" action="{{ url_for('empleados.eliminar_honorario', id=h.id) }}" style="margin:0;"
                       onsubmit="return confirm('¿Eliminar este honorario?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️</button>
                 </form>
             </td>
@@ -82,6 +83,7 @@
     <div class="card" style="width:480px;max-width:95vw;padding:22px;margin:20px auto;">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:16px;">💼 Nuevo pago / honorario</h3>
         <form method="POST" action="{{ url_for('empleados.nuevo_honorario') }}" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:11px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div><label class="label">Empleado *</label>
                 <select name="empleado_id" class="input" required>
                     <option value="">— Selecciona empleado —</option>

@@ -35,7 +35,7 @@ def recalcular_producto(producto_id):
 def registrar_kardex(producto_id, tipo, cantidad, usuario_id=None, concepto='',
                      referencia='', fecha=None, precio_unitario=None,
                      compra_id=None):
-    """Añade un movimiento y conserva el costo promedio si la entrada no tiene precio."""
+    """Añade un movimiento en O(1), usando el saldo anterior como base."""
     cantidad = float(cantidad or 0)
     if cantidad <= 0:
         return None
@@ -47,24 +47,38 @@ def registrar_kardex(producto_id, tipo, cantidad, usuario_id=None, concepto='',
     if ultimo and fecha_movimiento < ultimo.fecha:
         fecha_movimiento = ultimo.fecha
     conocido = tipo != 'ingreso' or (precio_unitario is not None and float(precio_unitario) > 0)
+    saldo_cantidad = float(ultimo.cant_saldo or 0) if ultimo else 0.0
+    saldo_valor = float(ultimo.total_saldo or 0) if ultimo else 0.0
+    costo_promedio = saldo_valor / saldo_cantidad if saldo_cantidad > 0 else 0.0
+    cantidad_entrada = cantidad if tipo == 'ingreso' else 0
+    cantidad_salida = cantidad if tipo == 'egreso' else 0
+    precio_entrada = (float(precio_unitario) if conocido else costo_promedio) if tipo == 'ingreso' else 0.0
+    precio_salida = costo_promedio if tipo == 'egreso' else 0.0
+    total_entrada = round(cantidad_entrada * precio_entrada, 2)
+    total_salida = round(cantidad_salida * precio_salida, 2)
+    nuevo_saldo = saldo_cantidad + cantidad_entrada - cantidad_salida
+    nuevo_valor = saldo_valor + total_entrada - total_salida
     movimiento = KardexAlmacen(
         producto_id=producto_id,
         fecha=fecha_movimiento,
         tipo=tipo,
         concepto=concepto,
         referencia=referencia,
-        cant_entrada=cantidad if tipo == 'ingreso' else 0,
-        precio_entrada=float(precio_unitario or 0) if conocido and tipo == 'ingreso' else 0,
-        total_entrada=round(cantidad * float(precio_unitario or 0), 2)
-            if conocido and tipo == 'ingreso' else 0,
-        cant_salida=cantidad if tipo == 'egreso' else 0,
+        cant_entrada=cantidad_entrada,
+        precio_entrada=precio_entrada,
+        total_entrada=total_entrada,
+        cant_salida=cantidad_salida,
+        precio_salida=precio_salida,
+        total_salida=total_salida,
+        cant_saldo=round(nuevo_saldo, 4),
+        precio_saldo=round(nuevo_valor / nuevo_saldo, 4) if nuevo_saldo > 0 else 0,
+        total_saldo=round(max(nuevo_valor, 0.0), 2),
         usuario_id=usuario_id,
         compra_id=compra_id,
         costo_conocido=conocido,
     )
     db.session.add(movimiento)
     db.session.flush()
-    recalcular_producto(producto_id)
     return movimiento
 
 

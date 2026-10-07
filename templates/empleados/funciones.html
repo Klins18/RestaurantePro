@@ -11,6 +11,7 @@
         <div class="card" style="position:sticky;top:70px;">
             <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;font-size:0.95rem;">➕ Registrar Función</h3>
             <form method="POST" action="{{ url_for('empleados.funciones') }}" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
                 <div>
                     <label class="label">📅 Fecha</label>
@@ -86,6 +87,7 @@
                     </div>
                 </div>
                 <form method="POST" action="{{ url_for('empleados.eliminar_funcion', id=f.id) }}" onsubmit="return confirm('¿Eliminar?')" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" style="background:none;border:none;cursor:pointer;color:#e2e8f0;font-size:1.2rem;padding:0;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#e2e8f0'">×</button>
                 </form>
             </div>
@@ -111,7 +113,7 @@
 <script>
 function toggleFuncion(id, btn) {
     fetch(`/empleados/funciones/${id}/toggle`, {method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': ''}
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content}
     })
     .then(r => r.json())
     .then(data => {

@@ -4,6 +4,7 @@ from models import db, Producto, ListaPedido, MovimientoAlmacen, VentaDiaria
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import pytz
+from routes.decorators import tiene_permiso
 
 main_bp = Blueprint('main', __name__)
 PERU_TZ = pytz.timezone('America/Lima')
@@ -12,6 +13,10 @@ PERU_TZ = pytz.timezone('America/Lima')
 @login_required
 def dashboard():
     hoy = datetime.now(PERU_TZ).date()
+    puede_ver_ventas = tiene_permiso('ventas')
+    puede_ver_reservas = tiene_permiso('reservas')
+    puede_ver_inventario = tiene_permiso('inventario')
+    puede_ver_pedidos = tiene_permiso('pedidos')
 
     # Métricas principales
     total_productos    = Producto.query.filter_by(activo=True).count()
@@ -31,13 +36,13 @@ def dashboard():
         .filter(VentaDiaria.fecha.between(inicio_serie, hoy))
         .group_by(VentaDiaria.fecha)
         .all()
-    )
+    ) if puede_ver_ventas else {}
     ventas_hoy = float(totales_por_dia.get(hoy, 0))
     ventas_ayer = float(totales_por_dia.get(ayer, 0))
     resumen_hoy = db.session.query(
         func.coalesce(func.sum(VentaDiaria.num_pax), 0),
         func.count(VentaDiaria.id),
-    ).filter_by(fecha=hoy).one()
+    ).filter_by(fecha=hoy).one() if puede_ver_ventas or puede_ver_reservas else (0, 0)
     pax_hoy, num_servicios_hoy = int(resumen_hoy[0]), resumen_hoy[1]
     variacion_ventas = ((ventas_hoy - ventas_ayer) / ventas_ayer * 100) if ventas_ayer > 0 else 0
 
@@ -51,16 +56,16 @@ def dashboard():
     # Últimos movimientos
     ultimos_movimientos = MovimientoAlmacen.query.order_by(
         MovimientoAlmacen.fecha_hora.desc()
-    ).limit(6).all()
+    ).limit(6).all() if puede_ver_inventario else []
 
     # Últimas listas
     ultimas_listas = ListaPedido.query.order_by(
         ListaPedido.elaborado_en.desc()
-    ).limit(5).all()
+    ).limit(5).all() if puede_ver_pedidos else []
 
     # Cierre de hoy
     from models import CierreCaja
-    cierre_hoy = CierreCaja.query.filter_by(fecha=hoy).first()
+    cierre_hoy = CierreCaja.query.filter_by(fecha=hoy).first() if tiene_permiso('cierre_caja') else None
 
     # ── Funciones del día para el usuario logueado ──
     mis_funciones = []
@@ -79,9 +84,13 @@ def dashboard():
     reservas_proximas = Reserva.query.filter(
         Reserva.fecha.in_([hoy, manana]),
         Reserva.estado.in_(['pendiente', 'confirmada'])
-    ).order_by(Reserva.fecha, Reserva.hora).all()
+    ).order_by(Reserva.fecha, Reserva.hora).all() if puede_ver_reservas else []
 
     return render_template('dashboard.html',
+        puede_ver_ventas=tiene_permiso('ventas'),
+        puede_ver_reservas=puede_ver_reservas,
+        puede_ver_inventario=puede_ver_inventario,
+        puede_ver_pedidos=puede_ver_pedidos,
         total_productos=total_productos,
         pedidos_pendientes=pedidos_pendientes,
         pedidos_verificacion=pedidos_verificacion,

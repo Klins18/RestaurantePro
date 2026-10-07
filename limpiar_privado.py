@@ -1,5 +1,5 @@
 """
-Ejecutar UNA SOLA VEZ en D:\RestaurantePro\:
+Ejecutar UNA SOLA VEZ en D:\\RestaurantePro\\:
   python limpiar_privado.py
 
 Marca como inactiva la empresa "Privado" de la base de datos.

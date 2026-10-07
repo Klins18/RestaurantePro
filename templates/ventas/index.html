@@ -80,12 +80,12 @@
     <div class="card" style="padding:0;overflow:hidden;">
         <div style="padding:12px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
             <h3 style="font-weight:700;color:#1e293b;">Ventas del Período</h3>
-            <span style="font-size:0.82rem;color:#94a3b8;">{{ ventas|length }} registros</span>
+            <span style="font-size:0.82rem;color:#94a3b8;">{{ pagina.total }} registros</span>
         </div>
         <div id="ventas-rows" style="max-height:520px;overflow-y:auto;">
         {% for v in ventas %}
         {% set es_hoy = (v.fecha == hoy) %}
-        {% set tiene_cierre = cierre_hoy and es_hoy %}
+        {% set tiene_cierre = v.fecha in cierres_cerrados %}
         <div style="border-bottom:2px solid #f1f5f9;">
             <!-- Cabecera de la venta -->
             <div style="padding:8px 16px;background:#f8fafc;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -99,9 +99,10 @@
                 <span style="font-size:0.82rem;color:#1e293b;font-weight:600;">{{ v.nombre_grupo or 'Sin nombre' }}</span>
                 {% if v.num_pax %}<span style="font-size:0.75rem;color:#94a3b8;">· {{ v.num_pax }} pax</span>{% endif %}
                 <span style="margin-left:auto;font-weight:800;color:#1e293b;">S/.{{ '%.2f'|format(v.total) }}</span>
-                {% if not tiene_cierre %}
+                {% if not tiene_cierre and current_user.es_admin() %}
                 <form method="POST" action="{{ url_for('ventas.eliminar_venta', id=v.id) }}" style="margin:0;"
                       onsubmit="return confirm('¿Eliminar toda esta venta?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" style="background:#fee2e2;border:none;border-radius:6px;padding:3px 8px;font-size:0.72rem;color:#dc2626;cursor:pointer;font-weight:600;">🗑 Venta</button>
                 </form>
                 {% endif %}
@@ -113,18 +114,20 @@
                 <span style="font-size:0.8rem;color:#64748b;min-width:40px;text-align:center;">×{{ item.cantidad }}</span>
                 <span style="font-size:0.8rem;color:#1d4ed8;min-width:70px;text-align:right;">S/.{{ '%.2f'|format(item.subtotal) }}</span>
                 {% if not tiene_cierre %}
-                <button onclick="editarItem({{ item.id }}, {{ item.cantidad }}, {{ item.precio_unit or 0 }})"
+                <button onclick="editarItem({{ item.id }}, {{ item.cantidad }}, {{ item.precio_unitario or 0 }})"
                     style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:2px 7px;font-size:0.7rem;color:#1d4ed8;cursor:pointer;">✏️</button>
-                <form method="POST" action="{{ url_for('ventas.eliminar_item_venta', item_id=item.id) }}" style="margin:0;"
+                {% if current_user.es_admin() %}<form method="POST" action="{{ url_for('ventas.eliminar_item_venta', item_id=item.id) }}" style="margin:0;"
                       onsubmit="return confirm('¿Eliminar {{ item.descripcion }}?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" style="background:#fee2e2;border:none;border-radius:5px;padding:2px 7px;font-size:0.7rem;color:#dc2626;cursor:pointer;">✕</button>
-                </form>
+                </form>{% endif %}
                 <!-- Fila de edición inline -->
                 <div id="edit-item-{{ item.id }}" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
                     <div class="card" style="padding:18px;width:320px;">
                         <p style="font-weight:700;color:#1e293b;margin-bottom:12px;">✏️ Editar: {{ item.descripcion }}</p>
                         <form method="POST" action="{{ url_for('ventas.editar_item_venta', item_id=item.id) }}"
                               style="display:flex;flex-direction:column;gap:10px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                                 <div><label class="label">Cantidad</label>
                                     <input type="number" name="cantidad" id="ei-cant-{{ item.id }}"
@@ -151,6 +154,13 @@
         </div>
     </div>
 </div>
+{% if pagina.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:10px;align-items:center;margin:16px 0;">
+    {% if pagina.has_prev %}<a class="btn-secondary btn-sm" href="{{ url_for('ventas.index', page=pagina.prev_num, desde=desde, hasta=hasta) }}">Anterior</a>{% endif %}
+    <span style="color:#64748b;font-size:.85rem;">Página {{ pagina.page }} de {{ pagina.pages }}</span>
+    {% if pagina.has_next %}<a class="btn-secondary btn-sm" href="{{ url_for('ventas.index', page=pagina.next_num, desde=desde, hasta=hasta) }}">Siguiente</a>{% endif %}
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

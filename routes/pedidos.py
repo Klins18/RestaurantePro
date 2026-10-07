@@ -1,12 +1,18 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+import math
+import uuid
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, current_app
 from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, ListaPedido, ItemPedido, ComprobantePedido, Usuario, Producto, MovimientoAlmacen, Notificacion, registrar_auditoria
 from services.kardex import registrar_kardex
+from services.units import UNIT_CHOICES, normalize_unit
 from datetime import datetime, date
 import pytz
+from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 PERU_TZ = pytz.timezone('America/Lima')
@@ -14,17 +20,17 @@ PERU_TZ = pytz.timezone('America/Lima')
 def now_peru():
     return datetime.now(PERU_TZ).replace(tzinfo=None)
 
-UPLOAD_COMPROBANTES = 'static/uploads/comprobantes_pedido'
+UPLOAD_COMPROBANTES = 'uploads/comprobantes_pedido'
 ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'webp'}
 
 def guardar_comprobante(file):
     if file and file.filename and '.' in file.filename:
         ext = file.filename.rsplit('.', 1)[1].lower()
         if ext in ALLOWED_EXT:
-            os.makedirs(UPLOAD_COMPROBANTES, exist_ok=True)
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S_')
-            fname = ts + secure_filename(file.filename)
-            file.save(os.path.join(UPLOAD_COMPROBANTES, fname))
+            folder = os.path.join(current_app.instance_path, UPLOAD_COMPROBANTES)
+            os.makedirs(folder, exist_ok=True)
+            fname = f'{uuid.uuid4().hex}.{ext}'
+            file.save(os.path.join(folder, fname))
             return fname
     return None
 
@@ -105,8 +111,12 @@ def index():
     q = ListaPedido.query.order_by(ListaPedido.elaborado_en.desc())
     if estado: q = q.filter_by(estado=estado)
     if tipo:   q = q.filter_by(tipo_requerimiento=tipo)
-    listas = q.all()
-    return render_template('pedidos/index.html', listas=listas,
+    pagina = q.options(
+        selectinload(ListaPedido.items),
+        joinedload(ListaPedido.elaborado_por),
+        joinedload(ListaPedido.verificado_por),
+    ).paginate(page=request.args.get('page', 1, type=int), per_page=50, error_out=False)
+    return render_template('pedidos/index.html', listas=pagina.items, pagina=pagina,
                            tipos=TIPOS_REQUERIMIENTO,
                            estado_filtro=estado, tipo_filtro=tipo)
 
@@ -126,7 +136,7 @@ def nueva():
         try:
             fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         except:
-            fecha = date.today()
+            fecha = now_peru().date()
 
         lista = ListaPedido(
             titulo=titulo or f"Pedido {tipo} - {fecha.strftime('%d/%m/%Y')}",
@@ -151,24 +161,32 @@ def nueva():
             if es_extra and not nombre:
                 continue
 
-            try:
-                cant = float(cantidades[i]) if i < len(cantidades) and cantidades[i].strip() else None
-            except:
-                cant = None
-
-            # ── Solo guardar ítems CON cantidad pedida ──
-            if not cant or cant <= 0:
+            cantidad_raw = cantidades[i].strip() if i < len(cantidades) else ''
+            if not cantidad_raw:
                 continue
-
             try:
-                precio = float(precios[i]) if i < len(precios) and precios[i].strip() else None
-            except:
-                precio = None
+                cant = float(cantidad_raw)
+                if cant <= 0 or not math.isfinite(cant) or not nombre:
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                db.session.rollback()
+                flash('Cada artículo debe tener nombre y cantidad válida mayor que cero.', 'error')
+                return redirect(url_for('pedidos.nueva'))
+
+            precio_raw = precios[i].strip() if i < len(precios) else ''
+            try:
+                precio = float(precio_raw) if precio_raw else None
+                if precio is not None and (precio < 0 or not math.isfinite(precio)):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                db.session.rollback()
+                flash('El precio unitario debe ser válido y no negativo.', 'error')
+                return redirect(url_for('pedidos.nueva'))
 
             item = ItemPedido(
                 lista_id=lista.id,
                 producto_nombre=nombre,
-                unidad_medida=unidades[i] if i < len(unidades) else '',
+                unidad_medida=normalize_unit(unidades[i] if i < len(unidades) else ''),
                 cantidad_solicitada=cant,
                 precio_unitario=precio,
                 observacion=obs_items[i] if i < len(obs_items) else '',
@@ -176,6 +194,11 @@ def nueva():
             )
             db.session.add(item)
             orden += 1
+
+        if orden == 0:
+            db.session.rollback()
+            flash('Agrega al menos un producto con cantidad mayor que cero.', 'error')
+            return redirect(url_for('pedidos.nueva'))
 
         registrar_auditoria(current_user.id, 'CREAR_LISTA_PEDIDO',
                             'listas_pedido', lista.id,
@@ -187,13 +210,15 @@ def nueva():
     return render_template('pedidos/nueva.html',
                            tipos=TIPOS_REQUERIMIENTO,
                            listas_predefinidas=LISTAS_PREDEFINIDAS,
-                           hoy=date.today())
+                           unidad_options=UNIT_CHOICES,
+                           hoy=now_peru().date())
 
 # ──────────────────────────────────────
 #  API lista predefinida
 # ──────────────────────────────────────
 @pedidos_bp.route('/api/lista-predefinida/<tipo>')
 @login_required
+@permiso_required('pedidos')
 def api_lista_predefinida(tipo):
     items = LISTAS_PREDEFINIDAS.get(tipo, [])
     return jsonify([{'nombre': n, 'unid': u} for n, u in items])
@@ -237,14 +262,30 @@ def verificar(id):
             try:
                 item.cantidad_recibida = float(cant_rec_str) if cant_rec_str else None
             except:
-                item.cantidad_recibida = None
+                db.session.rollback()
+                flash('La cantidad recibida debe ser numérica.', 'error')
+                return redirect(url_for('pedidos.verificar', id=id))
+            if item.cantidad_recibida is not None and (
+                item.cantidad_recibida < 0 or not math.isfinite(item.cantidad_recibida)
+            ):
+                db.session.rollback()
+                flash('La cantidad recibida no puede ser negativa ni inválida.', 'error')
+                return redirect(url_for('pedidos.verificar', id=id))
             # Si está marcado pero sin cantidad recibida → usar la cantidad solicitada
             if verificado and not item.cantidad_recibida and item.cantidad_solicitada:
                 item.cantidad_recibida = item.cantidad_solicitada
             try:
                 item.precio_unitario = float(precio_str) if precio_str else item.precio_unitario
             except:
-                pass
+                db.session.rollback()
+                flash('El costo unitario debe ser numérico.', 'error')
+                return redirect(url_for('pedidos.verificar', id=id))
+            if item.precio_unitario is not None and (
+                item.precio_unitario < 0 or not math.isfinite(item.precio_unitario)
+            ):
+                db.session.rollback()
+                flash('El costo unitario no puede ser negativo ni inválido.', 'error')
+                return redirect(url_for('pedidos.verificar', id=id))
             item.observacion = obs
             # Asignar comprobante si seleccionado
             comp_id_str = request.form.get(f'comp_{item.id}', '').strip()
@@ -283,7 +324,7 @@ def verificar(id):
             if verificado and item.cantidad_recibida and item.cantidad_recibida > 0:
                 prod = None
                 if item.producto_id:
-                    prod = Producto.query.get(item.producto_id)
+                    prod = db.session.get(Producto, item.producto_id)
                 if not prod:
                     # Buscar por nombre exacto primero, luego parcial
                     nombre_buscar = item.producto_nombre.strip()
@@ -298,22 +339,26 @@ def verificar(id):
                 # ── Si el producto NO existe en el inventario, CREARLO automáticamente ──
                 if not prod and item.producto_nombre.strip():
                     from models import Categoria
-                    from sqlalchemy import text
                     cat_nombre = (lista.tipo_requerimiento or 'General').upper()
-
-                    # INSERT OR IGNORE evita el UNIQUE constraint sin importar acentos
-                    db.session.execute(
-                        text("INSERT OR IGNORE INTO categorias (nombre, activo) VALUES (:n, 1)"),
-                        {"n": cat_nombre}
-                    )
-                    db.session.flush()
-                    # Ahora SELECT exacto — siempre existe
-                    cat = Categoria.query.filter_by(nombre=cat_nombre).first()
-                    # Fallback por si el nombre en BD difiere (ej: ya existía con otro case)
+                    cat = Categoria.query.filter(func.lower(Categoria.nombre) == cat_nombre.lower()).first()
+                    if not cat:
+                        try:
+                            with db.session.begin_nested():
+                                cat = Categoria(nombre=cat_nombre, activo=True)
+                                db.session.add(cat)
+                                db.session.flush()
+                        except IntegrityError:
+                            cat = Categoria.query.filter(
+                                func.lower(Categoria.nombre) == cat_nombre.lower()
+                            ).first()
                     if not cat:
                         cat = Categoria.query.filter_by(activo=True).first()
+                    if not cat:
+                        db.session.rollback()
+                        flash('Crea una categoría de almacén antes de recibir este producto.', 'error')
+                        return redirect(url_for('pedidos.verificar', id=id))
 
-                    unidad = item.unidad_medida or 'unid'
+                    unidad = normalize_unit(item.unidad_medida) or 'unidad'
                     prod = Producto(
                         nombre=item.producto_nombre.strip(),
                         unidad_medida=unidad,
@@ -356,9 +401,11 @@ def verificar(id):
                         referencia_ajuste = ref_item if not movimientos_item else (
                             f'{ref_item}-AJUSTE-{int(now_peru().timestamp())}'
                         )
-                        prod.stock_actual = max(
-                            0, (prod.stock_actual or 0) + diferencia
-                        )
+                        if diferencia < 0 and (prod.stock_actual or 0) < abs(diferencia):
+                            db.session.rollback()
+                            flash(f'No se puede corregir la recepción: ya se consumieron unidades de "{prod.nombre}".', 'error')
+                            return redirect(url_for('pedidos.verificar', id=id))
+                        prod.stock_actual = (prod.stock_actual or 0) + diferencia
                         db.session.add(MovimientoAlmacen(
                             tipo=tipo_mov, producto_id=prod.id,
                             cantidad=cantidad_mov,
@@ -438,9 +485,9 @@ def verificar(id):
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>/aprobar', methods=['POST'])
 @login_required
-@permiso_required('pedidos')
+@admin_required
 def aprobar(id):
-    # Empleados Y administradores pueden aprobar
+    # La aprobación final queda reservada a administración.
     lista = ListaPedido.query.get_or_404(id)
 
     if lista.estado not in ('en_verificacion', 'completado', 'pendiente'):
@@ -464,7 +511,7 @@ def aprobar(id):
                 # Buscar producto y actualizar si no se hizo antes
                 prod = None
                 if item.producto_id:
-                    prod = Producto.query.get(item.producto_id)
+                    prod = db.session.get(Producto, item.producto_id)
                 if not prod:
                     prod = Producto.query.filter(
                         Producto.nombre.ilike(f'%{item.producto_nombre.strip()}%')
@@ -534,6 +581,7 @@ def editar_items_aprobado(id):
     """Editar precios/cantidades de una lista ya aprobada (sin tocar stock)."""
     lista = ListaPedido.query.get_or_404(id)
     cambios = 0
+    actualizaciones = []
     for item in lista.items:
         if not item.producto_nombre.strip():
             continue
@@ -541,11 +589,24 @@ def editar_items_aprobado(id):
         rec_str   = request.form.get(f'rec_{item.id}', '').strip()
         precio_str= request.form.get(f'precio_{item.id}', '').strip()
         try:
-            if sol_str:    item.cantidad_solicitada = float(sol_str)
-            if rec_str:    item.cantidad_recibida   = float(rec_str)
-            if precio_str: item.precio_unitario      = float(precio_str)
-            cambios += 1
-        except: pass
+            valores = {}
+            if sol_str:
+                valores['cantidad_solicitada'] = float(sol_str)
+            if rec_str:
+                valores['cantidad_recibida'] = float(rec_str)
+            if precio_str:
+                valores['precio_unitario'] = float(precio_str)
+            if any(not math.isfinite(v) or v < 0 for v in valores.values()):
+                raise ValueError
+            actualizaciones.append((item, valores))
+        except (TypeError, ValueError, OverflowError):
+            db.session.rollback()
+            flash('Las cantidades y precios deben ser numéricos, finitos y no negativos.', 'error')
+            return redirect(url_for('pedidos.ver', id=id))
+    for item, valores in actualizaciones:
+        for campo, valor in valores.items():
+            setattr(item, campo, valor)
+        cambios += 1
     registrar_auditoria(current_user.id, 'EDITAR_ITEMS_APROBADO',
                         'listas_pedido', lista.id,
                         f'{cambios} ítems editados post-aprobación',
@@ -584,7 +645,13 @@ def eliminar(id):
 def agregar_comprobante(id):
     lista = ListaPedido.query.get_or_404(id)
     archivo = guardar_comprobante(request.files.get('archivo'))
-    monto = float(request.form.get('monto_total', 0) or 0)
+    try:
+        monto = float(request.form.get('monto_total', 0) or 0)
+        if monto < 0 or not math.isfinite(monto):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('El monto del comprobante debe ser válido y no negativo.', 'error')
+        return redirect(url_for('pedidos.ver', id=id))
     comp = ComprobantePedido(
         lista_id=lista.id,
         tipo=request.form.get('tipo', 'boleta'),
@@ -624,8 +691,13 @@ def eliminar_comprobante(cid):
 
 @pedidos_bp.route('/comprobante/archivo/<filename>')
 @login_required
+@permiso_required('pedidos')
 def comprobante_archivo(filename):
-    return send_from_directory(UPLOAD_COMPROBANTES, filename)
+    safe_name = secure_filename(filename)
+    private_folder = os.path.join(current_app.instance_path, UPLOAD_COMPROBANTES)
+    legacy_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'comprobantes_pedido')
+    folder = private_folder if os.path.isfile(os.path.join(private_folder, safe_name)) else legacy_folder
+    return send_from_directory(folder, safe_name, as_attachment=True)
 
 
 @pedidos_bp.route('/notificaciones')
@@ -633,7 +705,7 @@ def comprobante_archivo(filename):
 def notificaciones():
     from models import Reserva
     from datetime import date, timedelta
-    hoy = date.today()
+    hoy = now_peru().date()
 
     # Auto-generar alertas de reservas próximas (hoy y mañana)
     try:
@@ -641,7 +713,7 @@ def notificaciones():
         reservas_prox = Reserva.query.filter(
             Reserva.fecha.in_([hoy, manana]),
             Reserva.estado.in_(['pendiente', 'confirmada'])
-        ).all()
+        ).all() if current_user.rol in ('administrador', 'supervisor') or current_user.permisos.filter_by(permiso='reservas').first() else []
         for r in reservas_prox:
             existe = Notificacion.query.filter_by(
                 destinatario_id=current_user.id,
@@ -676,7 +748,7 @@ def notificaciones():
 @pedidos_bp.route('/notificaciones/<int:id>/leer', methods=['POST'])
 @login_required
 def leer_notificacion(id):
-    n = Notificacion.query.get_or_404(id)
+    n = Notificacion.query.filter_by(id=id, destinatario_id=current_user.id).first_or_404()
     n.leido = True
     db.session.commit()
     return redirect(request.referrer or url_for('pedidos.notificaciones'))
@@ -696,16 +768,16 @@ def leer_todas_notificaciones():
 @pedidos_bp.route('/notificaciones/<int:id>/eliminar', methods=['POST'])
 @login_required
 def eliminar_notificacion(id):
-    n = Notificacion.query.get_or_404(id)
-    if n.destinatario_id == current_user.id:
-        db.session.delete(n)
-        db.session.commit()
+    n = Notificacion.query.filter_by(id=id, destinatario_id=current_user.id).first_or_404()
+    db.session.delete(n)
+    db.session.commit()
     return redirect(url_for('pedidos.notificaciones'))
 # ──────────────────────────────────────
 #  IMPRIMIR / PDF (solo items con cantidad)
 # ──────────────────────────────────────
 @pedidos_bp.route('/<int:id>/imprimir')
 @login_required
+@permiso_required('pedidos')
 def imprimir(id):
     lista = ListaPedido.query.get_or_404(id)
     # Solo items que tienen cantidad solicitada > 0 o al menos nombre + unidad
@@ -717,6 +789,6 @@ def imprimir(id):
     ]
     from datetime import date as _date
     return render_template('pedidos/imprimir.html',
-                           now_date=_date.today().strftime('%d/%m/%Y'),
+                           now_date=now_peru().date().strftime('%d/%m/%Y'),
                            lista=lista,
                            items_imprimir=items_imprimir)

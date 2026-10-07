@@ -38,6 +38,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
         {% if lista.estado in ['completado', 'en_verificacion'] and current_user.es_admin() %}
         <form method="POST" action="{{ url_for('pedidos.aprobar', id=lista.id) }}" onsubmit="return confirm('¿Aprobar esta lista?')" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-success btn-sm">🎯 Aprobar</button>
         </form>
         {% endif %}
@@ -52,6 +53,7 @@
         {% endif %}
         {% if current_user.es_admin() %}
         <form method="POST" action="{{ url_for('pedidos.eliminar', id=lista.id) }}" onsubmit="return confirm('¿Eliminar?')" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-danger btn-sm">🗑️</button>
         </form>
         {% endif %}
@@ -192,6 +194,7 @@
                style="color:#6366f1;font-size:0.78rem;font-weight:600;text-decoration:none;">📎 Ver</a>
             {% endif %}
             <form method="POST" action="{{ url_for('pedidos.eliminar_comprobante', cid=c.id) }}" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Eliminar comprobante?')"
                     style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.8rem;">🗑️</button>
             </form>
@@ -211,6 +214,7 @@
         </div>
         <form method="POST" action="{{ url_for('pedidos.agregar_comprobante', id=lista.id) }}"
               enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div><label class="label">Tipo</label>
                     <select name="tipo" class="input">
@@ -272,6 +276,7 @@
             ⚠️ La lista ya fue aprobada. Los cambios aquí son solo de precios y cantidades para el registro — no modifican el stock automáticamente.
         </p>
         <form method="POST" action="{{ url_for('pedidos.editar_items_aprobado', id=lista.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
             <thead>
                 <tr style="background:#f8fafc;">

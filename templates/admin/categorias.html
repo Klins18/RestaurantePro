@@ -21,6 +21,7 @@
 <div class="card">
     <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">➕ Nueva Categoría</h3>
     <form method="POST" action="{{ url_for("admin.nueva_categoria") }}" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div><label class="label">Nombre</label><input type="text" name="nombre" class="input" required></div>
         <div><label class="label">Descripción</label><textarea name="descripcion" class="input" rows="2"></textarea></div>
         <button type="submit" class="btn-primary" style="text-align:center;">Crear</button>

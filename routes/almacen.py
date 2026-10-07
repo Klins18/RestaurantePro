@@ -2,10 +2,13 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, supervisor_required, permiso_required
 from models import db, Producto, Categoria, MovimientoAlmacen, Proveedor, registrar_auditoria
+from services.units import normalize_unit
 from services.kardex import registrar_kardex
 from routes.helpers import agrupar_por_categoria
 from datetime import datetime, date, timedelta
+import math
 import pytz
+from sqlalchemy import func
 
 almacen_bp = Blueprint('almacen', __name__, url_prefix='/almacen')
 PERU_TZ = pytz.timezone('America/Lima')
@@ -26,7 +29,9 @@ def index():
 
     q = Producto.query.filter_by(activo=True)
     if categoria_id:
-        q = q.filter_by(categoria_id=int(categoria_id))
+        cat_id = request.args.get('categoria', type=int)
+        if cat_id:
+            q = q.filter_by(categoria_id=cat_id)
     if q_filtro:
         q = q.filter(Producto.nombre.ilike(f'%{q_filtro}%'))
     if solo_bajos:
@@ -37,8 +42,11 @@ def index():
         Categoria.nombre.is_(None), Categoria.nombre, Producto.nombre
     ).all()
     categorias = Categoria.query.filter_by(activo=True).order_by(Categoria.nombre).all()
-    alertas = sum(1 for p in Producto.query.filter_by(activo=True).all()
-                  if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0)
+    alertas = Producto.query.filter(
+        Producto.activo.is_(True),
+        Producto.stock_actual <= Producto.stock_minimo,
+        Producto.stock_minimo > 0,
+    ).count()
 
     return render_template('almacen/index.html',
                            productos=productos, categorias=categorias,
@@ -61,13 +69,16 @@ def alertas():
         (Producto.stock_actual / Producto.stock_minimo)
     ).all()
 
-    # Para cada producto, último ingreso
-    detalle = []
-    for p in productos_bajos:
-        ultimo_ing = MovimientoAlmacen.query.filter_by(
-            producto_id=p.id, tipo='ingreso'
-        ).order_by(MovimientoAlmacen.fecha_hora.desc()).first()
-        detalle.append({'producto': p, 'ultimo_ingreso': ultimo_ing})
+    ultimo_ingreso = db.session.query(
+        MovimientoAlmacen.producto_id.label('producto_id'),
+        func.max(MovimientoAlmacen.id).label('mov_id'),
+    ).filter(MovimientoAlmacen.tipo == 'ingreso').group_by(
+        MovimientoAlmacen.producto_id
+    ).subquery()
+    ingresos = dict(db.session.query(
+        MovimientoAlmacen.producto_id, MovimientoAlmacen
+    ).join(ultimo_ingreso, MovimientoAlmacen.id == ultimo_ingreso.c.mov_id).all())
+    detalle = [{'producto': p, 'ultimo_ingreso': ingresos.get(p.id)} for p in productos_bajos]
 
     return render_template('almacen/alertas.html', detalle=detalle)
 
@@ -85,14 +96,14 @@ def ingreso():
         except:
             flash('Cantidad inválida', 'error')
             return redirect(request.url)
-        if cantidad <= 0:
+        if cantidad <= 0 or not math.isfinite(cantidad):
             flash('La cantidad debe ser mayor que cero.', 'error')
             return redirect(request.url)
 
         costo_raw = request.form.get('costo_unitario', '').strip()
         try:
             costo_unitario = float(costo_raw) if costo_raw else None
-            if costo_unitario is not None and costo_unitario < 0:
+            if costo_unitario is not None and (costo_unitario < 0 or not math.isfinite(costo_unitario)):
                 raise ValueError
         except ValueError:
             flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
@@ -116,7 +127,7 @@ def ingreso():
             tipo='ingreso',
             producto_id=producto.id,
             cantidad=cantidad,
-            unidad_medida=producto.unidad_medida,
+            unidad_medida=normalize_unit(producto.unidad_medida),
             motivo=request.form.get('motivo', ''),
             referencia=request.form.get('referencia', ''),
             proveedor_id=request.form.get('proveedor_id') or None,
@@ -144,7 +155,7 @@ def ingreso():
         'almacen/ingreso.html',
         productos_por_categoria=agrupar_por_categoria(productos),
         proveedores=proveedores,
-        hoy=date.today(),
+        hoy=now_peru().date(),
     )
 
 # ──────────────────────────────────────
@@ -161,7 +172,7 @@ def egreso():
         except:
             flash('Cantidad inválida', 'error')
             return redirect(request.url)
-        if cantidad <= 0:
+        if cantidad <= 0 or not math.isfinite(cantidad):
             flash('La cantidad debe ser mayor que cero.', 'error')
             return redirect(request.url)
 
@@ -175,7 +186,7 @@ def egreso():
             tipo='egreso',
             producto_id=producto.id,
             cantidad=cantidad,
-            unidad_medida=producto.unidad_medida,
+            unidad_medida=normalize_unit(producto.unidad_medida),
             motivo=request.form.get('motivo', ''),
             referencia=request.form.get('referencia', ''),
             usuario_id=current_user.id,
@@ -206,9 +217,9 @@ def egreso():
 @login_required
 @permiso_required('inventario')
 def movimientos():
-    hoy = date.today()
+    hoy = now_peru().date()
     tipo        = request.args.get('tipo', '')
-    producto_id = request.args.get('producto', '')
+    producto_id = request.args.get('producto', type=int)
     desde_str   = request.args.get('desde', hoy.strftime('%Y-%m-%d'))
     hasta_str   = request.args.get('hasta',  hoy.strftime('%Y-%m-%d'))
 
@@ -216,7 +227,7 @@ def movimientos():
     if tipo:
         q = q.filter_by(tipo=tipo)
     if producto_id:
-        q = q.filter_by(producto_id=int(producto_id))
+        q = q.filter_by(producto_id=producto_id)
     try:
         q = q.filter(MovimientoAlmacen.fecha_hora >=
                      datetime.strptime(desde_str, '%Y-%m-%d'))

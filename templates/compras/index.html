@@ -52,7 +52,7 @@
 <div class="mobile-two-col" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px;">
     <div class="card" style="padding:12px 16px;border-left:4px solid #6366f1;">
         <p style="font-size:0.68rem;font-weight:700;color:#6366f1;text-transform:uppercase;">Compras</p>
-        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|length }}</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ total_compras }}</p>
     </div>
     <div class="card" style="padding:12px 16px;border-left:4px solid #fbbf24;">
         <p style="font-size:0.68rem;font-weight:700;color:#fbbf24;text-transform:uppercase;">Total período</p>
@@ -60,11 +60,11 @@
     </div>
     <div class="card" style="padding:12px 16px;border-left:4px solid #10b981;">
         <p style="font-size:0.68rem;font-weight:700;color:#10b981;text-transform:uppercase;">Con comprobante</p>
-        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|selectattr('archivo_comprobante')|list|length }}</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ con_archivo_count }}</p>
     </div>
     <div class="card" style="padding:12px 16px;border-left:4px solid #ef4444;">
         <p style="font-size:0.68rem;font-weight:700;color:#ef4444;text-transform:uppercase;">Sin comprobante</p>
-        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ compras|rejectattr('archivo_comprobante')|list|length }}</p>
+        <p style="font-size:1.6rem;font-weight:800;color:#1e293b;">{{ sin_archivo_count }}</p>
     </div>
 </div>
 
@@ -136,6 +136,13 @@
     </table>
     </div>
 </div>
+{% if pagina.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:10px;align-items:center;margin:16px 0;">
+    {% if pagina.has_prev %}<a class="btn-secondary btn-sm" href="{{ url_for('compras.index', page=pagina.prev_num, desde=desde, hasta=hasta, tipo=tipo, q=q, con_archivo=con_archivo) }}">Anterior</a>{% endif %}
+    <span style="color:#64748b;font-size:.85rem;">Página {{ pagina.page }} de {{ pagina.pages }}</span>
+    {% if pagina.has_next %}<a class="btn-secondary btn-sm" href="{{ url_for('compras.index', page=pagina.next_num, desde=desde, hasta=hasta, tipo=tipo, q=q, con_archivo=con_archivo) }}">Siguiente</a>{% endif %}
+</div>
+{% endif %}
 
 <!-- Modal vista previa comprobante -->
 <div id="modal-comp" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;">

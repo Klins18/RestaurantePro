@@ -1,7 +1,9 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+import math
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, current_app
 from flask_login import login_required, current_user
+from routes.decorators import admin_required, permiso_required
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 from models import (db, Empleado, Asistencia, FuncionDiaria, Usuario,
@@ -24,8 +26,9 @@ def guardar_archivo_honorario(file):
     if ext not in ['.pdf', '.jpg', '.jpeg', '.png']:
         return None
     nombre = f"honorario_{uuid.uuid4().hex[:10]}{ext}"
-    os.makedirs(UPLOAD_HONORARIOS, exist_ok=True)
-    file.save(os.path.join(UPLOAD_HONORARIOS, nombre))
+    folder = os.path.join(current_app.instance_path, 'uploads', 'honorarios')
+    os.makedirs(folder, exist_ok=True)
+    file.save(os.path.join(folder, nombre))
     return nombre
 
 # ─────────────────────────────────
@@ -33,6 +36,7 @@ def guardar_archivo_honorario(file):
 # ─────────────────────────────────
 @empleados_bp.route('/')
 @login_required
+@admin_required
 def index():
     empleados = Empleado.query.order_by(Empleado.apellidos).all()
     # Usuarios sin empleado vinculado (para mostrar en formulario)
@@ -41,13 +45,14 @@ def index():
     ).all()
     return render_template('empleados/index.html',
                            empleados=empleados, usuarios_libres=usuarios_libres,
-                           hoy=date.today())
+                           hoy=now_peru().date())
 
 # ─────────────────────────────────
 #  NUEVO EMPLEADO
 # ─────────────────────────────────
 @empleados_bp.route('/nuevo', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def nuevo():
     if request.method == 'POST':
         fn_str = request.form.get('fecha_nacimiento', '')
@@ -57,9 +62,19 @@ def nuevo():
         try: fi = datetime.strptime(fi_str, '%Y-%m-%d').date() if fi_str else None
         except: fi = None
 
+        nombres = request.form.get('nombres', '').strip()
+        apellidos = request.form.get('apellidos', '').strip()
+        try:
+            sueldo_base = float(request.form.get('sueldo_base', 0) or 0)
+            if sueldo_base < 0 or not math.isfinite(sueldo_base) or not nombres or not apellidos:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            flash('Nombres, apellidos y sueldo válido no negativo son obligatorios.', 'error')
+            return redirect(url_for('empleados.nuevo'))
+
         empleado = Empleado(
-            nombres=request.form.get('nombres', '').strip(),
-            apellidos=request.form.get('apellidos', '').strip(),
+            nombres=nombres,
+            apellidos=apellidos,
             dni=request.form.get('dni', '').strip() or None,
             telefono=request.form.get('telefono', '').strip(),
             direccion=request.form.get('direccion', '').strip(),
@@ -67,7 +82,7 @@ def nuevo():
             cargo=request.form.get('cargo', '').strip(),
             fecha_ingreso=fi,
             tipo_contrato=request.form.get('tipo_contrato', 'fijo'),
-            sueldo_base=float(request.form.get('sueldo_base', 0) or 0),
+            sueldo_base=sueldo_base,
             activo=True
         )
 
@@ -77,10 +92,16 @@ def nuevo():
             username = request.form.get('nuevo_username', '').strip()
             password = request.form.get('nuevo_password', '').strip()
             if username and password:
+                if len(password) < 8:
+                    flash('La contraseña debe tener al menos 8 caracteres.', 'error')
+                    return render_template('empleados/nuevo.html', hoy=now_peru().date())
+                rol = request.form.get('nuevo_rol', 'empleado')
+                if rol not in {'empleado', 'supervisor'}:
+                    flash('El rol de la cuenta no es válido.', 'error')
+                    return render_template('empleados/nuevo.html', hoy=now_peru().date())
                 if Usuario.query.filter_by(username=username).first():
                     flash(f'El usuario "{username}" ya existe.', 'error')
-                    return render_template('empleados/nuevo.html', hoy=date.today())
-                rol = request.form.get('nuevo_rol', 'empleado')
+                    return render_template('empleados/nuevo.html', hoy=now_peru().date())
                 u = Usuario(username=username, nombre_completo=empleado.nombres + ' ' + request.form.get('apellidos','').strip(),
                             rol=rol, password_hash=generate_password_hash(password), activo=True)
                 db.session.add(u)
@@ -94,16 +115,17 @@ def nuevo():
         flash(f'Empleado registrado correctamente.', 'success')
         return redirect(url_for('empleados.ver', id=empleado.id))
 
-    return render_template('empleados/nuevo.html', hoy=date.today())
+    return render_template('empleados/nuevo.html', hoy=now_peru().date())
 
 # ─────────────────────────────────
 #  VER EMPLEADO
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>')
 @login_required
+@admin_required
 def ver(id):
     empleado = Empleado.query.get_or_404(id)
-    hoy = date.today()
+    hoy = now_peru().date()
     asistencias_mes = Asistencia.query.filter(
         Asistencia.empleado_id == id,
         Asistencia.fecha >= hoy.replace(day=1)
@@ -123,6 +145,7 @@ def ver(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def editar(id):
     empleado = Empleado.query.get_or_404(id)
     if request.method == 'POST':
@@ -133,8 +156,18 @@ def editar(id):
         try: fi = datetime.strptime(fi_str, '%Y-%m-%d').date() if fi_str else None
         except: fi = None
 
-        empleado.nombres = request.form.get('nombres', '').strip()
-        empleado.apellidos = request.form.get('apellidos', '').strip()
+        nombres = request.form.get('nombres', '').strip()
+        apellidos = request.form.get('apellidos', '').strip()
+        try:
+            sueldo_base = float(request.form.get('sueldo_base', 0) or 0)
+            if sueldo_base < 0 or not math.isfinite(sueldo_base) or not nombres or not apellidos:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            flash('Nombres, apellidos y sueldo válido no negativo son obligatorios.', 'error')
+            return redirect(url_for('empleados.editar', id=id))
+
+        empleado.nombres = nombres
+        empleado.apellidos = apellidos
         empleado.dni = request.form.get('dni', '').strip() or None
         empleado.telefono = request.form.get('telefono', '').strip()
         empleado.direccion = request.form.get('direccion', '').strip()
@@ -143,7 +176,7 @@ def editar(id):
         empleado.cargo = request.form.get('cargo', '').strip()
         empleado.fecha_ingreso = fi
         empleado.tipo_contrato = request.form.get('tipo_contrato', 'fijo')
-        empleado.sueldo_base = float(request.form.get('sueldo_base', 0) or 0)
+        empleado.sueldo_base = sueldo_base
         empleado.activo = request.form.get('activo') in ('1', 'on', 'true', 'True')
 
         # Vincular usuario existente
@@ -164,6 +197,7 @@ def editar(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/vincular-usuario', methods=['POST'])
 @login_required
+@admin_required
 def vincular_usuario(id):
     empleado = Empleado.query.get_or_404(id)
     accion = request.form.get('accion', 'vincular')
@@ -204,6 +238,7 @@ def vincular_usuario(id):
 # ─────────────────────────────────
 @empleados_bp.route('/<int:id>/cambiar-password', methods=['POST'])
 @login_required
+@admin_required
 def cambiar_password(id):
     empleado = Empleado.query.get_or_404(id)
     if not empleado.usuario:
@@ -211,8 +246,8 @@ def cambiar_password(id):
         return redirect(url_for('empleados.ver', id=id))
 
     nueva = request.form.get('nueva_password', '').strip()
-    if len(nueva) < 3:
-        flash('La contraseña debe tener al menos 3 caracteres.', 'error')
+    if len(nueva) < 8:
+        flash('La contraseña debe tener al menos 8 caracteres.', 'error')
         return redirect(url_for('empleados.ver', id=id))
 
     empleado.usuario.password_hash = generate_password_hash(nueva)
@@ -240,8 +275,8 @@ def mi_password():
         if nueva != repite:
             flash('Las contraseñas nuevas no coinciden.', 'error')
             return redirect(url_for('empleados.mi_password'))
-        if len(nueva) < 3:
-            flash('La contraseña debe tener al menos 3 caracteres.', 'error')
+        if len(nueva) < 8:
+            flash('La contraseña debe tener al menos 8 caracteres.', 'error')
             return redirect(url_for('empleados.mi_password'))
 
         current_user.password_hash = generate_password_hash(nueva)
@@ -256,8 +291,9 @@ def mi_password():
 # ─────────────────────────────────
 @empleados_bp.route('/asistencia', methods=['GET', 'POST'])
 @login_required
+@permiso_required('asistencia')
 def asistencia():
-    hoy = date.today()
+    hoy = now_peru().date()
     fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
     try: fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
     except: fecha = hoy
@@ -364,10 +400,16 @@ def asistencia():
 # ─────────────────────────────────
 @empleados_bp.route('/reporte')
 @login_required
+@permiso_required('honorarios')
 def reporte():
-    hoy  = date.today()
-    mes  = int(request.args.get('mes', hoy.month))
-    anio = int(request.args.get('anio', hoy.year))
+    hoy  = now_peru().date()
+    try:
+        mes = int(request.args.get('mes', hoy.month))
+        anio = int(request.args.get('anio', hoy.year))
+        if not 1 <= mes <= 12 or not 2000 <= anio <= 2100:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        mes, anio = hoy.month, hoy.year
     desde = date(anio, mes, 1)
     if mes == 12:
         hasta = date(anio + 1, 1, 1) - timedelta(days=1)
@@ -404,8 +446,9 @@ def reporte():
 # ─────────────────────────────────
 @empleados_bp.route('/funciones', methods=['GET', 'POST'])
 @login_required
+@permiso_required('asistencia')
 def funciones():
-    hoy = date.today()
+    hoy = now_peru().date()
     fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
     try: fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
     except: fecha = hoy
@@ -413,20 +456,26 @@ def funciones():
     empleados_activos = Empleado.query.filter_by(activo=True).order_by(Empleado.apellidos).all()
 
     if request.method == 'POST':
-        emp_id  = int(request.form.get('empleado_id'))
+        try:
+            emp_id = int(request.form.get('empleado_id'))
+        except (TypeError, ValueError):
+            flash('Selecciona un empleado válido.', 'error')
+            return redirect(url_for('empleados.funciones', fecha=fecha_str))
         funcion = request.form.get('funcion', '').strip()
         area    = request.form.get('area', '').strip()
         fecha_f_str = request.form.get('fecha', hoy.strftime('%Y-%m-%d'))
         try: fecha_f = datetime.strptime(fecha_f_str, '%Y-%m-%d').date()
         except: fecha_f = hoy
 
-        if funcion:
-            db.session.add(FuncionDiaria(
-                empleado_id=emp_id, fecha=fecha_f, funcion=funcion,
-                area=area, registrado_por=current_user.id, creado_en=now_peru()
-            ))
-            db.session.commit()
-            flash('Función registrada.', 'success')
+        if not funcion or not Empleado.query.filter_by(id=emp_id, activo=True).first():
+            flash('La función y un empleado activo son obligatorios.', 'error')
+            return redirect(url_for('empleados.funciones', fecha=fecha_f_str))
+        db.session.add(FuncionDiaria(
+            empleado_id=emp_id, fecha=fecha_f, funcion=funcion,
+            area=area, registrado_por=current_user.id, creado_en=now_peru()
+        ))
+        db.session.commit()
+        flash('Función registrada.', 'success')
         return redirect(url_for('empleados.funciones', fecha=fecha_f_str))
 
     funciones_dia = FuncionDiaria.query.filter_by(fecha=fecha).order_by(FuncionDiaria.empleado_id).all()
@@ -436,6 +485,7 @@ def funciones():
 
 @empleados_bp.route('/funciones/<int:id>/toggle', methods=['POST'])
 @login_required
+@permiso_required('asistencia')
 def toggle_funcion(id):
     f = FuncionDiaria.query.get_or_404(id)
     f.completado = not f.completado
@@ -444,6 +494,7 @@ def toggle_funcion(id):
 
 @empleados_bp.route('/funciones/<int:id>/eliminar', methods=['POST'])
 @login_required
+@permiso_required('asistencia')
 def eliminar_funcion(id):
     f = FuncionDiaria.query.get_or_404(id)
     db.session.delete(f)
@@ -456,17 +507,28 @@ def eliminar_funcion(id):
 # ─────────────────────────────────
 @empleados_bp.route('/honorarios')
 @login_required
+@permiso_required('honorarios')
 def honorarios():
     desde_str = request.args.get('desde', '')
     hasta_str = request.args.get('hasta', '')
     emp_id    = request.args.get('empleado_id', '')
-    hoy = date.today()
-    desde = datetime.strptime(desde_str, '%Y-%m-%d').date() if desde_str else date(hoy.year, hoy.month, 1)
-    hasta = datetime.strptime(hasta_str, '%Y-%m-%d').date() if hasta_str else hoy
+    hoy = now_peru().date()
+    try:
+        desde = datetime.strptime(desde_str, '%Y-%m-%d').date() if desde_str else date(hoy.year, hoy.month, 1)
+        hasta = datetime.strptime(hasta_str, '%Y-%m-%d').date() if hasta_str else hoy
+    except ValueError:
+        desde, hasta = date(hoy.year, hoy.month, 1), hoy
+    if desde > hasta:
+        desde, hasta = hasta, desde
 
     q = Honorario.query.filter(Honorario.fecha_pago >= desde, Honorario.fecha_pago <= hasta)
     if emp_id:
-        q = q.filter(Honorario.empleado_id == int(emp_id))
+        try:
+            emp_id = int(emp_id)
+        except ValueError:
+            emp_id = ''
+        if emp_id:
+            q = q.filter(Honorario.empleado_id == emp_id)
     honorarios = q.order_by(Honorario.fecha_pago.desc()).all()
     empleados_activos = Empleado.query.filter_by(activo=True).order_by(Empleado.apellidos).all()
     total = sum(h.monto for h in honorarios)
@@ -478,18 +540,32 @@ def honorarios():
 
 @empleados_bp.route('/honorarios/nuevo', methods=['POST'])
 @login_required
+@permiso_required('honorarios')
 def nuevo_honorario():
     def pd(s):
         try: return datetime.strptime(s, '%Y-%m-%d').date()
         except: return None
 
+    try:
+        empleado_id = int(request.form.get('empleado_id'))
+        monto = float(request.form.get('monto', 0) or 0)
+        if monto < 0 or not math.isfinite(monto) or not db.session.get(Empleado, empleado_id):
+            raise ValueError
+        periodo_desde = pd(request.form.get('periodo_desde'))
+        periodo_hasta = pd(request.form.get('periodo_hasta'))
+        if periodo_desde and periodo_hasta and periodo_desde > periodo_hasta:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('Empleado, monto y período deben ser válidos.', 'error')
+        return redirect(url_for('empleados.honorarios'))
+
     archivo = guardar_archivo_honorario(request.files.get('archivo_recibo'))
     h = Honorario(
-        empleado_id   = int(request.form.get('empleado_id')),
-        fecha_pago    = pd(request.form.get('fecha_pago')) or date.today(),
-        periodo_desde = pd(request.form.get('periodo_desde')),
-        periodo_hasta = pd(request.form.get('periodo_hasta')),
-        monto         = float(request.form.get('monto', 0) or 0),
+        empleado_id   = empleado_id,
+        fecha_pago    = pd(request.form.get('fecha_pago')) or now_peru().date(),
+        periodo_desde = periodo_desde,
+        periodo_hasta = periodo_hasta,
+        monto         = monto,
         tipo_pago     = request.form.get('tipo_pago', 'efectivo'),
         concepto      = request.form.get('concepto', '').strip(),
         numero_recibo = request.form.get('numero_recibo', '').strip(),
@@ -505,6 +581,7 @@ def nuevo_honorario():
 
 @empleados_bp.route('/honorarios/<int:id>/eliminar', methods=['POST'])
 @login_required
+@admin_required
 def eliminar_honorario(id):
     h = Honorario.query.get_or_404(id)
     db.session.delete(h)
@@ -514,5 +591,10 @@ def eliminar_honorario(id):
 
 @empleados_bp.route('/honorarios/archivo/<filename>')
 @login_required
+@permiso_required('honorarios')
 def archivo_honorario(filename):
-    return send_from_directory(UPLOAD_HONORARIOS, filename)
+    safe_name = secure_filename(filename)
+    private_folder = os.path.join(current_app.instance_path, 'uploads', 'honorarios')
+    legacy_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'honorarios')
+    folder = private_folder if os.path.isfile(os.path.join(private_folder, safe_name)) else legacy_folder
+    return send_from_directory(folder, safe_name, as_attachment=True)

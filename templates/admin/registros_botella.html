@@ -98,6 +98,7 @@
             <!-- Editar registro existente -->
             <form method="POST" action="{{ url_for('admin.editar_registro_botella', reg_id=reg.id) }}"
                   style="display:flex;flex-direction:column;gap:8px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div style="display:flex;gap:8px;">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#dcfce7;padding:8px 12px;border-radius:8px;flex:1;justify-content:center;">
                         <input type="radio" name="botella_vacia" value="si" {% if reg.botella_vacia %}checked{% endif %}>
@@ -116,6 +117,7 @@
             <!-- Crear nuevo registro -->
             <form method="POST" action="{{ url_for('admin.confirmar_botella') }}"
                   style="display:flex;flex-direction:column;gap:8px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="producto_carta_id" value="{{ vino.id }}">
                 <input type="hidden" name="fecha" value="{{ fecha_str }}">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">

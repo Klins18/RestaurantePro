@@ -38,6 +38,18 @@ class Usuario(UserMixin, db.Model):
     def __repr__(self):
         return f'<Usuario {self.username}>'
 
+
+class LoginAttempt(db.Model):
+    """Control persistente de intentos para frenar fuerza bruta entre workers."""
+    __tablename__ = 'login_attempts'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False)
+    ip = db.Column(db.String(45), nullable=False)
+    intentos = db.Column(db.Integer, nullable=False, default=0)
+    ventana_inicio = db.Column(db.DateTime, nullable=False, default=now_peru)
+    bloqueado_hasta = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint('username', 'ip', name='uq_login_attempt_username_ip'),)
+
 # ─────────────────────────────────────────
 #  CATEGORÍAS DE PRODUCTOS
 # ─────────────────────────────────────────
@@ -394,11 +406,22 @@ class ItemCompra(db.Model):
 # ─────────────────────────────────────────
 #  REGISTRO DE VENTAS DIARIAS
 # ─────────────────────────────────────────
+class SolicitudVenta(db.Model):
+    """Clave idempotente para no repetir una operación al reintentar el envío."""
+    __tablename__ = 'solicitudes_venta'
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(32), nullable=False, unique=True)
+    fecha = db.Column(db.Date, nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    creado_en = db.Column(db.DateTime, default=now_peru, nullable=False)
+
+
 class VentaDiaria(db.Model):
     """Cabecera de venta — un grupo o servicio del día"""
     __tablename__ = 'ventas_diarias'
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, nullable=False)
+    solicitud_id = db.Column(db.Integer, db.ForeignKey('solicitudes_venta.id'), nullable=True)
     empresa_id = db.Column(db.Integer, db.ForeignKey('empresas_turisticas.id'), nullable=True)
     tipo_cliente = db.Column(db.String(20), default='empresa')   # empresa | privado
     nombre_grupo = db.Column(db.String(150))                     # solo para grupos privados
@@ -441,7 +464,12 @@ class CierreCaja(db.Model):
     observaciones = db.Column(db.Text)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     creado_en = db.Column(db.DateTime, default=now_peru)
-    usuario = db.relationship('Usuario')
+    abierta = db.Column(db.Boolean, nullable=False, default=False)
+    reabierta_en = db.Column(db.DateTime)
+    reabierta_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    motivo_reapertura = db.Column(db.Text)
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id])
+    reabierta_por = db.relationship('Usuario', foreign_keys=[reabierta_por_id])
 
 
 class ItemVenta(db.Model):
@@ -491,7 +519,7 @@ class Empleado(db.Model):
     def cumpleanos_hoy(self):
         from datetime import date
         if self.fecha_nacimiento:
-            hoy = date.today()
+            hoy = now_peru().date()
             return (self.fecha_nacimiento.month == hoy.month and
                     self.fecha_nacimiento.day == hoy.day)
         return False
@@ -500,7 +528,7 @@ class Empleado(db.Model):
     def edad(self):
         from datetime import date
         if self.fecha_nacimiento:
-            hoy = date.today()
+            hoy = now_peru().date()
             return hoy.year - self.fecha_nacimiento.year - (
                 (hoy.month, hoy.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day))
         return None
@@ -510,7 +538,7 @@ class Empleado(db.Model):
         from datetime import date
         if not self.fecha_nacimiento:
             return None
-        hoy = date.today()
+        hoy = now_peru().date()
         try:
             proximo = self.fecha_nacimiento.replace(year=hoy.year)
         except ValueError:
@@ -559,8 +587,9 @@ class FuncionDiaria(db.Model):
 # ══════════════════════════════════════════════
 class CategoriaBien(db.Model):
     __tablename__ = 'categorias_bien'
+    __table_args__ = (db.UniqueConstraint('nombre', 'area', name='uq_categoria_bien_area'),)
     id          = db.Column(db.Integer, primary_key=True)
-    nombre      = db.Column(db.String(100), nullable=False, unique=True)
+    nombre      = db.Column(db.String(100), nullable=False)
     area        = db.Column(db.String(50))   # ALMACÉN | COMEDOR | COCINA
     descripcion = db.Column(db.String(255))
     activo      = db.Column(db.Boolean, default=True)
@@ -834,6 +863,13 @@ from sqlalchemy import Index
 Index('ix_ventas_fecha',       VentaDiaria.fecha)
 Index('ix_ventas_empresa',     VentaDiaria.empresa_id)
 Index('ix_ventas_fecha_emp',   VentaDiaria.fecha, VentaDiaria.empresa_id)
+Index('ix_ventas_solicitud',   VentaDiaria.solicitud_id)
+Index('ix_items_venta_venta',  ItemVenta.venta_id)
+Index('ix_productos_categoria_activo', Producto.categoria_id, Producto.activo)
+Index('ix_pedidos_estado_fecha', ListaPedido.estado, ListaPedido.elaborado_en)
+Index('ix_movimientos_producto_fecha', MovimientoAlmacen.producto_id, MovimientoAlmacen.fecha_hora)
+Index('ix_movimientos_tipo_fecha', MovimientoAlmacen.tipo, MovimientoAlmacen.fecha_hora)
+Index('ix_items_compra_compra', ItemCompra.compra_id)
 
 # Compras
 Index('ix_compras_fecha',      Compra.fecha)
@@ -846,12 +882,14 @@ Index('ix_asist_emp_fecha',    Asistencia.empleado_id, Asistencia.fecha)
 # Kardex — consultado por producto y fecha
 Index('ix_kardex_alm_prod',    KardexAlmacen.producto_id)
 Index('ix_kardex_alm_fecha',   KardexAlmacen.fecha)
+Index('ix_kardex_alm_prod_fecha', KardexAlmacen.producto_id, KardexAlmacen.fecha)
 Index('ix_kardex_com_prod',    KardexComedor.producto_carta_id)
 Index('ix_kardex_bien_prod_fecha', KardexBienes.bien_id, KardexBienes.fecha)
 
 # Auditoría — consultada por fecha
 Index('ix_auditoria_fecha',    Auditoria.fecha_hora)
 Index('ix_auditoria_tabla',    Auditoria.tabla)
+Index('ix_login_attempts_window', LoginAttempt.ventana_inicio)
 
 # Notificaciones — consultadas por destinatario y estado de lectura
 Index('ix_notif_dest_leido',   Notificacion.destinatario_id, Notificacion.leido)
@@ -860,6 +898,7 @@ Index('ix_notif_dest_leido',   Notificacion.destinatario_id, Notificacion.leido)
 Index('ix_pasajeros_fecha',    RegistroPasajeros.fecha)
 Index('ix_reservas_fecha',     Reserva.fecha)
 Index('ix_reservas_estado',    Reserva.estado)
+Index('ix_reservas_estado_fecha', Reserva.estado, Reserva.fecha)
 
 # Permisos — consultados por usuario en cada request
 Index('ix_permisos_usuario',   PermisoUsuario.usuario_id)

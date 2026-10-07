@@ -1,12 +1,17 @@
 {% extends 'base.html' %}
 {% block title %}Pasajeros del Día{% endblock %}
-{% block page_title %}Pasajeros del Día{% endblock %}
-{% block page_subtitle %}Registro por empresa y ruta · {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
+{% block page_title %}Control de pasajeros{% endblock %}
+{% block page_subtitle %}Registro operativo por empresa y ruta · {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
 {% block header_actions %}
 <a href="{{ url_for('pasajeros.reservas') }}" class="btn-secondary btn-sm">📅 Reservas</a>
 {% endblock %}
 
 {% block content %}
+
+<div class="card" style="padding:11px 14px;margin-bottom:14px;background:#eff6ff;border-left:4px solid #3b82f6;color:#1e3a8a;font-size:.85rem;">
+    Este control es para contar grupos y pasajeros por ruta. <strong>No registra una venta ni afecta la caja.</strong>
+    Para ingresos y consumo de productos, usa <strong>Registrar venta</strong>; no registres el mismo grupo dos veces salvo que necesites ambos controles.
+</div>
 
 <!-- Selector de fecha -->
 <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -30,9 +35,7 @@
 <div class="card" style="padding:12px 16px;border-left:4px solid {{ datos.color }};">
     <p style="font-size:0.7rem;font-weight:700;color:{{ datos.color }};text-transform:uppercase;margin-bottom:2px;">{{ nombre }}</p>
     <p style="font-size:1.6rem;font-weight:800;color:#1e293b;line-height:1;">{{ datos.pax }}</p>
-    <p style="font-size:0.72rem;color:#94a3b8;">pax
-        {% if datos.ingresos > 0 %}· S/.{{ '%.0f'|format(datos.ingresos) }}{% endif %}
-    </p>
+    <p style="font-size:0.72rem;color:#94a3b8;">pasajeros en el control operativo</p>
 </div>
 {% endfor %}
 </div>
@@ -44,6 +47,7 @@
 <div class="card" style="padding:16px;">
     <h3 style="font-weight:700;color:#1e293b;font-size:0.9rem;margin-bottom:14px;">➕ Nuevo registro</h3>
     <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="display:flex;flex-direction:column;gap:10px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="accion" value="nuevo">
         <input type="hidden" name="fecha" value="{{ fecha.strftime('%Y-%m-%d') }}">
 
@@ -68,7 +72,7 @@
                 <input type="number" name="num_pax" class="input" min="1" value="1" required>
             </div>
             <div>
-                <label class="label">Precio buffet S/.</label>
+                <label class="label">Precio buffet referencial S/.</label>
                 <input type="number" name="precio_buffet" class="input" min="0" step="0.5" value="0">
             </div>
         </div>
@@ -99,7 +103,7 @@
         <thead><tr style="background:#f8fafc;">
             <th class="th">Empresa / Grupo</th>
             <th class="th" style="text-align:center;">Pax</th>
-            <th class="th">Precio buffet</th>
+            <th class="th">Precio buffet referencial</th>
             <th class="th">Ruta</th>
             <th class="th">Obs.</th>
             <th class="th" style="text-align:center;">Acciones</th>
@@ -127,6 +131,7 @@
                         style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">✏️</button>
                     <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="margin:0;"
                           onsubmit="return confirm('¿Eliminar este registro?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="accion" value="eliminar">
                         <input type="hidden" name="reg_id" value="{{ r.id }}">
                         <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️</button>
@@ -152,6 +157,7 @@
     <div class="card" style="width:400px;max-width:95vw;padding:20px;">
         <h3 style="font-weight:700;color:#1e293b;margin-bottom:14px;">✏️ Editar registro</h3>
         <form method="POST" action="{{ url_for('pasajeros.index', fecha=fecha.strftime('%Y-%m-%d')) }}" style="display:flex;flex-direction:column;gap:10px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="accion" value="editar">
             <input type="hidden" name="reg_id" id="edit-reg-id">
             <div>

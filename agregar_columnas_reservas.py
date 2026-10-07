@@ -1,5 +1,5 @@
 """
-Ejecutar desde D:\RestaurantePro\ con:
+Ejecutar desde D:\\RestaurantePro\\ con:
   python agregar_columnas_reservas.py
 """
 import sqlite3, os

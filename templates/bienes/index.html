@@ -3,7 +3,7 @@
 {% block page_title %}Inventario de Bienes{% endblock %}
 {% block page_subtitle %}Equipos, muebles, menajería y utensilios{% endblock %}
 {% block header_actions %}
-<a href="{{ url_for('bienes.nuevo') }}" class="btn-primary btn-sm">+ Nuevo bien</a>
+<a href="{{ url_for('bienes.nuevo', area=area_sel) if area_sel else url_for('bienes.nuevo') }}" class="btn-primary btn-sm">+ Agregar bien{% if area_sel %} a {{ area_sel|title }}{% endif %}</a>
 <a href="{{ url_for('kardex.bienes') }}" class="btn-secondary btn-sm">🗂️ Kardex</a>
 <a href="{{ url_for('bienes.categorias') }}" class="btn-secondary btn-sm">📁 Categorías</a>
 {% endblock %}
@@ -46,7 +46,6 @@
 <!-- FILTROS -->
 <div class="card" style="padding:12px 16px;margin-bottom:14px;">
     <form method="GET" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-        {% if area_sel %}<input type="hidden" name="area" value="{{ area_sel }}">{% endif %}
         <div style="flex:2;min-width:180px;">
             <label class="label">🔍 Buscar</label>
             <input type="text" name="q" value="{{ buscar }}" class="input" placeholder="Nombre del bien...">
@@ -147,6 +146,7 @@
                        style="background:#fef3c7;color:#92400e;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;text-decoration:none;">✏️</a>
                     <form method="POST" action="{{ url_for('bienes.eliminar', id=b.id) }}" style="margin:0;"
                           onsubmit="return confirm('¿Eliminar «{{ b.nombre }}»?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" style="background:#fee2e2;color:#ef4444;border:none;border-radius:7px;padding:4px 9px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️</button>
                     </form>
                 </div>

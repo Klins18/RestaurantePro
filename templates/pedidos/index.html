@@ -87,4 +87,11 @@
     </table>
     </div>
 </div>
+{% if pagina.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:10px;align-items:center;margin:16px 0;">
+    {% if pagina.has_prev %}<a class="btn-secondary btn-sm" href="{{ url_for('pedidos.index', page=pagina.prev_num, estado=estado_filtro, tipo=tipo_filtro) }}">Anterior</a>{% endif %}
+    <span style="color:#64748b;font-size:.85rem;">Página {{ pagina.page }} de {{ pagina.pages }}</span>
+    {% if pagina.has_next %}<a class="btn-secondary btn-sm" href="{{ url_for('pedidos.index', page=pagina.next_num, estado=estado_filtro, tipo=tipo_filtro) }}">Siguiente</a>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

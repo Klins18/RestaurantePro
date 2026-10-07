@@ -14,6 +14,42 @@
         .btn { width:100%; background:#f59e0b; color:white; font-weight:700; padding:12px; border-radius:10px; border:none; cursor:pointer; font-size:1rem; transition:all 0.2s; }
         .btn:hover { background:#d97706; }
         .label { display:block; font-size:0.84rem; font-weight:600; color:#374151; margin-bottom:6px; }
+        
+        /* ─── CAMPO DE CONTRASEÑA ─── */
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        .password-wrapper .input {
+            padding-right: 44px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 7px;
+            font-size: 1rem;
+            padding: 0;
+            transition: background 0.15s, color 0.15s;
+        }
+        .password-toggle:hover {
+            background: #f1f5f9;
+            color: #334155;
+        }
+        .password-toggle:focus {
+            outline: 2px solid #fbbf24;
+            outline-offset: 1px;
+        }
         .flash-error { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:10px; padding:10px 14px; font-size:0.875rem; margin-bottom:16px; }
         .flash-warn  { background:#fefce8; color:#854d0e; border:1px solid #fde68a; border-radius:10px; padding:10px 14px; font-size:0.875rem; margin-bottom:16px; }
     </style>
@@ -31,6 +67,7 @@
         {% endfor %}
     {% endwith %}
     <form method="POST" action="{{ url_for('auth.login') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="margin-bottom:16px;">
             <label class="label">Usuario</label>
             <input type="text" name="username" class="input" placeholder="Tu usuario" required autofocus>
@@ -43,5 +80,53 @@
     </form>
     <p style="text-align:center;font-size:0.75rem;color:#94a3b8;margin-top:20px;">Restaurante Turístico Marangani</p>
 </div>
+    <script>
+    // ─── MOSTRAR / OCULTAR CONTRASEÑA ───
+    document.addEventListener('DOMContentLoaded', function () {
+
+        document.querySelectorAll('input[type="password"]').forEach(function (input) {
+
+            if (input.dataset.passwordToggle === 'true') {
+                return;
+            }
+
+            input.dataset.passwordToggle = 'true';
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'password-wrapper';
+
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'password-toggle';
+            button.setAttribute('aria-label', 'Mostrar contraseña');
+            button.setAttribute('title', 'Mostrar contraseña');
+            button.innerHTML = '👁️';
+
+            wrapper.appendChild(button);
+
+            button.addEventListener('click', function () {
+
+                const visible = input.type === 'text';
+
+                input.type = visible ? 'password' : 'text';
+
+                button.innerHTML = visible ? '👁️' : '🙈';
+
+                button.setAttribute(
+                    'aria-label',
+                    visible ? 'Mostrar contraseña' : 'Ocultar contraseña'
+                );
+
+                button.setAttribute(
+                    'title',
+                    visible ? 'Mostrar contraseña' : 'Ocultar contraseña'
+                );
+            });
+        });
+    });
+</script>
 </body>
 </html>

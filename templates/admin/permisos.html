@@ -45,6 +45,7 @@
         {% for key, (icono, label) in permisos_labels.items() %}
         {% set activo = key in perms %}
         <form method="POST" action="{{ url_for('admin.toggle_permiso', usuario_id=usuario.id) }}" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="permiso" value="{{ key }}">
             <button type="submit" style="
                 width:100%;text-align:left;padding:10px 14px;border-radius:10px;cursor:pointer;

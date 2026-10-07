@@ -22,6 +22,7 @@
     <p style="font-weight:700;color:#1e293b;margin-bottom:10px;font-size:0.9rem;">➕ Registrar entrega</p>
     <form method="POST" action="{{ url_for('suministros.registrar_entrega', pid=prod.id) }}"
           style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div><label class="label">Fecha</label>
             <input type="date" name="fecha" class="input" value="{{ hoy }}" style="width:145px;"></div>
         <div><label class="label">Cantidad ({{ prod.unidad }})</label>
@@ -78,6 +79,7 @@
             <td class="td" style="font-size:0.8rem;color:#94a3b8;">{{ e.observaciones or '—' }}</td>
             <td class="td" style="text-align:center;">
                 <form method="POST" action="{{ url_for('suministros.eliminar_entrega', eid=e.id) }}" style="display:inline;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" onclick="return confirm('¿Eliminar esta entrega?')"
                         style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.9rem;">🗑️</button>
                 </form>
@@ -137,6 +139,7 @@
         </div>
         <form method="POST" action="{{ url_for('suministros.registrar_pago', pid=prod.id) }}"
               enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="background:#fef3c7;border-radius:8px;padding:10px 14px;">
                 <p style="font-size:0.82rem;font-weight:700;color:#92400e;">
                     Pendiente: {{ pend_cantidad }} {{ prod.unidad }} = S/.{{ "%.2f"|format(pend_monto) }}

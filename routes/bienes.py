@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from routes.decorators import permiso_required
 from models import db, Bien, KardexBienes, CategoriaBien, registrar_auditoria
 from datetime import date, datetime
+import math
 import pytz
 
 bienes_bp = Blueprint('bienes', __name__, url_prefix='/bienes')
@@ -208,7 +210,7 @@ def registrar_kardex_bien(bien, tipo, bueno_antes=0, malo_antes=0,
 # ─── SEMILLA automática ────────────────────────────────────────────────────
 def seed_bienes():
     if Bien.query.count() == 0:
-        hoy = date.today()
+        hoy = datetime.now(PERU_TZ).date()
         cats_cache = {}
         for area, cat_nombre, nombre, bueno, malo, total, obs in SEED_BIENES:
             key = f"{area}|{cat_nombre}"
@@ -243,18 +245,21 @@ def seed_bienes():
 
 @bienes_bp.route('/')
 @login_required
+@permiso_required('inventario')
 def index():
     area_sel  = request.args.get('area', '')
-    cat_sel   = request.args.get('categoria', '')
+    cat_sel   = request.args.get('categoria', type=int)
     buscar    = request.args.get('q', '').strip()
 
     cats = CategoriaBien.query.filter_by(activo=True).order_by(CategoriaBien.area, CategoriaBien.nombre).all()
 
     q = Bien.query.filter_by(activo=True)
     if area_sel:  q = q.filter_by(area=area_sel)
-    if cat_sel:   q = q.filter_by(categoria_id=int(cat_sel))
+    if cat_sel:   q = q.filter_by(categoria_id=cat_sel)
     if buscar:    q = q.filter(Bien.nombre.ilike(f'%{buscar}%'))
-    bienes = q.order_by(Bien.area, Bien.categoria_id, Bien.nombre).all()
+    bienes = q.join(CategoriaBien, Bien.categoria_id == CategoriaBien.id).order_by(
+        Bien.area, CategoriaBien.nombre, Bien.nombre
+    ).all()
 
     # Resumen por área
     resumen = {}
@@ -272,31 +277,60 @@ def index():
 
 @bienes_bp.route('/nuevo', methods=['GET', 'POST'])
 @login_required
+@permiso_required('inventario')
 def nuevo():
     if request.method == 'POST':
         cat_id  = request.form.get('categoria_id')
         nombre  = request.form.get('nombre', '').strip()
         area    = request.form.get('area', '')
-        bueno   = int(request.form.get('estado_bueno', 0) or 0)
-        malo    = int(request.form.get('estado_malo', 0) or 0)
-        total   = int(request.form.get('total', 0) or 0) or (bueno + malo)
+        try:
+            if area not in AREAS:
+                raise ValueError
+            if cat_id == '__new__':
+                cat_nombre = request.form.get('nueva_categoria', '').strip()
+                if not cat_nombre or len(cat_nombre) > 100:
+                    raise ValueError
+                categoria = CategoriaBien.query.filter_by(nombre=cat_nombre, area=area).first()
+                if not categoria:
+                    categoria = CategoriaBien(nombre=cat_nombre, area=area)
+                    db.session.add(categoria)
+                    db.session.flush()
+            else:
+                categoria = db.session.get(CategoriaBien, int(cat_id)) if cat_id else None
+            bueno = int(request.form.get('estado_bueno', 0) or 0)
+            malo = int(request.form.get('estado_malo', 0) or 0)
+            total = int(request.form.get('total', 0) or 0) or (bueno + malo)
+            if min(bueno, malo, total) < 0 or total != bueno + malo:
+                raise ValueError
+            if not categoria or categoria.area != area or area not in AREAS:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            db.session.rollback()
+            flash('Categoría, área y cantidades deben ser válidas; el total debe coincidir con bueno + malo.', 'error')
+            return redirect(request.url)
         obs     = request.form.get('observaciones', '').strip()
         costo_raw = request.form.get('costo_unitario', '').strip()
         try:
             costo_unitario = float(costo_raw) if costo_raw else None
-            if costo_unitario is not None and costo_unitario < 0:
+            if costo_unitario is not None and (costo_unitario < 0 or not math.isfinite(costo_unitario)):
                 raise ValueError
         except ValueError:
+            db.session.rollback()
             flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
             return redirect(request.url)
 
         if not nombre or not cat_id:
+            db.session.rollback()
             flash('Nombre y categoría son obligatorios.', 'error')
+        elif len(nombre) > 200:
+            db.session.rollback()
+            flash('El nombre no puede superar los 200 caracteres.', 'error')
+            return redirect(request.url)
         else:
-            b = Bien(categoria_id=cat_id, nombre=nombre, area=area,
+            b = Bien(categoria_id=categoria.id, nombre=nombre, area=area,
                      estado_bueno=bueno, estado_malo=malo, total=total,
                      costo_unitario=costo_unitario,
-                     observaciones=obs, fecha_registro=date.today(),
+                     observaciones=obs, fecha_registro=datetime.now(PERU_TZ).date(),
                      usuario_id=current_user.id)
             db.session.add(b)
             db.session.flush()
@@ -310,11 +344,14 @@ def nuevo():
 
     cats = CategoriaBien.query.filter_by(activo=True).order_by(CategoriaBien.area, CategoriaBien.nombre).all()
     area_pre = request.args.get('area', '')
+    if area_pre not in AREAS:
+        area_pre = ''
     return render_template('bienes/form.html', bien=None, cats=cats, areas=AREAS, area_pre=area_pre)
 
 
 @bienes_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
+@permiso_required('inventario')
 def editar(id):
     bien = Bien.query.get_or_404(id)
     if request.method == 'POST':
@@ -323,20 +360,46 @@ def editar(id):
         total_antes = int(bien.total or 0)
         costo_antes = bien.costo_unitario
         costo_raw = request.form.get('costo_unitario', '').strip()
+        area_nueva = request.form.get('area', '')
         try:
-            costo_nuevo = float(costo_raw) if costo_raw else costo_antes
-            if costo_nuevo is not None and costo_nuevo < 0:
+            if area_nueva not in AREAS:
                 raise ValueError
-        except ValueError:
-            flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
+            if request.form.get('categoria_id') == '__new__':
+                cat_nombre = request.form.get('nueva_categoria', '').strip()
+                if not cat_nombre or len(cat_nombre) > 100:
+                    raise ValueError
+                categoria = CategoriaBien.query.filter_by(nombre=cat_nombre, area=area_nueva).first()
+                if not categoria:
+                    categoria = CategoriaBien(nombre=cat_nombre, area=area_nueva)
+                    db.session.add(categoria)
+                    db.session.flush()
+            else:
+                categoria = db.session.get(CategoriaBien, int(request.form.get('categoria_id')))
+            costo_nuevo = float(costo_raw) if costo_raw else costo_antes
+            bueno_nuevo = int(request.form.get('estado_bueno', 0) or 0)
+            malo_nuevo = int(request.form.get('estado_malo', 0) or 0)
+            total_nuevo = int(request.form.get('total', 0) or 0)
+            categoria_id = categoria.id if categoria else None
+            if (costo_nuevo is not None and (costo_nuevo < 0 or not math.isfinite(costo_nuevo))) or \
+                    min(bueno_nuevo, malo_nuevo, total_nuevo) < 0 or total_nuevo != bueno_nuevo + malo_nuevo or \
+                    not categoria or categoria.area != area_nueva or area_nueva not in AREAS:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            db.session.rollback()
+            flash('Categoría, área, cantidades o costo inválidos; el total debe coincidir con bueno + malo.', 'error')
             return redirect(request.url)
 
-        bien.categoria_id  = request.form.get('categoria_id')
-        bien.nombre        = request.form.get('nombre', '').strip()
-        bien.area          = request.form.get('area', '')
-        bien.estado_bueno  = int(request.form.get('estado_bueno', 0) or 0)
-        bien.estado_malo   = int(request.form.get('estado_malo', 0) or 0)
-        bien.total         = int(request.form.get('total', 0) or 0)
+        bien.categoria_id  = categoria_id
+        nombre_nuevo = request.form.get('nombre', '').strip()
+        if not nombre_nuevo or len(nombre_nuevo) > 200:
+            db.session.rollback()
+            flash('El nombre es obligatorio y no puede superar los 200 caracteres.', 'error')
+            return redirect(request.url)
+        bien.nombre        = nombre_nuevo
+        bien.area          = area_nueva
+        bien.estado_bueno  = bueno_nuevo
+        bien.estado_malo   = malo_nuevo
+        bien.total         = total_nuevo
         bien.observaciones = request.form.get('observaciones', '').strip()
         bien.costo_unitario = costo_nuevo
         cambio_cantidad = (
@@ -365,6 +428,7 @@ def editar(id):
 
 @bienes_bp.route('/<int:id>/eliminar', methods=['POST'])
 @login_required
+@permiso_required('inventario')
 def eliminar(id):
     bien = Bien.query.get_or_404(id)
     registrar_kardex_bien(
@@ -384,6 +448,7 @@ def eliminar(id):
 
 @bienes_bp.route('/categorias', methods=['GET', 'POST'])
 @login_required
+@permiso_required('inventario')
 def categorias():
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
@@ -404,6 +469,7 @@ def categorias():
 
 @bienes_bp.route('/categorias/<int:id>/editar', methods=['POST'])
 @login_required
+@permiso_required('inventario')
 def editar_categoria(id):
     cat = CategoriaBien.query.get_or_404(id)
     cat.nombre = request.form.get('nombre', cat.nombre).strip()
@@ -415,6 +481,7 @@ def editar_categoria(id):
 
 @bienes_bp.route('/categorias/<int:id>/eliminar', methods=['POST'])
 @login_required
+@permiso_required('inventario')
 def eliminar_categoria(id):
     cat = CategoriaBien.query.get_or_404(id)
     if cat.bienes:

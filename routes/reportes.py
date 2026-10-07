@@ -5,6 +5,7 @@ from routes.decorators import permiso_required
 from models import db, Compra, ItemCompra, VentaDiaria, ItemVenta, Asistencia, Empleado
 from datetime import datetime, date, timedelta
 import pytz
+from sqlalchemy import func
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 PERU_TZ = pytz.timezone('America/Lima')
@@ -17,8 +18,9 @@ def now_peru():
 # ──────────────────────────────────────
 @reportes_bp.route('/')
 @login_required
+@permiso_required('reportes')
 def index():
-    hoy = date.today()
+    hoy = now_peru().date()
     return render_template('reportes/index.html', hoy=hoy)
 
 
@@ -29,7 +31,7 @@ def index():
 @login_required
 @permiso_required('compras')
 def economico():
-    hoy = date.today()
+    hoy = now_peru().date()
     mes_str  = request.args.get('mes',  hoy.strftime('%Y-%m'))
     try:
         anio, mes = int(mes_str.split('-')[0]), int(mes_str.split('-')[1])
@@ -83,10 +85,9 @@ def economico():
     total_periodo = sum(c.total for c in compras)
 
     # Ventas del período (para el cuadro de ingresos)
-    ventas = VentaDiaria.query.filter(
+    total_ingresos = db.session.query(func.coalesce(func.sum(VentaDiaria.total), 0)).filter(
         VentaDiaria.fecha >= inicio, VentaDiaria.fecha <= fin
-    ).all()
-    total_ingresos = sum(v.total for v in ventas)
+    ).scalar() or 0
 
     # Meses disponibles
     meses = []
@@ -221,11 +222,12 @@ def _export_economico_excel(filas, inicio, fin, total_compras, total_ingresos):
 # ──────────────────────────────────────
 @reportes_bp.route('/diario')
 @login_required
+@permiso_required('reportes')
 def diario():
-    from models import ProductoCarta, CategoriaCarta, ItemVenta, VentaDiaria, Producto
+    from models import ProductoCarta, CategoriaCarta, ItemVenta, VentaDiaria, Producto, KardexAlmacen
     from sqlalchemy import func
 
-    hoy     = date.today()
+    hoy     = now_peru().date()
     fecha_str = request.args.get('fecha', hoy.strftime('%Y-%m-%d'))
     try:
         fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
@@ -265,6 +267,28 @@ def diario():
         for v in ventas_cobradas
     }
 
+    inventario_ids = [p.producto_almacen_id for p in productos
+                      if p.producto_almacen_id and p.descuenta_inventario]
+    inicio_dia = datetime.combine(fecha, datetime.min.time())
+    fin_dia = inicio_dia + timedelta(days=1)
+
+    def saldos_hasta(corte):
+        if not inventario_ids:
+            return {}
+        ultimos = db.session.query(
+            KardexAlmacen.producto_id.label('pid'),
+            func.max(KardexAlmacen.id).label('mid'),
+        ).filter(
+            KardexAlmacen.producto_id.in_(inventario_ids),
+            KardexAlmacen.fecha < corte,
+        ).group_by(KardexAlmacen.producto_id).subquery()
+        return dict(db.session.query(
+            KardexAlmacen.producto_id, KardexAlmacen.cant_saldo
+        ).join(ultimos, KardexAlmacen.id == ultimos.c.mid).all())
+
+    saldos_antes = saldos_hasta(inicio_dia)
+    saldos_cierre = saldos_hasta(fin_dia)
+
     # Construir filas del reporte
     filas = []
     for p in productos:
@@ -274,15 +298,9 @@ def diario():
         ingreso_real   = cobrado.get('ingreso', 0)   # ingreso sin cortesías
         cortesias      = vendido - vendido_cobrado    # unidades de cortesía
 
-        # Stock actual del producto en almacén (si está vinculado)
-        stock_actual = 0
-        if p.producto_almacen_id and p.descuenta_inventario:
-            prod_alm = Producto.query.get(p.producto_almacen_id)
-            if prod_alm:
-                stock_actual = prod_alm.stock_actual or 0
-        # Stock inicial = stock actual + todo lo que salió hoy (ventas + cortesías)
-        stock_inicial = stock_actual + vendido
-        stock_final   = stock_actual
+        # Los saldos se toman del kardex a cada corte; no se infieren sumando ventas al stock actual.
+        stock_inicial = saldos_antes.get(p.producto_almacen_id, 0) if p.producto_almacen_id else 0
+        stock_final = saldos_cierre.get(p.producto_almacen_id, stock_inicial) if p.producto_almacen_id else 0
 
         filas.append({
             'id':             p.id,

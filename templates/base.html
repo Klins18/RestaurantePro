@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}RestoPro{% endblock %} | {{ config.RESTAURANTE_NOMBRE }}</title>
     <script src="/static/libs/tailwind.min.js"></script>
     <script src="/static/libs/chart.umd.min.js"></script>
@@ -97,6 +98,45 @@
         select.input { appearance: auto; }
         .label { display: block; font-size: 0.83rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
 
+        /* ─── CAMPOS DE CONTRASEÑA ─── */
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .password-wrapper .input {
+            padding-right: 44px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 7px;
+            font-size: 1rem;
+            padding: 0;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .password-toggle:hover {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        .password-toggle:focus {
+            outline: 2px solid #fbbf24;
+            outline-offset: 1px;
+        }
         /* Tabla responsive */
         .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .th { padding: 10px 14px; text-align: left; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; background: #f8fafc; white-space: nowrap; }
@@ -166,15 +206,15 @@
         {% set ep = request.endpoint or '' %}
         {% set grp_inv = bp in ['almacen','bienes','kardex'] %}
         {% set grp_ventas = bp == 'ventas' %}
-        {% set grp_abast = bp in ['pedidos','compras'] %}
+        {% set grp_abast = bp in ['pedidos','compras','operaciones'] %}
         {% set grp_emp = bp == 'empleados' %}
 
         <a href="{{ url_for('main.dashboard') }}" class="sidebar-link {% if ep == 'main.dashboard' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Dashboard</a>
 
         <!-- INVENTARIO -->
-        <div class="nav-group-header {% if grp_inv %}open{% endif %}" onclick="toggleGroup(this)">
+        {% if tiene_permiso('inventario') %}<div class="nav-group-header {% if grp_inv %}open{% endif %}" onclick="toggleGroup(this)">
             <span>📦 Inventario</span><span class="chevron">▶</span>
-        </div>
+        </div>{% endif %}
         <div class="nav-group-body {% if grp_inv %}open{% endif %}">
             <a href="{{ url_for('almacen.index') }}" class="sidebar-link {% if bp=='almacen' and ep not in ['almacen.ingreso','almacen.egreso','almacen.movimientos','almacen.alertas'] %}active{% endif %}" onclick="closeSidebar()"><span>🥦</span> Alimentos</a>
             <a href="{{ url_for('almacen.movimientos') }}" class="sidebar-link sidebar-sub {% if ep=='almacen.movimientos' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Movimientos</a>
@@ -186,44 +226,44 @@
 
         <!-- VENTAS -->
         {% set grp_ventas2 = grp_ventas or bp == 'pasajeros' %}
-        <div class="nav-group-header {% if grp_ventas2 %}open{% endif %}" onclick="toggleGroup(this)">
+        {% if tiene_permiso('ventas') or tiene_permiso('reservas') or tiene_permiso('cierre_caja') %}<div class="nav-group-header {% if grp_ventas2 %}open{% endif %}" onclick="toggleGroup(this)">
             <span>💰 Ventas</span><span class="chevron">▶</span>
         </div>
         <div class="nav-group-body {% if grp_ventas2 %}open{% endif %}">
-            <a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if ep=='ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Resumen ventas</a>
-            <a href="{{ url_for('ventas.pasajeros') }}" class="sidebar-link sidebar-sub {% if ep=='ventas.pasajeros' %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Reporte privados</a>
-            <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if ep=='ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Registrar venta</a>
-            <a href="{{ url_for('pasajeros.index') }}" class="sidebar-link {% if bp=='pasajeros' and ep=='pasajeros.index' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Pasajeros del día</a>
-            <a href="{{ url_for('pasajeros.reservas') }}" class="sidebar-link {% if ep=='pasajeros.reservas' %}active{% endif %}" onclick="closeSidebar()"><span>📅</span> Reservas</a>
-            <a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if ep=='ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de caja</a>
-        </div>
+            {% if tiene_permiso('ventas') %}<a href="{{ url_for('ventas.index') }}" class="sidebar-link {% if ep=='ventas.index' %}active{% endif %}" onclick="closeSidebar()"><span>📈</span> Resumen ventas</a>
+            <a href="{{ url_for('ventas.pasajeros') }}" class="sidebar-link sidebar-sub {% if ep=='ventas.pasajeros' %}active{% endif %}" onclick="closeSidebar()"><span>👥</span> Pax atendidos en ventas</a>
+            <a href="{{ url_for('ventas.nueva') }}" class="sidebar-link {% if ep=='ventas.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>➕</span> Registrar venta</a>{% endif %}
+            {% if tiene_permiso('reservas') %}<a href="{{ url_for('pasajeros.index') }}" class="sidebar-link {% if bp=='pasajeros' and ep=='pasajeros.index' %}active{% endif %}" onclick="closeSidebar()"><span>🚌</span> Control de pasajeros</a>
+            <a href="{{ url_for('pasajeros.reservas') }}" class="sidebar-link {% if ep=='pasajeros.reservas' %}active{% endif %}" onclick="closeSidebar()"><span>📅</span> Reservas</a>{% endif %}
+            {% if tiene_permiso('cierre_caja') %}<a href="{{ url_for('ventas.cierre') }}" class="sidebar-link {% if ep=='ventas.cierre' %}active{% endif %}" onclick="closeSidebar()"><span>🏁</span> Cierre de caja</a>{% endif %}
+        </div>{% endif %}
 
         <!-- ABASTECIMIENTO (Pedidos + Compras unificados) -->
-        <div class="nav-group-header {% if grp_abast %}open{% endif %}" onclick="toggleGroup(this)">
+        {% if tiene_permiso('pedidos') or tiene_permiso('compras') or tiene_permiso('gas') %}<div class="nav-group-header {% if grp_abast %}open{% endif %}" onclick="toggleGroup(this)">
             <span>🛒 Abastecimiento</span><span class="chevron">▶</span>
         </div>
         <div class="nav-group-body {% if grp_abast %}open{% endif %}">
-            <a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if bp=='pedidos' and ep not in ['pedidos.nueva','pedidos.notificaciones'] %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Listas de pedido</a>
-            <a href="{{ url_for('compras.index') }}" class="sidebar-link {% if bp=='compras' and ep != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Registro compras</a>
-            <a href="{{ url_for('pasajeros.gas') }}" class="sidebar-link {% if ep=='pasajeros.gas' %}active{% endif %}" onclick="closeSidebar()"><span>🔴</span> Balones de gas</a>
-            <a href="{{ url_for('suministros.index') }}" class="sidebar-link {% if bp=='suministros' %}active{% endif %}" onclick="closeSidebar()"><span>🛒</span> Compras diarias</a>
-        </div>
+            {% if tiene_permiso('pedidos') %}<a href="{{ url_for('pedidos.index') }}" class="sidebar-link {% if bp=='pedidos' and ep not in ['pedidos.nueva','pedidos.notificaciones'] %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Listas de pedido</a>{% endif %}
+            {% if tiene_permiso('compras') %}<a href="{{ url_for('compras.index') }}" class="sidebar-link {% if bp=='compras' and ep != 'compras.nueva' %}active{% endif %}" onclick="closeSidebar()"><span>🛍️</span> Compras e inventario</a>{% endif %}
+            {% if tiene_permiso('gas') %}<a href="{{ url_for('operaciones.gas') }}" class="sidebar-link {% if ep in ['operaciones.gas','pasajeros.gas_legacy'] %}active{% endif %}" onclick="closeSidebar()"><span>🔴</span> Balones de gas</a>{% endif %}
+            {% if tiene_permiso('compras') %}<a href="{{ url_for('suministros.index') }}" class="sidebar-link {% if bp=='suministros' %}active{% endif %}" onclick="closeSidebar()"><span>🧾</span> Entregas frecuentes / pagos</a>{% endif %}
+        </div>{% endif %}
 
         <!-- EMPLEADOS -->
-        <div class="nav-group-header {% if grp_emp %}open{% endif %}" onclick="toggleGroup(this)">
+        {% if current_user.es_admin() or tiene_permiso('asistencia') or tiene_permiso('honorarios') %}<div class="nav-group-header {% if grp_emp %}open{% endif %}" onclick="toggleGroup(this)">
             <span>👥 Empleados</span><span class="chevron">▶</span>
         </div>
         <div class="nav-group-body {% if grp_emp %}open{% endif %}">
-            <a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if ep and 'empleados' in ep and ep not in ['empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👤</span> Personal</a>
-            <a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if ep=='empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
-            <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if ep=='empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>
-            <a href="{{ url_for('empleados.honorarios') }}" class="sidebar-link {% if ep=='empleados.honorarios' %}active{% endif %}" onclick="closeSidebar()"><span>💼</span> Honorarios</a>
-            <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if ep=='empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte mensual</a>
-        </div>
+            {% if current_user.es_admin() %}<a href="{{ url_for('empleados.index') }}" class="sidebar-link {% if ep and 'empleados' in ep and ep not in ['empleados.asistencia','empleados.reporte','empleados.funciones'] %}active{% endif %}" onclick="closeSidebar()"><span>👤</span> Personal</a>{% endif %}
+            {% if tiene_permiso('asistencia') %}<a href="{{ url_for('empleados.asistencia') }}" class="sidebar-link {% if ep=='empleados.asistencia' %}active{% endif %}" onclick="closeSidebar()"><span>📋</span> Asistencia</a>
+            <a href="{{ url_for('empleados.funciones') }}" class="sidebar-link {% if ep=='empleados.funciones' %}active{% endif %}" onclick="closeSidebar()"><span>✅</span> Funciones del día</a>{% endif %}
+            {% if tiene_permiso('honorarios') %}<a href="{{ url_for('empleados.honorarios') }}" class="sidebar-link {% if ep=='empleados.honorarios' %}active{% endif %}" onclick="closeSidebar()"><span>💼</span> Honorarios</a>
+            <a href="{{ url_for('empleados.reporte') }}" class="sidebar-link {% if ep=='empleados.reporte' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reporte mensual</a>{% endif %}
+        </div>{% endif %}
 
         <!-- Notificaciones + Admin -->
         <div style="margin-top:4px;">
-            <a href="{{ url_for('reportes.index') }}" class="sidebar-link {% if bp=='reportes' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reportes</a>
+            {% if tiene_permiso('reportes') %}<a href="{{ url_for('reportes.index') }}" class="sidebar-link {% if bp=='reportes' %}active{% endif %}" onclick="closeSidebar()"><span>📊</span> Reportes</a>{% endif %}
             <a href="{{ url_for('pedidos.notificaciones') }}" class="sidebar-link {% if ep=='pedidos.notificaciones' %}active{% endif %}" onclick="closeSidebar()" style="position:relative;">
                 <span>🔔</span> Notificaciones
                 {%- set n_count = notif_no_leidas|default(0) -%}
@@ -246,6 +286,7 @@
         </div>
         <a href="{{ url_for('empleados.mi_password') }}" style="font-size:0.78rem;color:#94a3b8;text-decoration:none;">🔑 Cambiar contraseña</a>
         <form method="POST" action="{{ url_for('auth.logout') }}" style="margin:0;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" style="display:flex;align-items:center;gap:7px;color:#475569;font-size:0.8rem;text-decoration:none;padding:6px 0;background:none;border:0;cursor:pointer;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
                 <span>🚪</span> Cerrar sesión
             </button>
@@ -299,34 +340,172 @@
     function openSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
+
         sidebar.classList.add('open');
         overlay.classList.add('open');
+
         // Solo bloquear scroll del main, no del sidebar
         const main = document.querySelector('.main-content');
         if (main) main.style.overflow = 'hidden';
+
         // Enfocar el sidebar para que el scroll funcione en mobile
         sidebar.focus();
     }
+
     function toggleGroup(header) {
         header.classList.toggle('open');
         var body = header.nextElementSibling;
         body.classList.toggle('open');
     }
+
     function closeSidebar() {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebar-overlay').classList.remove('open');
+
         const main = document.querySelector('.main-content');
         if (main) main.style.overflow = '';
     }
+
+
+    // ─── MOSTRAR / OCULTAR CONTRASEÑA ───
+    document.addEventListener('DOMContentLoaded', function () {
+
+        document.querySelectorAll('input[type="password"]').forEach(function (input) {
+
+            // Evitar agregar dos veces el ojito
+            if (input.dataset.passwordToggle === 'true') {
+                return;
+            }
+
+            input.dataset.passwordToggle = 'true';
+
+            // Crear contenedor
+            const wrapper = document.createElement('div');
+            wrapper.className = 'password-wrapper';
+
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+
+            // Crear botón
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'password-toggle';
+            button.setAttribute('aria-label', 'Mostrar contraseña');
+            button.setAttribute('title', 'Mostrar contraseña');
+            button.innerHTML = '👁️';
+
+            wrapper.appendChild(button);
+
+            // Mostrar / ocultar contraseña
+            button.addEventListener('click', function () {
+
+                const visible = input.type === 'text';
+
+                input.type = visible ? 'password' : 'text';
+
+                button.innerHTML = visible ? '👁️' : '🙈';
+
+                button.setAttribute(
+                    'aria-label',
+                    visible ? 'Mostrar contraseña' : 'Ocultar contraseña'
+                );
+
+                button.setAttribute(
+                    'title',
+                    visible ? 'Mostrar contraseña' : 'Ocultar contraseña'
+                );
+            });
+        });
+    });
+
+
+    // Solo limpia el borrador local cuando el servidor confirma ese mismo lote de ventas.
+    (function limpiarBorradorVentaConfirmada() {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('venta_guardada');
+
+        if (!token) return;
+
+        try {
+            if (localStorage.getItem('restopro_venta_submission_token') === token) {
+                localStorage.removeItem('restopro_venta_tabs');
+                localStorage.removeItem('restopro_venta_fecha');
+                localStorage.removeItem('restopro_venta_submission_token');
+            }
+        } catch (e) {}
+
+        params.delete('venta_guardada');
+
+        const query = params.toString();
+
+        window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname +
+            (query ? '?' + query : '') +
+            window.location.hash
+        );
+    })();
+
+
+    // Evita registrar dos veces una acción por doble clic o toques repetidos.
+    document.addEventListener('submit', function(event) {
+
+        const form = event.target;
+
+        if (
+            !form ||
+            form.tagName !== 'FORM' ||
+            form.method.toLowerCase() !== 'post' ||
+            event.defaultPrevented
+        ) {
+            return;
+        }
+
+        if (form.dataset.submitLocked === 'true') {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.submitLocked = 'true';
+
+        form.querySelectorAll(
+            'button[type="submit"], input[type="submit"]'
+        ).forEach(function(button) {
+
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            button.style.opacity = '0.65';
+            button.style.cursor = 'wait';
+        });
+    });
+
+
     // Hora Perú
     function actualizarHora() {
+
         const el = document.getElementById('hora-peru');
+
         if (!el) return;
-        const op = { timeZone:'America/Lima', hour:'2-digit', minute:'2-digit', second:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' };
-        el.textContent = new Date().toLocaleString('es-PE', op) + ' (Perú)';
+
+        const op = {
+            timeZone: 'America/Lima',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        };
+
+        el.textContent =
+            new Date().toLocaleString('es-PE', op) + ' (Perú)';
     }
+
     actualizarHora();
+
     setInterval(actualizarHora, 1000);
+
 </script>
 {% block scripts %}{% endblock %}
 </body>

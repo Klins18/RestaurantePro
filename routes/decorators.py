@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import redirect, url_for, flash
+from flask import redirect, url_for, flash, g
 from flask_login import current_user
 
 
@@ -12,6 +12,8 @@ PERMISOS_LABELS = {
     'reservas':    ('📅', 'Reservas de grupos'),
     'cierre_caja': ('🏁', 'Cierre de caja'),
     'honorarios':  ('💼', 'Honorarios'),
+    'ventas':      ('🧾', 'Ventas'),
+    'reportes':    ('📊', 'Reportes operativos'),
 }
 
 
@@ -21,7 +23,11 @@ def tiene_permiso(permiso):
         return False
     if current_user.rol in ('administrador', 'supervisor'):
         return True
-    return current_user.permisos.filter_by(permiso=permiso).first() is not None
+    permisos = getattr(g, '_permisos_usuario', None)
+    if permisos is None:
+        permisos = {p.permiso for p in current_user.permisos.all()}
+        g._permisos_usuario = permisos
+    return permiso in permisos
 
 
 def get_permisos_usuario(usuario):

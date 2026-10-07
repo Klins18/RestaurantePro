@@ -6,6 +6,7 @@
 
 {% block content %}
 <form method="POST" action="{{ url_for('empleados.nuevo') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="nuevo-emp-grid">
 
     <!-- Datos personales -->

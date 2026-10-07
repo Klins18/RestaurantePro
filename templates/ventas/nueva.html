@@ -121,7 +121,7 @@
         <p style="font-size:0.72rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px;">{{ cat.nombre }}</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;">
         {% for prod in cat.productos if prod.activo %}
-        <div onclick="agregarProducto({{ prod.id }}, '{{ prod.nombre|replace("'","\\'") }}', {{ prod.precio }}, {{ prod.tiene_variantes|lower }})"
+        <div onclick='agregarProducto({{ prod.id }}, {{ prod.nombre|tojson }}, {{ prod.precio|tojson }}, {{ prod.tiene_variantes|tojson }})'
             style="cursor:pointer;border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;background:white;transition:all 0.15s;user-select:none;"
             onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='#fbbf24';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'"
             onmouseout="this.style.transform='';this.style.borderColor='#e2e8f0';this.style.boxShadow=''">
@@ -157,7 +157,9 @@
 
 <!-- Form oculto -->
 <form method="POST" id="form-venta" action="{{ url_for('ventas.nueva') }}" style="display:none;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="fecha" value="{{ hoy }}">
+    <input type="hidden" name="solicitud_token" id="hid-solicitud-token" value="{{ token_inicial }}">
     <input type="hidden" name="tabs_json" id="hid-tabs-json">
 </form>
 
@@ -173,6 +175,23 @@ const tabs = {};
 let tabActiva = null;
 const STORAGE_KEY = 'restopro_venta_tabs';
 const STORAGE_FECHA = 'restopro_venta_fecha';
+const STORAGE_TOKEN = 'restopro_venta_submission_token';
+const FECHA_VENTA = '{{ hoy.isoformat() }}';
+const TOKEN_INICIAL = '{{ token_inicial }}';
+
+// El token se conserva junto al borrador para que un reintento use la misma clave.
+let submissionToken = TOKEN_INICIAL;
+try {
+    if (localStorage.getItem(STORAGE_FECHA) !== FECHA_VENTA) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_TOKEN);
+        localStorage.setItem(STORAGE_FECHA, FECHA_VENTA);
+    }
+    const guardado = localStorage.getItem(STORAGE_TOKEN);
+    if (guardado && /^[0-9a-f]{32}$/i.test(guardado)) submissionToken = guardado;
+    localStorage.setItem(STORAGE_TOKEN, submissionToken);
+} catch (e) {}
+document.getElementById('hid-solicitud-token').value = submissionToken;
 
 const EMPRESAS = [
 {% for e in empresas %}
@@ -187,12 +206,7 @@ EMPRESAS.forEach(e => { tabs[e.id] = { nombre:e.nombre, color:e.color, esPrivado
 // Restaurar desde localStorage si la fecha coincide con hoy
 (function restaurarEstado() {
     try {
-        var hoyStr = new Date().toISOString().split('T')[0];
-        if (localStorage.getItem(STORAGE_FECHA) !== hoyStr) {
-            localStorage.removeItem(STORAGE_KEY);
-            localStorage.setItem(STORAGE_FECHA, hoyStr);
-            return;
-        }
+        if (localStorage.getItem(STORAGE_FECHA) !== FECHA_VENTA) return;
         var guardado = localStorage.getItem(STORAGE_KEY);
         if (!guardado) return;
         var datos = JSON.parse(guardado);
@@ -201,6 +215,7 @@ EMPRESAS.forEach(e => { tabs[e.id] = { nombre:e.nombre, color:e.color, esPrivado
                 tabs[empId].items      = tabData.items || [];
                 tabs[empId].nombreGrupo= tabData.nombreGrupo || '';
                 tabs[empId].tipoPago   = tabData.tipoPago || '';
+                tabs[empId].esCortesia = !!tabData.esCortesia;
                 tabs[empId].numPax     = tabData.numPax || 0;
                 tabs[empId].precioBuf  = tabData.precioBuf !== undefined
                     ? tabData.precioBuf
@@ -212,11 +227,10 @@ EMPRESAS.forEach(e => { tabs[e.id] = { nombre:e.nombre, color:e.color, esPrivado
 
 function guardarEstado() {
     try {
-        var hoyStr = new Date().toISOString().split('T')[0];
-        localStorage.setItem(STORAGE_FECHA, hoyStr);
+        localStorage.setItem(STORAGE_FECHA, FECHA_VENTA);
         var snapshot = {};
         Object.entries(tabs).forEach(function([id, t]) {
-            snapshot[id] = { items:t.items, nombreGrupo:t.nombreGrupo,
+            snapshot[id] = { items:t.items, nombreGrupo:t.nombreGrupo, esCortesia:t.esCortesia,
                              tipoPago:t.tipoPago, numPax:t.numPax, precioBuf:t.precioBuf };
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -433,16 +447,18 @@ function registrarTodo() {
     btn.style.opacity = '0.6';
     btn.style.pointerEvents = 'none';
     document.getElementById('hid-tabs-json').value = JSON.stringify(conItems);
-    try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_FECHA); } catch(e) {}
     document.getElementById('form-venta').submit();
 }
 
-// Al cargar: si venimos del botón Atrás, limpiar el form
+// Si se volvió con el botón Atrás tras un envío confirmado, refrescar sin el borrador ya cerrado.
 window.addEventListener('pageshow', function(e) {
     if (e.persisted) {
-        // Página restaurada de caché (botón Atrás)
-        try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_FECHA); } catch(err) {}
-        window.location.reload();
+        try {
+            const tokenGuardado = localStorage.getItem(STORAGE_TOKEN);
+            if (!tokenGuardado || tokenGuardado !== document.getElementById('hid-solicitud-token').value) {
+                window.location.reload();
+            }
+        } catch(err) {}
     }
 });
 </script>

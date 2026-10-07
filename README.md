@@ -128,14 +128,17 @@ cp .env.example .env
 
 Editar `.env`:
 ```bash
-FLASK_ENV=development
-SECRET_KEY=clave-secreta-unica-cambiar-esto-12345
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=TuPasswordSegura2026!
+SECRET_KEY=pega-aqui-una-clave-aleatoria-de-al-menos-32-caracteres
+ADMIN_USERNAME=elige-un-usuario-administrador
+ADMIN_PASSWORD=elige-una-clave-unica-de-12-caracteres-o-mas
+DATABASE_URL=sqlite:///restaurante_pro.db
+SESSION_COOKIE_SECURE=false
 RESTAURANTE_NOMBRE=Rest. Tco. Marangani
 FLASK_HOST=0.0.0.0
 FLASK_PORT=5000
 ```
+
+Genera una clave con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y úsala como `SECRET_KEY`. No publiques ni compartas el archivo `.env`. En producción con HTTPS configura `SESSION_COOKIE_SECURE=true`.
 
 ---
 
@@ -145,7 +148,7 @@ FLASK_PORT=5000
 python app.py
 ```
 
-Al iniciar por primera vez:
+En ejecución local, al iniciar por primera vez:
 - Se crea la base de datos automáticamente
 - Se crea el usuario administrador
 - Se crean las categorías por defecto (Verduras, Carnes, Abarrotes, etc.)
@@ -220,23 +223,69 @@ Cada acción registra:
 ## 🔧 MANTENIMIENTO
 
 ### Backups automáticos
-El sistema crea backups automáticamente al iniciar, guardados en `backups/`.
+El sistema crea un backup SQLite al iniciar, guardado bajo `instance/backups/`.
 Se mantienen los últimos **10 backups**.
+
+### Instalación limpia en PythonAnywhere
+
+Usa una configuración WSGI manual y la misma versión de Python en la aplicación web y en el entorno virtual. Esta aplicación se prueba localmente con Python 3.14; PythonAnywhere también documenta entornos con Python 3.13. Si eliges 3.13 en PythonAnywhere, instala los paquetes desde este archivo dentro de ese entorno.
+
+1. Sube el proyecto completo, incluyendo `routes/`, `services/`, `templates/`, `static/` y `migrations/`. No subas `venv/`, `.env` local ni una base de datos local. Comprueba en la consola que existe `routes/compras.py`.
+2. Crea y activa un entorno virtual con la misma versión elegida para la aplicación web. Desde la raíz del proyecto instala todas las dependencias de una vez:
+
+```bash
+mkvirtualenv restaurantepro --python=python3.13
+workon restaurantepro
+cd /home/USUARIO/RestaurantePro-main
+pip install -r requirements.txt
+```
+
+3. Crea un `.env` solo en el servidor, en la raíz del proyecto. Define `SECRET_KEY` (aleatoria, mínimo 32 caracteres), `ADMIN_USERNAME`, `ADMIN_PASSWORD` (mínimo 12 caracteres), y la ruta absoluta de una base nueva, por ejemplo `DATABASE_URL=sqlite:////home/USUARIO/RestaurantePro-main/instance/restaurante_pro.db`. No subas ni compartas ese archivo. Crea la carpeta `instance` si no existe.
+4. En la pestaña **Web**, configura la misma ruta del entorno virtual y edita el WSGI para añadir la ruta del proyecto y cargar el `.env` antes de importar la aplicación:
+
+```python
+import os
+import sys
+from dotenv import load_dotenv
+
+project_path = '/home/USUARIO/RestaurantePro-main'
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+load_dotenv(os.path.join(project_path, '.env'))
+
+from app import app as application
+```
+
+5. En una consola Bash, activa el entorno, cambia a la raíz del proyecto y ejecuta la migración y el inicio de datos **una sola vez para esta base vacía**:
+
+```bash
+workon restaurantepro
+cd /home/USUARIO/RestaurantePro-main
+flask --app app db upgrade
+python -c "from app import app, init_db; init_db(app)"
+```
+
+El primer comando crea el esquema versionado; el segundo crea el usuario administrador y los datos iniciales. No ejecutes `flask db stamp head` en una base nueva. Para publicar cambios futuros, sube el código completo, haz un backup, ejecuta `flask --app app db upgrade` y recarga la aplicación desde la pestaña **Web**. No compartas aquí claves ni contraseñas.
 
 ### Backup manual
 ```bash
+# Crear una copia consistente usando la ruta configurada de SQLite:
+python -c "from app import app, hacer_backup; hacer_backup(app)"
+
 # Windows
-copy restaurante_pro.db backups\backup_manual.db
+copy instance\restaurante_pro.db instance\backups\backup_manual.db
 
 # Linux
-cp restaurante_pro.db backups/backup_manual_$(date +%Y%m%d).db
+cp instance/restaurante_pro.db instance/backups/backup_manual_$(date +%Y%m%d).db
 ```
+
+En PythonAnywhere programa el comando de copia con una tarea diaria y descarga periódicamente una copia fuera del servidor. Un backup guardado solo junto a la aplicación no protege frente a la pérdida de la cuenta o del disco.
 
 ### Restaurar backup
 ```bash
 # 1. Detener el sistema (Ctrl+C)
 # 2. Copiar backup como base de datos principal:
-copy backups\restaurante_pro_FECHA.db restaurante_pro.db
+copy instance\backups\restaurante_pro_FECHA.db instance\restaurante_pro.db
 # 3. Reiniciar:
 python app.py
 ```
@@ -265,10 +314,8 @@ netstat -an | findstr 5000  # Windows
 **Contraseña olvidada del admin:**
 ```bash
 # Opción 1: Restaurar backup
-# Opción 2: Resetear (SE PIERDEN TODOS LOS DATOS)
-del restaurante_pro.db   # Windows
-rm restaurante_pro.db    # Linux
-python app.py
+# Solicitar al administrador que restablezca la contraseña desde una operación controlada.
+# No elimines el archivo de la base de datos: contiene ventas, inventario y registros.
 ```
 
 ---

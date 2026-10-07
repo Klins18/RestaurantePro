@@ -1,15 +1,22 @@
 {% extends 'base.html' %}
 {% block title %}{{ 'Editar' if bien else 'Nuevo' }} Bien{% endblock %}
 {% block page_title %}{{ 'Editar' if bien else 'Nuevo' }} Bien{% endblock %}
-{% block page_subtitle %}Inventario de equipos, muebles y utensilios{% endblock %}
+{% block page_subtitle %}Registra el área, el tipo de bien y su cantidad en pocos pasos.{% endblock %}
 
 {% block content %}
 <div style="max-width:600px;">
 <div class="card">
+    {% if not bien %}
+    <div style="padding:12px 14px;margin-bottom:16px;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:.9rem;">
+        <strong>Ejemplo:</strong> Licuadora → <strong>Cocina</strong> → <strong>Electrodomésticos</strong>.
+        Si no encuentras una categoría, puedes crearla aquí mismo.
+    </div>
+    {% endif %}
     <form method="POST" style="display:flex;flex-direction:column;gap:14px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <div>
-            <label class="label">Área *</label>
+            <label class="label">¿Dónde se encuentra? *</label>
             <select name="area" id="sel-area" class="input" required onchange="filtrarCats()">
                 <option value="">— Selecciona —</option>
                 {% for a in areas %}
@@ -19,20 +26,32 @@
         </div>
 
         <div>
-            <label class="label">Categoría *</label>
-            <select name="categoria_id" id="sel-cat" class="input" required>
-                <option value="">— Selecciona área primero —</option>
+            <label class="label">Tipo de bien o categoría *</label>
+            <select name="categoria_id" id="sel-cat" class="input" required onchange="mostrarNuevaCategoria()">
+                <option value="">— Selecciona una categoría —</option>
                 {% for c in cats %}
                 <option value="{{ c.id }}" data-area="{{ c.area }}"
                     {% if bien and bien.categoria_id == c.id %}selected{% endif %}>
                     {{ c.nombre }}
                 </option>
                 {% endfor %}
+                <option value="__new__">＋ Crear una categoría nueva…</option>
             </select>
+            <div id="nueva-cat-wrap" style="display:none;margin-top:9px;">
+                <label class="label" for="nueva-categoria">Nombre de la nueva categoría</label>
+                <input type="text" name="nueva_categoria" id="nueva-categoria" class="input" maxlength="100"
+                       placeholder="Ej.: Electrodomésticos" list="categorias-sugeridas">
+                <datalist id="categorias-sugeridas">
+                    <option value="Electrodomésticos"><option value="Equipos"><option value="Mobiliario">
+                    <option value="Utensilios"><option value="Cubertería"><option value="Menajería">
+                    <option value="Cristalería"><option value="Mantelería"><option value="Otros">
+                </datalist>
+                <small style="display:block;color:#64748b;margin-top:4px;">La categoría se guardará en el área seleccionada y quedará disponible para otros bienes.</small>
+            </div>
         </div>
 
         <div>
-            <label class="label">Descripción del bien *</label>
+                <label class="label">Nombre del bien *</label>
             <input type="text" name="nombre" class="input" required
                 value="{{ bien.nombre if bien else '' }}"
                 placeholder="Ej: Tenedores, Sartén grande...">
@@ -93,24 +112,35 @@
 {% block scripts %}
 <script>
 // Todas las categorías como array JS construido desde Jinja2
-var ALL_CATS = [
-{% for c in cats %}
-  {id: {{ c.id }}, nombre: "{{ c.nombre|replace('"', '\\"') }}", area: "{{ c.area }}"},
-{% endfor %}
-];
+var ALL_CATS = {{ cats|map(attribute='id')|list|tojson }};
+var CAT_DATA = {{ cats|map(attribute='nombre')|list|tojson }};
+var CAT_AREAS = {{ cats|map(attribute='area')|list|tojson }};
 
 function filtrarCats() {
     var area = document.getElementById('sel-area').value;
     var sel  = document.getElementById('sel-cat');
     sel.innerHTML = '<option value="">— Selecciona categoría —</option>';
-    ALL_CATS.forEach(function(c) {
-        if (!area || c.area === area) {
+    ALL_CATS.forEach(function(id, i) {
+        if (!area || CAT_AREAS[i] === area) {
             var o = document.createElement('option');
-            o.value = c.id;
-            o.textContent = c.nombre;
+            o.value = id;
+            o.textContent = CAT_DATA[i];
             sel.appendChild(o);
         }
     });
+    var nuevo = document.createElement('option');
+    nuevo.value = '__new__';
+    nuevo.textContent = '＋ Crear una categoría nueva…';
+    sel.appendChild(nuevo);
+    mostrarNuevaCategoria();
+}
+
+function mostrarNuevaCategoria() {
+    var crear = document.getElementById('sel-cat').value === '__new__';
+    var wrap = document.getElementById('nueva-cat-wrap');
+    var input = document.getElementById('nueva-categoria');
+    wrap.style.display = crear ? 'block' : 'none';
+    input.required = crear;
 }
 
 function calcTotal() {
@@ -127,6 +157,7 @@ function calcTotal() {
         {% if bien %}
         document.getElementById('sel-cat').value = "{{ bien.categoria_id }}";
         {% endif %}
+        mostrarNuevaCategoria();
     }
 })();
 </script>

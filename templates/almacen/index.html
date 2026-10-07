@@ -65,18 +65,18 @@
                 <td colspan="7" style="padding:8px 14px;background:#eef2f7;color:#334155;font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;">📁 {{ nombre_categoria }}</td>
             </tr>
             {% endif %}
-            <tr style="{% if p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
+            <tr style="{% if (p.stock_actual or 0) <= (p.stock_minimo or 0) and (p.stock_minimo or 0) > 0 %}background:#fef2f2;{% elif loop.index % 2 == 0 %}background:#fafafa;{% endif %}">
                 <td class="td" style="font-weight:600;color:#1e293b;">{{ p.nombre }}</td>
                 <td class="td" style="font-size:0.82rem;color:#64748b;">{{ p.categoria.nombre if p.categoria else "—" }}</td>
                 <td class="td" style="text-align:center;color:#64748b;font-size:0.875rem;">{{ p.unidad_medida }}</td>
-                <td class="td" style="text-align:right;font-weight:700;font-size:1rem;color:{% if p.stock_actual <= 0 %}#dc2626{% elif p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}#d97706{% else %}#166534{% endif %};">
+                <td class="td" style="text-align:right;font-weight:700;font-size:1rem;color:{% if (p.stock_actual or 0) <= 0 %}#dc2626{% elif (p.stock_actual or 0) <= (p.stock_minimo or 0) and (p.stock_minimo or 0) > 0 %}#d97706{% else %}#166534{% endif %};">
                     {{ p.stock_actual|round(2) }}
                 </td>
-                <td class="td" style="text-align:right;color:#94a3b8;font-size:0.875rem;">{{ p.stock_minimo|round(2) }}</td>
+                <td class="td" style="text-align:right;color:#94a3b8;font-size:0.875rem;">{{ (p.stock_minimo or 0)|round(2) }}</td>
                 <td class="td" style="text-align:center;">
                     {% if p.stock_actual <= 0 %}
                         <span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">🔴 Sin stock</span>
-                    {% elif p.stock_actual <= p.stock_minimo and p.stock_minimo > 0 %}
+                    {% elif (p.stock_actual or 0) <= (p.stock_minimo or 0) and (p.stock_minimo or 0) > 0 %}
                         <span style="background:#fef3c7;color:#92400e;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">⚠️ Bajo</span>
                     {% else %}
                         <span style="background:#dcfce7;color:#166534;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:9999px;">✓ Normal</span>

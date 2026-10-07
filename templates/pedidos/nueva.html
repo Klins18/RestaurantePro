@@ -5,6 +5,7 @@
 
 {% block content %}
 <form method="POST" action="{{ url_for('pedidos.nueva') }}" id="form-pedido">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div style="display:grid;grid-template-columns:270px 1fr;gap:16px;" id="nueva-grid">
 
     <!-- PANEL LATERAL -->
@@ -145,8 +146,7 @@
 <script type="application/json" id="listas-json">{{ listas_predefinidas | tojson | safe }}</script>
 <script>
 const LISTAS = JSON.parse(document.getElementById('listas-json').textContent);
-const UNIDADES = ['','kg','@','gramos','litro','ml','unid','caja',
-    'bolsa','saco','galon','atado','docena','barra','sobre','pqt','S/.','und','botella','lata'];
+const UNIDADES = {{ unidad_options | tojson | safe }};
 const COLORES = {
     'VERDURA FRESCA':'#16a34a','FRUTAS/BOMBONERA':'#dc2626','CARNES':'#92400e',
     'ABARROTES E INSUMOS DE LIMPIEZA':'#7c3aed','LÁCTEOS Y DERIVADOS':'#2563eb',
@@ -159,7 +159,9 @@ let extraCount = 0;
 let numFilaGlobal = 0;  // numeración continua global
 
 function opcionesUnidad(sel) {
-    return UNIDADES.map(u=>`<option value="${u}"${u===sel?' selected':''}>${u||'— sin unidad —'}</option>`).join('');
+    const alias = {'kilo':'kg','kilos':'kg','kilogramo':'kg','kilogramos':'kg','gramos':'g','gr':'g','litro':'l','litros':'l','unid':'unidad','und':'unidad','unidades':'unidad','pqt':'paquete','paq':'paquete','galón':'galon','galones':'galon','panes':'pan','@':'arroba','s/.':'S/.'};
+    sel = alias[String(sel||'').trim().toLocaleLowerCase('es')] || sel || '';
+    return `<option value=""${!sel?' selected':''}>— sin unidad —</option>` + UNIDADES.map(u=>`<option value="${u.value}"${u.value===sel?' selected':''}>${u.label}</option>`).join('');
 }
 function safeid(s){ return s.replace(/[^a-zA-Z0-9]/g,'_'); }
 

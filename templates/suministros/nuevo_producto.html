@@ -8,16 +8,17 @@
 <div style="max-width:520px;margin:0 auto;">
 <div class="card">
     <form method="POST" style="display:flex;flex-direction:column;gap:14px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div><label class="label">Nombre del producto *</label>
             <input type="text" name="nombre" class="input" required placeholder="Leche, Pan de trigo..."></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div><label class="label">Unidad de medida</label>
                 <select name="unidad" class="input">
-                    <option value="litros">Litros</option>
-                    <option value="kg">Kilogramos</option>
-                    <option value="unidades">Unidades</option>
-                    <option value="bolsas">Bolsas</option>
-                    <option value="panes">Panes</option>
+                    <option value="l">Litros (L)</option>
+                    <option value="kg">Kilogramos (kg)</option>
+                    <option value="unidad">Unidad</option>
+                    <option value="bolsa">Bolsa</option>
+                    <option value="pan">Pan</option>
                 </select>
             </div>
             <div><label class="label">Precio por unidad (S/.)</label>

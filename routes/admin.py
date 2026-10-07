@@ -1,9 +1,42 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from models import db, Usuario, Categoria, Producto, Proveedor, Auditoria, registrar_auditoria
+from models import db, Usuario, Categoria, Producto, Proveedor, Auditoria, registrar_auditoria, now_peru
+from services.units import INVENTORY_UNIT_CHOICES, normalize_unit
 from functools import wraps
+import math
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+UNIDADES_PRODUCTO = {option['value'] for option in INVENTORY_UNIT_CHOICES}
+
+
+def _producto_duplicado(nombre, unidad, categoria_id, excluir_id=None):
+    consulta = Producto.query.filter(
+        db.func.lower(db.func.trim(Producto.nombre)) == nombre.lower(),
+        Producto.unidad_medida == unidad,
+        Producto.categoria_id == categoria_id,
+        Producto.activo.is_(True),
+    )
+    if excluir_id is not None:
+        consulta = consulta.filter(Producto.id != excluir_id)
+    return consulta.first()
+
+
+def _ajustar_stock_vino(producto, unidades, referencia, concepto):
+    """Ajusta stock, movimientos y kardex dentro de la misma transacción."""
+    if not unidades:
+        return
+    from models import MovimientoAlmacen
+    from services.kardex import registrar_kardex
+    tipo = 'egreso' if unidades > 0 else 'ingreso'
+    cantidad = abs(unidades)
+    producto.stock_actual = (producto.stock_actual or 0) - unidades
+    db.session.add(MovimientoAlmacen(
+        tipo=tipo, producto_id=producto.id, cantidad=cantidad,
+        unidad_medida=producto.unidad_medida, motivo=concepto,
+        referencia=referencia, usuario_id=current_user.id, fecha_hora=now_peru(),
+    ))
+    registrar_kardex(producto.id, tipo, cantidad, current_user.id,
+                     concepto=concepto, referencia=referencia, fecha=now_peru())
 
 def admin_required(f):
     @wraps(f)
@@ -46,6 +79,10 @@ def nuevo_usuario():
         flash('Todos los campos son obligatorios.', 'error')
         return redirect(url_for('admin.usuarios'))
 
+    if len(password) < 8 or rol not in {'empleado', 'supervisor', 'administrador'}:
+        flash('La contraseña debe tener al menos 8 caracteres y el rol debe ser válido.', 'error')
+        return redirect(url_for('admin.usuarios'))
+
     if Usuario.query.filter_by(username=username).first():
         flash(f'El usuario "{username}" ya existe.', 'error')
         return redirect(url_for('admin.usuarios'))
@@ -77,6 +114,12 @@ def editar_usuario(id):
 
     if id == current_user.id and rol != 'administrador':
         flash('No puedes quitarte el rol de administrador.', 'error')
+        return redirect(url_for('admin.usuarios'))
+    if rol not in {'empleado', 'supervisor', 'administrador'}:
+        flash('El rol seleccionado no es válido.', 'error')
+        return redirect(url_for('admin.usuarios'))
+    if password and len(password) < 8:
+        flash('La contraseña debe tener al menos 8 caracteres.', 'error')
         return redirect(url_for('admin.usuarios'))
 
     user.nombre_completo = nombre
@@ -165,44 +208,62 @@ def eliminar_categoria(id):
 @admin_required
 def productos():
     cats = Categoria.query.filter_by(activo=True).order_by(Categoria.nombre).all()
-    UNIDADES = ['kg', 'gramos', 'litro', 'ml', 'unidad', 'caja', 'bolsa',
-                'saco', 'galon', 'atado', 'docena', 'barra', 'sobre']
     # Agrupar productos por categoría
     por_categoria = []
     for cat in cats:
         prods = Producto.query.filter_by(categoria_id=cat.id, activo=True).order_by(Producto.nombre).all()
         if prods:
+            for prod in prods:
+                prod.unidad_ui = normalize_unit(prod.unidad_medida)
             por_categoria.append({'cat': cat, 'productos': prods})
     # Sin categoría
     sin_cat = Producto.query.filter_by(categoria_id=None, activo=True).order_by(Producto.nombre).all()
     if sin_cat:
+        for prod in sin_cat:
+            prod.unidad_ui = normalize_unit(prod.unidad_medida)
         por_categoria.append({'cat': None, 'productos': sin_cat})
     return render_template('admin/productos.html',
                            por_categoria=por_categoria,
-                           categorias=cats, unidades=UNIDADES)
+                           categorias=cats, unidades=INVENTORY_UNIT_CHOICES)
 
 @admin_bp.route('/productos/nuevo', methods=['POST'])
 @login_required
 @admin_required
 def nuevo_producto():
     nombre = request.form.get('nombre', '').strip()
-    unidad = request.form.get('unidad_medida', 'unidad')
-    cat_id = request.form.get('categoria_id') or None
+    unidad = normalize_unit(request.form.get('unidad_medida', 'unidad'))
+    cat_id_raw = request.form.get('categoria_id', '').strip()
     stock_min_str = request.form.get('stock_minimo', '0')
     costo_raw = request.form.get('costo_unitario', '').strip()
 
     if not nombre:
         flash('El nombre es obligatorio.', 'error')
         return redirect(url_for('admin.productos'))
+    if len(nombre) > 150 or unidad not in UNIDADES_PRODUCTO:
+        flash('Revisa el nombre y la unidad del producto.', 'error')
+        return redirect(url_for('admin.productos'))
+    try:
+        cat_id = int(cat_id_raw) if cat_id_raw else None
+    except (TypeError, ValueError, OverflowError):
+        cat_id = -1
+    if cat_id is not None and not db.session.get(Categoria, cat_id):
+        flash('La categoría seleccionada ya no existe. Actualiza la página y vuelve a elegirla.', 'error')
+        return redirect(url_for('admin.productos'))
+    if _producto_duplicado(nombre, unidad, cat_id):
+        flash('Ya existe un producto activo con el mismo nombre, categoría y unidad. Edita el existente para evitar dividir el stock.', 'error')
+        return redirect(url_for('admin.productos'))
 
     try:
         stock_min = float(stock_min_str)
-    except:
-        stock_min = 0
+        if stock_min < 0 or not math.isfinite(stock_min):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('El stock mínimo debe ser un número válido y no negativo.', 'error')
+        return redirect(url_for('admin.productos'))
 
     try:
         costo_unitario = float(costo_raw) if costo_raw else None
-        if costo_unitario is not None and costo_unitario < 0:
+        if costo_unitario is not None and (costo_unitario < 0 or not math.isfinite(costo_unitario)):
             raise ValueError
     except ValueError:
         flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
@@ -221,20 +282,42 @@ def nuevo_producto():
 @admin_required
 def editar_producto(id):
     prod = Producto.query.get_or_404(id)
-    prod.nombre = request.form.get('nombre', prod.nombre).strip()
-    prod.unidad_medida = request.form.get('unidad_medida', prod.unidad_medida)
-    prod.categoria_id = request.form.get('categoria_id') or None
-    try: prod.stock_minimo = float(request.form.get('stock_minimo', 0))
-    except: pass
+    nombre = request.form.get('nombre', prod.nombre).strip()
+    unidad = normalize_unit(request.form.get('unidad_medida', prod.unidad_medida))
+    cat_id_raw = request.form.get('categoria_id', '').strip()
+    try:
+        cat_id = int(cat_id_raw) if cat_id_raw else None
+    except (TypeError, ValueError, OverflowError):
+        cat_id = -1
+    if not nombre or len(nombre) > 150 or (unidad not in UNIDADES_PRODUCTO and unidad != prod.unidad_medida):
+        flash('Revisa el nombre y la unidad del producto.', 'error')
+        return redirect(url_for('admin.productos'))
+    if cat_id is not None and not db.session.get(Categoria, cat_id):
+        flash('La categoría seleccionada no existe.', 'error')
+        return redirect(url_for('admin.productos'))
+    if _producto_duplicado(nombre, unidad, cat_id, excluir_id=prod.id):
+        flash('Ya existe otro producto activo con ese nombre, categoría y unidad. No se guardaron los cambios.', 'error')
+        return redirect(url_for('admin.productos'))
+    try:
+        stock_minimo = float(request.form.get('stock_minimo', 0))
+        if stock_minimo < 0 or not math.isfinite(stock_minimo):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('El stock mínimo debe ser un número válido y no negativo.', 'error')
+        return redirect(url_for('admin.productos'))
     costo_raw = request.form.get('costo_unitario', '').strip()
     try:
         costo = float(costo_raw) if costo_raw else None
-        if costo is not None and costo < 0:
+        if costo is not None and (costo < 0 or not math.isfinite(costo)):
             raise ValueError
         prod.costo_unitario = costo
     except ValueError:
         flash('El costo unitario debe ser un monto igual o mayor que cero.', 'error')
         return redirect(url_for('admin.productos'))
+    prod.nombre = nombre
+    prod.unidad_medida = unidad
+    prod.categoria_id = cat_id
+    prod.stock_minimo = stock_minimo
     prod.activo = request.form.get('activo', 'on') == 'on'
     db.session.commit()
     flash(f'Producto "{prod.nombre}" actualizado.', 'success')
@@ -375,7 +458,7 @@ def vincular_carta(id):
                 cat = Categoria.query.filter_by(activo=True).first()
             nuevo_prod = Producto(
                 nombre=prod.nombre,
-                unidad_medida='unid',
+                unidad_medida='unidad',
                 categoria_id=cat.id if cat else None,
                 stock_actual=0, stock_minimo=0, activo=True
             )
@@ -412,11 +495,21 @@ def nuevo_producto_carta():
     from models import ProductoCarta, CategoriaCarta
     nombre = request.form.get('nombre', '').strip()
     cat_id = request.form.get('categoria_id')
-    precio = float(request.form.get('precio', 0) or 0)
-    if nombre and cat_id:
+    try:
+        precio = float(request.form.get('precio', 0) or 0)
+        categoria_id = int(cat_id) if cat_id else None
+        if precio < 0 or not math.isfinite(precio) or not nombre or not categoria_id:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('Indica un nombre, categoría válida y precio no negativo.', 'error')
+        return redirect(url_for('admin.carta'))
+    if not db.session.get(CategoriaCarta, categoria_id):
+        flash('La categoría seleccionada no existe.', 'error')
+        return redirect(url_for('admin.carta'))
+    if nombre and categoria_id:
         orden = db.session.query(db.func.max(ProductoCarta.orden)).scalar() or 0
         db.session.add(ProductoCarta(
-            nombre=nombre, categoria_id=int(cat_id),
+            nombre=nombre, categoria_id=categoria_id,
             precio=precio, activo=True, orden=orden+1
         ))
         db.session.commit()
@@ -432,13 +525,21 @@ def nuevo_producto_carta():
 def configurar_vino(id):
     from models import ProductoCarta
     prod = ProductoCarta.query.get_or_404(id)
-    prod.es_vino           = request.form.get('es_vino') == 'on'
-    try: prod.copas_por_botella = int(request.form.get('copas_por_botella', 5))
-    except: prod.copas_por_botella = 5
-    try: prod.precio_copa     = float(request.form.get('precio_copa', 0) or 0)
-    except: prod.precio_copa = 0
-    try: prod.precio_botella  = float(request.form.get('precio_botella', 0) or 0)
-    except: prod.precio_botella = 0
+    try:
+        copas = int(request.form.get('copas_por_botella', 5))
+        precio_copa = float(request.form.get('precio_copa', 0) or 0)
+        precio_botella = float(request.form.get('precio_botella', 0) or 0)
+        if copas < 1 or min(precio_copa, precio_botella) < 0 or not all(
+            map(math.isfinite, (precio_copa, precio_botella))
+        ):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('Copas y precios deben ser valores válidos; las copas deben ser al menos una.', 'error')
+        return redirect(url_for('admin.carta'))
+    prod.es_vino = request.form.get('es_vino') == 'on'
+    prod.copas_por_botella = copas
+    prod.precio_copa = precio_copa
+    prod.precio_botella = precio_botella
     db.session.commit()
     flash(f'Configuración de vino actualizada para "{prod.nombre}".', 'success')
     return redirect(url_for('admin.carta'))
@@ -446,15 +547,16 @@ def configurar_vino(id):
 
 @admin_bp.route('/vinos/registros')
 @login_required
+@admin_required
 def registros_botella():
     from models import RegistroBotella, ProductoCarta
     from datetime import date
-    fecha_str = request.args.get('fecha', date.today().strftime('%Y-%m-%d'))
+    fecha_str = request.args.get('fecha', now_peru().date().strftime('%Y-%m-%d'))
     try:
         from datetime import datetime
         fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
     except:
-        fecha = date.today()
+        fecha = now_peru().date()
     registros = RegistroBotella.query.filter_by(fecha=fecha).all()
     # Productos de vino
     vinos = ProductoCarta.query.filter_by(es_vino=True, activo=True).all()
@@ -465,45 +567,50 @@ def registros_botella():
 
 @admin_bp.route('/vinos/confirmar', methods=['POST'])
 @login_required
+@admin_required
 def confirmar_botella():
     from models import RegistroBotella, ProductoCarta, Producto
     from datetime import date, datetime
-    prod_id  = int(request.form.get('producto_carta_id'))
+    try:
+        prod_id = int(request.form.get('producto_carta_id'))
+        n_bot_enteras = int(request.form.get('botellas_enteras', 0) or 0)
+        if n_bot_enteras < 0:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        flash('Selecciona un vino válido e indica una cantidad de botellas no negativa.', 'error')
+        return redirect(url_for('admin.registros_botella'))
     fecha_str= request.form.get('fecha')
     try: fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-    except: fecha = date.today()
+    except: fecha = now_peru().date()
 
     vacia    = request.form.get('botella_vacia') == 'si'
     notas    = request.form.get('notas', '').strip()
-    n_bot_enteras = int(request.form.get('botellas_enteras', 0) or 0)
-
+    pc = ProductoCarta.query.get_or_404(prod_id)
     reg = RegistroBotella.query.filter_by(
         producto_carta_id=prod_id, fecha=fecha).first()
     if not reg:
         reg = RegistroBotella(producto_carta_id=prod_id, fecha=fecha,
                               creado_en=now_peru(), usuario_id=current_user.id)
         db.session.add(reg)
+        db.session.flush()
+
+    unidades_antes = (1 if reg.botella_vacia else 0) + (reg.botellas_vendidas_enteras or 0)
+    unidades_ahora = (1 if vacia else 0) + n_bot_enteras
+    diferencia = unidades_ahora - unidades_antes
+    prod_alm = db.session.get(Producto, pc.producto_almacen_id) if pc.producto_almacen_id and pc.descuenta_inventario else None
+    if diferencia > 0 and prod_alm and (prod_alm.stock_actual or 0) < diferencia:
+        flash(f'Stock insuficiente de {prod_alm.nombre} para confirmar el consumo.', 'error')
+        return redirect(url_for('admin.registros_botella', fecha=fecha_str))
 
     reg.botella_vacia             = vacia
     reg.botellas_vendidas_enteras = n_bot_enteras
     reg.notas                     = notas
     reg.confirmado_por            = current_user.id
 
-    # Si la botella se confirmó como vacía → descontar 1 del stock
-    if vacia:
-        pc = ProductoCarta.query.get(prod_id)
-        if pc and pc.producto_almacen_id and pc.descuenta_inventario:
-            prod_alm = Producto.query.get(pc.producto_almacen_id)
-            if prod_alm:
-                prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - 1)
-
-    # Botellas enteras vendidas → descontar del stock
-    if n_bot_enteras > 0:
-        pc = ProductoCarta.query.get(prod_id)
-        if pc and pc.producto_almacen_id and pc.descuenta_inventario:
-            prod_alm = Producto.query.get(pc.producto_almacen_id)
-            if prod_alm:
-                prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - n_bot_enteras)
+    if prod_alm:
+        _ajustar_stock_vino(prod_alm, diferencia,
+                            f'VINO-{reg.id}-{fecha.isoformat()}',
+                            f'Ajuste de consumo de vino — registro #{reg.id}')
 
     db.session.commit()
     flash('Registro de botella guardado.', 'success')
@@ -512,6 +619,7 @@ def confirmar_botella():
 
 @admin_bp.route('/vinos/editar/<int:reg_id>', methods=['POST'])
 @login_required
+@admin_required
 def editar_registro_botella(reg_id):
     from models import RegistroBotella, Producto, ProductoCarta
     reg = RegistroBotella.query.get_or_404(reg_id)
@@ -521,17 +629,18 @@ def editar_registro_botella(reg_id):
     reg.notas = request.form.get('notas', '').strip()
     reg.confirmado_por = current_user.id
 
-    # Ajustar stock si cambió la decisión
-    pc = ProductoCarta.query.get(reg.producto_carta_id)
+    # Ajustar solo la diferencia, así volver a confirmar no duplica el consumo.
+    pc = db.session.get(ProductoCarta, reg.producto_carta_id)
     if pc and pc.producto_almacen_id and pc.descuenta_inventario:
-        prod_alm = Producto.query.get(pc.producto_almacen_id)
+        prod_alm = db.session.get(Producto, pc.producto_almacen_id)
         if prod_alm:
-            if not vacia_antes and vacia_nueva:
-                # Antes no estaba vacía, ahora sí → descontar 1
-                prod_alm.stock_actual = max(0, (prod_alm.stock_actual or 0) - 1)
-            elif vacia_antes and not vacia_nueva:
-                # Antes estaba vacía, ahora no → devolver 1
-                prod_alm.stock_actual = (prod_alm.stock_actual or 0) + 1
+            diferencia = int(vacia_nueva) - int(bool(vacia_antes))
+            if diferencia > 0 and (prod_alm.stock_actual or 0) < diferencia:
+                flash('No hay stock suficiente para ajustar la botella confirmada.', 'error')
+                return redirect(request.referrer or url_for('admin.registros_botella'))
+            _ajustar_stock_vino(prod_alm, diferencia,
+                                f'VINO-EDICION-{reg.id}-{int(now_peru().timestamp())}',
+                                f'Ajuste al editar registro de vino #{reg.id}')
 
     db.session.commit()
     flash('Registro actualizado.', 'success')

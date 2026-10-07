@@ -25,6 +25,7 @@
         <p style="font-weight:700;color:#1e293b;font-size:0.85rem;margin-bottom:10px;">➕ Nueva categoría de carta</p>
         <form method="POST" action="{{ url_for('admin.nueva_categoria_carta') }}"
               style="display:flex;gap:8px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="nombre" class="input" placeholder="Ej: Jugos, Cafés..." required style="flex:1;">
             <button type="submit" class="btn-primary btn-sm">Crear</button>
         </form>
@@ -33,6 +34,7 @@
         <p style="font-weight:700;color:#1e293b;font-size:0.85rem;margin-bottom:10px;">➕ Nuevo producto en carta</p>
         <form method="POST" action="{{ url_for('admin.nuevo_producto_carta') }}"
               style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="flex:2;min-width:140px;">
                 <label class="label">Nombre</label>
                 <input type="text" name="nombre" class="input" placeholder="Ej: Gaseosa 700ml" required>
@@ -132,6 +134,7 @@
                 style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
         </div>
         <form method="POST" id="form-vincular" style="display:flex;flex-direction:column;gap:14px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;">
                 <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                     <input type="checkbox" name="descuenta_inventario" id="chk-descuenta"
@@ -168,6 +171,7 @@
                 style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;">✕</button>
         </div>
         <form method="POST" id="form-vino" style="display:flex;flex-direction:column;gap:14px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px 14px;">
                 <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                     <input type="checkbox" name="es_vino" id="chk-es-vino"
