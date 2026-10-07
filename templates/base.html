@@ -224,6 +224,14 @@
             <a href="{{ url_for('kardex.bienes') }}" class="sidebar-link sidebar-sub {% if ep=='kardex.bienes' %}active{% endif %}" onclick="closeSidebar()"><span>🪑</span> Kardex bienes</a>
         </div>
 
+        {% if tiene_permiso('cocina') %}<div class="nav-group-header {% if bp == 'cocina' %}open{% endif %}" onclick="toggleGroup(this)">
+            <span>🍳 Cocina</span><span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-body {% if bp == 'cocina' %}open{% endif %}">
+            <a href="{{ url_for('cocina.index') }}" class="sidebar-link {% if ep == 'cocina.index' %}active{% endif %}" onclick="closeSidebar()"><span>🥘</span> Producción diaria</a>
+            {% if current_user.es_admin() %}<a href="{{ url_for('cocina.recetas') }}" class="sidebar-link sidebar-sub {% if ep == 'cocina.recetas' %}active{% endif %}" onclick="closeSidebar()"><span>📖</span> Recetas</a>{% endif %}
+        </div>{% endif %}
+
         <!-- VENTAS -->
         {% set grp_ventas2 = grp_ventas or bp == 'pasajeros' %}
         {% if tiene_permiso('ventas') or tiene_permiso('reservas') or tiene_permiso('cierre_caja') %}<div class="nav-group-header {% if grp_ventas2 %}open{% endif %}" onclick="toggleGroup(this)">

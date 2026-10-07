@@ -277,6 +277,77 @@ class KardexComedor(db.Model):
 
 
 # ─────────────────────────────────────────
+#  RECETAS Y PRODUCCIÓN DE COCINA
+# ─────────────────────────────────────────
+class Receta(db.Model):
+    __tablename__ = 'recetas_cocina'
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(150), nullable=False)
+    categoria = db.Column(db.String(30), nullable=False, default='Otro')
+    rendimiento = db.Column(db.Float, nullable=False, default=1)
+    unidad_rendimiento = db.Column(db.String(30), nullable=False, default='porciones')
+    margen_pct = db.Column(db.Float, nullable=False, default=15)
+    activa = db.Column(db.Boolean, nullable=False, default=True)
+    creado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    creado_en = db.Column(db.DateTime, nullable=False, default=now_peru)
+    actualizada_en = db.Column(db.DateTime, nullable=False, default=now_peru, onupdate=now_peru)
+
+    ingredientes = db.relationship(
+        'IngredienteReceta', backref='receta', lazy='selectin',
+        cascade='all, delete-orphan', order_by='IngredienteReceta.id',
+    )
+    creado_por = db.relationship('Usuario')
+    producciones = db.relationship('ProduccionCocina', backref='receta', lazy=True)
+
+
+class IngredienteReceta(db.Model):
+    __tablename__ = 'ingredientes_receta'
+    id = db.Column(db.Integer, primary_key=True)
+    receta_id = db.Column(db.Integer, db.ForeignKey('recetas_cocina.id'), nullable=False)
+    producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
+    cantidad = db.Column(db.Float, nullable=False)
+    unidad_medida = db.Column(db.String(30), nullable=False)
+
+    producto = db.relationship('Producto')
+    __table_args__ = (
+        db.UniqueConstraint('receta_id', 'producto_id', name='uq_ingrediente_receta_producto'),
+    )
+
+
+class ProduccionCocina(db.Model):
+    __tablename__ = 'producciones_cocina'
+    id = db.Column(db.Integer, primary_key=True)
+    receta_id = db.Column(db.Integer, db.ForeignKey('recetas_cocina.id'), nullable=False)
+    fecha_preparacion = db.Column(db.Date, nullable=False)
+    cantidad_producida = db.Column(db.Float, nullable=False)
+    unidad_rendimiento = db.Column(db.String(30), nullable=False)
+    token = db.Column(db.String(32), nullable=False, unique=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    nota = db.Column(db.String(255))
+    creado_en = db.Column(db.DateTime, nullable=False, default=now_peru)
+
+    usuario = db.relationship('Usuario')
+    consumos = db.relationship(
+        'IngredienteProduccion', backref='produccion', lazy='selectin',
+        cascade='all, delete-orphan', order_by='IngredienteProduccion.id',
+    )
+
+
+class IngredienteProduccion(db.Model):
+    __tablename__ = 'ingredientes_produccion'
+    id = db.Column(db.Integer, primary_key=True)
+    produccion_id = db.Column(db.Integer, db.ForeignKey('producciones_cocina.id'), nullable=False)
+    producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
+    producto_nombre = db.Column(db.String(150), nullable=False)
+    cantidad_estimada = db.Column(db.Float, nullable=False, default=0)
+    cantidad = db.Column(db.Float, nullable=False)
+    unidad_medida = db.Column(db.String(30), nullable=False)
+    fuera_margen = db.Column(db.Boolean, nullable=False, default=False)
+
+    producto = db.relationship('Producto')
+
+
+# ─────────────────────────────────────────
 #  PRODUCTOS DE CARTA (para comedor y ventas)
 # ─────────────────────────────────────────
 class CategoriaCarta(db.Model):
@@ -870,6 +941,8 @@ Index('ix_pedidos_estado_fecha', ListaPedido.estado, ListaPedido.elaborado_en)
 Index('ix_movimientos_producto_fecha', MovimientoAlmacen.producto_id, MovimientoAlmacen.fecha_hora)
 Index('ix_movimientos_tipo_fecha', MovimientoAlmacen.tipo, MovimientoAlmacen.fecha_hora)
 Index('ix_items_compra_compra', ItemCompra.compra_id)
+Index('ix_producciones_fecha', ProduccionCocina.fecha_preparacion, ProduccionCocina.creado_en)
+Index('ix_produccion_ingrediente_producto', IngredienteProduccion.producto_id)
 
 # Compras
 Index('ix_compras_fecha',      Compra.fecha)

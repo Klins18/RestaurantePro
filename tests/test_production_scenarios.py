@@ -19,18 +19,24 @@ from models import (
     Bien,
     ItemPedido,
     ItemCompra,
+    IngredienteProduccion,
+    IngredienteReceta,
     KardexBienes,
     KardexAlmacen,
     ListaPedido,
     MovimientoAlmacen,
     Producto,
     ProductoCarta,
+    PermisoUsuario,
+    ProduccionCocina,
+    Receta,
     SolicitudVenta,
     Usuario,
     VentaDiaria,
     db,
 )
 from services.units import normalize_unit
+from services.units import convert_quantity
 
 
 class ProductionScenarioTests(unittest.TestCase):
@@ -376,6 +382,31 @@ class ProductionScenarioTests(unittest.TestCase):
         with self.app.app_context():
             self.assertAlmostEqual(db.session.get(Producto, stock_id).stock_actual, 3)
 
+    def test_seeded_bottled_drinks_are_stock_tracked_and_block_at_zero(self):
+        with self.app.app_context():
+            agua = ProductoCarta.query.filter_by(nombre='Agua Mineral').one()
+            self.assertTrue(agua.descuenta_inventario)
+            self.assertIsNotNone(agua.producto_almacen_id)
+            producto_almacen = db.session.get(Producto, agua.producto_almacen_id)
+            self.assertEqual(producto_almacen.stock_actual, 0)
+            agua_id = agua.id
+
+        sale = [{
+            'num_pax': 0, 'precio_buffet': 0, 'es_privado': True,
+            'nombre_grupo': 'QA sin stock', 'tipo_pago': 'efectivo',
+            'items': [{'prod_id': agua_id, 'nombre': 'Agua Mineral', 'cant': 1, 'precio': 5}],
+        }]
+        response = self.post(
+            '/ventas/nueva', fecha='2026-10-08', tabs_json=json.dumps(sale),
+            solicitud_token='f' * 32,
+        )
+        self.assertEqual(response.status_code, 302)
+        followed = self.client.get(response.location, follow_redirects=True)
+        self.assertIn('Stock insuficiente', followed.get_data(as_text=True))
+        with self.app.app_context():
+            self.assertEqual(VentaDiaria.query.filter_by(fecha=date(2026, 10, 8)).count(), 0)
+            self.assertEqual(SolicitudVenta.query.filter_by(token='f' * 32).count(), 0)
+
     def test_sale_submission_rejects_empty_services_and_blank_items(self):
         fecha = '2026-10-04'
         token = 'c' * 32
@@ -426,6 +457,151 @@ class ProductionScenarioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             self.assertEqual(db.session.get(BalonGas, gas_id).estado, 'agotado')
+
+    def test_recipe_production_deducts_actual_amount_and_is_idempotent(self):
+        self.assertAlmostEqual(convert_quantity(1500, 'g', 'kg'), 1.5)
+        self.assertAlmostEqual(convert_quantity(250, 'ml', 'l'), 0.25)
+        self.assertAlmostEqual(convert_quantity(2, 'docena', 'unidad'), 24)
+        with self.app.app_context():
+            category = Categoria.query.filter_by(nombre='Verdura Fresca').one()
+            product = Producto(
+                nombre='QA Papa receta', unidad_medida='kg', categoria_id=category.id,
+                stock_actual=10, stock_minimo=0, activo=True,
+            )
+            db.session.add(product)
+            db.session.commit()
+            product_id = product.id
+
+        response = self.post(
+            '/cocina/recetas/guardar', nombre='QA Sopa diaria', categoria='Sopa',
+            rendimiento='20', unidad_rendimiento='porciones', margen_pct='15',
+            producto_id=[str(product_id)], cantidad=['1500'], unidad_medida=['g'],
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            recipe = Receta.query.filter_by(nombre='QA Sopa diaria').one()
+            ingredient = IngredienteReceta.query.filter_by(receta_id=recipe.id).one()
+            self.assertEqual(ingredient.unidad_medida, 'g')
+            recipe_id, ingredient_id = recipe.id, ingredient.id
+            movement_count_before = MovimientoAlmacen.query.filter_by(producto_id=product_id).count()
+            sale_count_before = VentaDiaria.query.count()
+
+        payload = {
+            'receta_id': str(recipe_id), 'fecha_preparacion': '2026-10-07',
+            'cantidad_producida': '40', 'cantidad_real_' + str(ingredient_id): '3600',
+            'token': '1' * 32, 'nota': 'Se usó más papa por tamaño de la papa',
+        }
+        self.assertEqual(self.post('/cocina/produccion', **payload).status_code, 302)
+        # Reintentar una misma confirmación no vuelve a descontar ingredientes.
+        self.assertEqual(self.post('/cocina/produccion', **payload).status_code, 302)
+        with self.app.app_context():
+            self.assertAlmostEqual(db.session.get(Producto, product_id).stock_actual, 6.4)
+            production = ProduccionCocina.query.filter_by(token='1' * 32).one()
+            self.assertEqual(production.cantidad_producida, 40)
+            consumption = IngredienteProduccion.query.filter_by(produccion_id=production.id).one()
+            self.assertAlmostEqual(consumption.cantidad_estimada, 3.0)
+            self.assertAlmostEqual(consumption.cantidad, 3.6)
+            self.assertTrue(consumption.fuera_margen)
+            movement = MovimientoAlmacen.query.filter_by(
+                producto_id=product_id, referencia=f'COCINA-PROD-{production.id}-{product_id}',
+            ).one()
+            self.assertEqual(movement.tipo, 'egreso')
+            self.assertAlmostEqual(movement.cantidad, 3.6)
+            self.assertEqual(MovimientoAlmacen.query.filter_by(producto_id=product_id).count(), movement_count_before + 1)
+            self.assertEqual(VentaDiaria.query.count(), sale_count_before)
+        daily = self.client.get('/cocina/?fecha=2026-10-07')
+        self.assertEqual(daily.status_code, 200)
+        self.assertIn('QA Sopa diaria', daily.get_data(as_text=True))
+        self.assertIn('3.6', daily.get_data(as_text=True))
+
+    def test_recipe_production_insufficient_stock_rolls_back_every_ingredient(self):
+        with self.app.app_context():
+            category = Categoria.query.filter_by(nombre='Verdura Fresca').one()
+            potato = Producto(
+                nombre='QA Papa atomic', unidad_medida='kg', categoria_id=category.id,
+                stock_actual=5, activo=True,
+            )
+            onion = Producto(
+                nombre='QA Cebolla atomic', unidad_medida='kg', categoria_id=category.id,
+                stock_actual=0.1, activo=True,
+            )
+            db.session.add_all([potato, onion])
+            db.session.flush()
+            recipe = Receta(
+                nombre='QA Sopa atomic', categoria='Sopa', rendimiento=20,
+                unidad_rendimiento='porciones', margen_pct=15, creado_por_id=self.admin_id,
+            )
+            recipe.ingredientes.extend([
+                IngredienteReceta(producto_id=potato.id, cantidad=1, unidad_medida='kg'),
+                IngredienteReceta(producto_id=onion.id, cantidad=0.5, unidad_medida='kg'),
+            ])
+            db.session.add(recipe)
+            db.session.commit()
+            potato_id, onion_id, recipe_id = potato.id, onion.id, recipe.id
+            ingredient_ids = [ingredient.id for ingredient in recipe.ingredientes]
+
+        response = self.post(
+            '/cocina/produccion', receta_id=str(recipe_id), fecha_preparacion='2026-10-07',
+            cantidad_producida='20', token='2' * 32,
+            **{f'cantidad_real_{ingredient_ids[0]}': '1', f'cantidad_real_{ingredient_ids[1]}': '0.5'},
+        )
+        self.assertEqual(response.status_code, 302)
+        page = self.client.get(response.location, follow_redirects=True)
+        self.assertIn('Stock insuficiente', page.get_data(as_text=True))
+        with self.app.app_context():
+            self.assertAlmostEqual(db.session.get(Producto, potato_id).stock_actual, 5)
+            self.assertAlmostEqual(db.session.get(Producto, onion_id).stock_actual, 0.1)
+            self.assertEqual(ProduccionCocina.query.filter_by(token='2' * 32).count(), 0)
+            self.assertEqual(MovimientoAlmacen.query.filter(
+                MovimientoAlmacen.producto_id.in_([potato_id, onion_id])
+            ).count(), 0)
+
+    def test_internal_consumption_deducts_stock_without_creating_a_sale(self):
+        with self.app.app_context():
+            category = Categoria.query.filter_by(nombre='Bebidas').one()
+            product = Producto(
+                nombre='QA Agua consumo interno', unidad_medida='unidad',
+                categoria_id=category.id, stock_actual=4, activo=True,
+            )
+            db.session.add(product)
+            db.session.commit()
+            product_id = product.id
+            sales_before = VentaDiaria.query.count()
+
+        payload = {
+            'fecha_preparacion': '2026-10-07', 'token': '3' * 32,
+            'producto_id': str(product_id), 'cantidad': '1',
+            'tipo_consumo': 'personal', 'persona': 'Personal QA',
+            'nota': 'Consumo interno de prueba',
+        }
+        self.assertEqual(self.post('/cocina/consumo-interno', **payload).status_code, 302)
+        self.assertEqual(self.post('/cocina/consumo-interno', **payload).status_code, 302)
+        with self.app.app_context():
+            self.assertAlmostEqual(db.session.get(Producto, product_id).stock_actual, 3)
+            self.assertEqual(VentaDiaria.query.count(), sales_before)
+            movement = MovimientoAlmacen.query.filter_by(referencia='CONSUMO-INT-' + '3' * 32).one()
+            self.assertEqual(movement.tipo, 'egreso')
+            self.assertEqual(movement.motivo, 'Consumo personal')
+            self.assertIn('Personal QA', movement.observaciones)
+            self.assertEqual(Auditoria.query.filter_by(accion='CONSUMO_INTERNO').count(), 1)
+
+    def test_cook_permission_opens_production_but_not_recipe_admin(self):
+        with self.app.app_context():
+            employee = Usuario(
+                username='qa_cocinero', nombre_completo='Cocinero QA',
+                rol='empleado', activo=True,
+            )
+            employee.set_password('qa-password-123456')
+            db.session.add(employee)
+            db.session.flush()
+            db.session.add(PermisoUsuario(usuario_id=employee.id, permiso='cocina', otorgado_por=self.admin_id))
+            db.session.commit()
+            employee_id = employee.id
+        with self.client.session_transaction() as session:
+            session['_user_id'] = str(employee_id)
+            session['_fresh'] = True
+        self.assertEqual(self.client.get('/cocina/').status_code, 200)
+        self.assertEqual(self.client.get('/cocina/recetas').status_code, 302)
 
 
 if __name__ == '__main__':

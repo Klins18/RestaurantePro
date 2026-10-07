@@ -625,19 +625,32 @@ def eliminar_venta(id):
     if not current_user.es_admin():
         flash('Solo administración puede anular una venta.', 'error')
         return redirect(url_for('ventas.index'))
-    # Devolver stock de todos los items
-    from models import ProductoCarta, Producto as ProdAlm
-    for item in venta.items:
-        if item.producto_carta_id:
-            pc = db.session.get(ProductoCarta, item.producto_carta_id)
-            if pc and pc.descuenta_inventario and pc.producto_almacen_id:
-                prod = db.session.get(ProdAlm, pc.producto_almacen_id)
-                if prod:
-                    registrar_ajuste_stock_venta(
-                        prod, float(item.cantidad or 0), 'ingreso',
-                        f'VENTA-{venta.id}-ANULACION-ITEM-{item.id}',
-                        f'Reversión por anular venta #{venta.id} — {item.descripcion}',
-                    )
+    # Revertir solo las cantidades que realmente movieron almacén. Una carta
+    # puede haberse vinculado después de una venta histórica; usar su
+    # configuración actual para devolver stock inflaría el inventario.
+    movimientos_venta = MovimientoAlmacen.query.filter(
+        MovimientoAlmacen.referencia.like(f'VENTA-{venta.id}-%')
+    ).all()
+    saldo_movido_por_producto = {}
+    for movimiento in movimientos_venta:
+        if movimiento.tipo not in {'ingreso', 'egreso'}:
+            continue
+        signo = -1 if movimiento.tipo == 'egreso' else 1
+        saldo_movido_por_producto[movimiento.producto_id] = (
+            saldo_movido_por_producto.get(movimiento.producto_id, 0)
+            + signo * float(movimiento.cantidad or 0)
+        )
+    from models import Producto as ProdAlm
+    for producto_id, saldo_neto in saldo_movido_por_producto.items():
+        if saldo_neto >= 0:
+            continue
+        prod = db.session.get(ProdAlm, producto_id)
+        if prod:
+            registrar_ajuste_stock_venta(
+                prod, abs(saldo_neto), 'ingreso',
+                f'VENTA-{venta.id}-ANULACION-PRODUCTO-{producto_id}',
+                f'Reversión por anular venta #{venta.id}',
+            )
     registrar_auditoria(current_user.id, 'ANULAR_VENTA', 'ventas_diarias', venta.id,
                         f'Total anulado: S/.{venta.total:.2f}', ip=request.remote_addr)
     db.session.delete(venta)

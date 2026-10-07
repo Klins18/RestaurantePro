@@ -8,6 +8,7 @@ PERMISOS_LABELS = {
     'compras':     ('🛍️', 'Registro de compras'),
     'gas':         ('🔴', 'Balones de gas'),
     'inventario':  ('📦', 'Inventario / Almacén'),
+    'cocina':      ('🍳', 'Cocina y producción'),
     'asistencia':  ('✅', 'Asistencia y reporte'),
     'reservas':    ('📅', 'Reservas de grupos'),
     'cierre_caja': ('🏁', 'Cierre de caja'),

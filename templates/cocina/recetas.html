@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Recetas de cocina{% endblock %}
+{% block page_title %}Recetas de cocina{% endblock %}
+{% block page_subtitle %}Define ingredientes y cantidades de referencia por tanda{% endblock %}
+{% block header_actions %}<a href="{{ url_for('cocina.index') }}" class="btn-secondary btn-sm">← Producción diaria</a>{% endblock %}
+
+{% block content %}
+<style>
+  .recetas-layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start}
+  .ingrediente-edicion{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(80px,.7fr) minmax(90px,.8fr) 36px;gap:7px;align-items:center;margin-bottom:8px}
+  @media(max-width:900px){.recetas-layout{grid-template-columns:1fr}}
+  @media(max-width:520px){.ingrediente-edicion{grid-template-columns:minmax(0,1fr) minmax(80px,.45fr) minmax(80px,.55fr) 32px;gap:5px}.ingrediente-edicion .input{padding:8px 6px;font-size:.78rem}}
+</style>
+
+<div class="card" style="margin-bottom:14px;background:#eff6ff;border:1px solid #bfdbfe">
+  <p style="font-size:.83rem;color:#1e40af;margin:0"><strong>Cómo configurar:</strong> ingresa la cantidad de cada ingrediente que normalmente usas para el rendimiento base. Ejemplo: para 20 porciones de sopa, 1.5 kg de papa. En producción diaria se calcula una cantidad estimada y cocina puede corregir lo que realmente usó.</p>
+</div>
+
+<div class="recetas-layout">
+<section class="card" id="form-receta">
+  <h2 style="font-size:1rem;font-weight:800;color:#1e293b;margin:0 0 12px">{{ 'Editar receta' if receta_editar else 'Nueva receta' }}</h2>
+  <form method="POST" action="{{ url_for('cocina.guardar_receta') }}" id="receta-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if receta_editar %}<input type="hidden" name="receta_id" value="{{ receta_editar.id }}">{% endif %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+      <div style="grid-column:1/-1"><label class="label">Nombre del plato o preparación *</label><input class="input" name="nombre" required maxlength="150" value="{{ receta_editar.nombre if receta_editar else '' }}" placeholder="Ej.: Sopa de quinua"></div>
+      <div><label class="label">Tipo *</label><select class="input" name="categoria" required>{% for c in categorias %}<option value="{{ c }}" {% if receta_editar and receta_editar.categoria==c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+      <div><label class="label">Rendimiento base *</label><div style="display:flex;gap:6px"><input class="input" type="number" name="rendimiento" min="0.0001" step="any" required value="{{ receta_editar.rendimiento if receta_editar else 20 }}"><select class="input" name="unidad_rendimiento">{% for u in unidades_rendimiento %}<option value="{{ u }}" {% if receta_editar and receta_editar.unidad_rendimiento==u %}selected{% elif not receta_editar and u=='porciones' %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></div></div>
+      <div style="grid-column:1/-1"><label class="label">Margen de referencia (%) *</label><input class="input" type="number" name="margen_pct" min="0" max="50" step="1" required value="{{ receta_editar.margen_pct if receta_editar else 15 }}"><small style="color:#64748b">Solo muestra el rango esperado. Cocina puede registrar más o menos y el stock se descuenta por la cantidad real.</small></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px"><h3 style="font-size:.88rem;font-weight:800;color:#1e293b;margin:0">Ingredientes *</h3><button type="button" class="btn-secondary btn-sm" onclick="agregarIngrediente()">＋ Añadir ingrediente</button></div>
+    <div id="ingredientes-lista">
+      {% if receta_editar %}
+        {% for ing in receta_editar.ingredientes %}
+        <div class="ingrediente-edicion">
+          <select class="input producto-ingrediente" name="producto_id" required><option value="">Producto</option>{% for p in productos %}<option value="{{ p.id }}" data-unidad="{{ p.unidad_medida }}" {% if ing.producto_id==p.id %}selected{% endif %}>{{ p.nombre }} · {{ unidad_label(p.unidad_medida) }}</option>{% endfor %}</select>
+          <input class="input" type="number" name="cantidad" min="0.0001" step="any" required value="{{ ing.cantidad }}" aria-label="Cantidad">
+          <select class="input unidad-ingrediente" name="unidad_medida" required>{% for u in unidades %}<option value="{{ u.value }}" {% if ing.unidad_medida==u.value %}selected{% endif %}>{{ u.value }}</option>{% endfor %}</select>
+          <button type="button" class="btn-danger btn-sm" onclick="this.closest('.ingrediente-edicion').remove()" title="Quitar ingrediente">×</button>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="ingrediente-edicion">
+          <select class="input producto-ingrediente" name="producto_id" required><option value="">Producto</option>{% for p in productos %}<option value="{{ p.id }}" data-unidad="{{ p.unidad_medida }}">{{ p.nombre }} · {{ unidad_label(p.unidad_medida) }}</option>{% endfor %}</select>
+          <input class="input" type="number" name="cantidad" min="0.0001" step="any" required placeholder="Cantidad" aria-label="Cantidad">
+          <select class="input unidad-ingrediente" name="unidad_medida" required>{% for u in unidades %}<option value="{{ u.value }}" {% if u.value=='kg' %}selected{% endif %}>{{ u.value }}</option>{% endfor %}</select>
+          <button type="button" class="btn-danger btn-sm" onclick="this.closest('.ingrediente-edicion').remove()" title="Quitar ingrediente">×</button>
+        </div>
+      {% endif %}
+    </div>
+    <p style="font-size:.7rem;color:#64748b;margin:6px 0 14px">Gramos ↔ kilogramos y mililitros ↔ litros se convierten automáticamente. Para cajas, bolsas y otros envases usa la misma unidad configurada en almacén.</p>
+    <div style="display:flex;gap:8px"><button type="submit" class="btn-primary" style="flex:1">💾 Guardar receta</button>{% if receta_editar %}<a href="{{ url_for('cocina.recetas') }}" class="btn-secondary" style="display:flex;align-items:center">Cancelar</a>{% endif %}</div>
+  </form>
+</section>
+
+<section>
+  <h2 style="font-size:1rem;font-weight:800;color:#1e293b;margin:2px 0 10px">Recetas registradas ({{ recetas|length }})</h2>
+  {% if recetas %}<div style="display:grid;gap:10px">
+    {% for r in recetas %}<article class="card" style="padding:14px 16px;{% if not r.activa %}opacity:.65{% endif %}">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:start;flex-wrap:wrap"><div><span style="font-size:.68rem;text-transform:uppercase;color:#64748b;font-weight:700">{{ r.categoria }} · {{ 'Activa' if r.activa else 'Inactiva' }}</span><h3 style="font-size:.95rem;font-weight:800;color:#1e293b;margin:3px 0">{{ r.nombre }}</h3><p style="font-size:.75rem;color:#64748b;margin:0">Base: {{ r.rendimiento|round(3) }} {{ r.unidad_rendimiento }} · margen orientativo ±{{ r.margen_pct|round(0)|int }}%</p></div><div style="display:flex;gap:6px"><a class="btn-secondary btn-sm" href="{{ url_for('cocina.recetas', editar=r.id) }}">✏️ Editar</a><form method="POST" action="{{ url_for('cocina.cambiar_estado_receta', receta_id=r.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-{{ 'danger' if r.activa else 'primary' }} btn-sm" type="submit">{{ 'Desactivar' if r.activa else 'Activar' }}</button></form></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px 12px;margin-top:10px">{% for ing in r.ingredientes %}<div style="font-size:.76rem;color:#475569">• {{ ing.producto.nombre }}: <strong>{{ ing.cantidad|round(4) }} {{ unidad_label(ing.unidad_medida) }}</strong></div>{% endfor %}</div>
+    </article>{% endfor %}
+  </div>{% else %}<div class="card" style="color:#94a3b8;text-align:center;padding:25px">Registra la primera receta usando el formulario.</div>{% endif %}
+</section>
+</div>
+
+<template id="fila-ingrediente-template">
+  <div class="ingrediente-edicion">
+    <select class="input producto-ingrediente" name="producto_id" required><option value="">Producto</option>{% for p in productos %}<option value="{{ p.id }}" data-unidad="{{ p.unidad_medida }}">{{ p.nombre }} · {{ unidad_label(p.unidad_medida) }}</option>{% endfor %}</select>
+    <input class="input" type="number" name="cantidad" min="0.0001" step="any" required placeholder="Cantidad" aria-label="Cantidad">
+    <select class="input unidad-ingrediente" name="unidad_medida" required>{% for u in unidades %}<option value="{{ u.value }}">{{ u.value }}</option>{% endfor %}</select>
+    <button type="button" class="btn-danger btn-sm" onclick="this.closest('.ingrediente-edicion').remove()" title="Quitar ingrediente">×</button>
+  </div>
+</template>
+<script>
+function configurarFila(fila){
+  var producto=fila.querySelector('.producto-ingrediente'), unidad=fila.querySelector('.unidad-ingrediente');
+  producto.addEventListener('change',function(){var u=producto.selectedOptions[0]?.dataset.unidad;if(u&&Array.from(unidad.options).some(function(o){return o.value===u;}))unidad.value=u;});
+}
+document.querySelectorAll('.ingrediente-edicion').forEach(configurarFila);
+function agregarIngrediente(){var tpl=document.getElementById('fila-ingrediente-template');var fila=tpl.content.firstElementChild.cloneNode(true);document.getElementById('ingredientes-lista').appendChild(fila);configurarFila(fila);}
+</script>
+{% endblock %}

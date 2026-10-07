@@ -74,3 +74,29 @@ UNIT_LABELS = {option['value']: option['label'] for option in UNIT_CHOICES}
 def unit_label(value):
     canonical = normalize_unit(value)
     return UNIT_LABELS.get(canonical, canonical)
+
+
+def convert_quantity(quantity, source_unit, target_unit):
+    """Convert a recipe quantity into the stock unit of an ingredient.
+
+    Weight and volume units convert between metric scales. Individual items,
+    bottles, cans and dozens use count conversions; packages such as boxes or
+    bags convert only when their units match because their pack size varies.
+    """
+    source = normalize_unit(source_unit)
+    target = normalize_unit(target_unit)
+    value = float(quantity)
+    if source == target:
+        return value
+
+    scales = {
+        'g': ('weight', 1.0), 'kg': ('weight', 1000.0),
+        'ml': ('volume', 1.0), 'l': ('volume', 1000.0),
+        'unidad': ('count', 1.0), 'botella': ('count', 1.0),
+        'lata': ('count', 1.0), 'docena': ('count', 12.0),
+    }
+    source_scale = scales.get(source)
+    target_scale = scales.get(target)
+    if source_scale and target_scale and source_scale[0] == target_scale[0]:
+        return value * source_scale[1] / target_scale[1]
+    raise ValueError(f'No se puede convertir {source or "(sin unidad)"} a {target or "(sin unidad)"}.')

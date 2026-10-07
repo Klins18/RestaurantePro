@@ -83,6 +83,7 @@ def create_app(test_config=None):
     from routes.suministros import suministros_bp
     from routes.operaciones import operaciones_bp
     from routes.reportes import reportes_bp
+    from routes.cocina import cocina_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -98,6 +99,7 @@ def create_app(test_config=None):
     app.register_blueprint(suministros_bp)
     app.register_blueprint(operaciones_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(cocina_bp)
 
     # Context processor: notificaciones no leídas para el sidebar
     @app.context_processor
@@ -260,6 +262,36 @@ def init_db(app):
                     for v_nombre in variantes:
                         db.session.add(VarianteCarta(producto_id=prod.id, nombre=v_nombre))
                 orden_prod += 1
+
+        # Las bebidas envasadas deben existir también en almacén y descontar
+        # stock al venderse. Sin esta relación, la venta puede aprobarse aunque
+        # el inventario esté en cero. Jugos y bebidas preparadas no se incluyen:
+        # su control requiere registrar sus insumos/recetas.
+        bebidas_control_stock = {
+            'Gaseosa 600ml', 'Gaseosa 300ml', 'Agua Mineral',
+            'Cerveza Pequeña', 'Cerveza Lata (Pilsen)',
+        }
+        categoria_bebidas = Categoria.query.filter_by(nombre='Bebidas').first()
+        for nombre_producto in bebidas_control_stock:
+            producto_carta = ProductoCarta.query.filter_by(nombre=nombre_producto).first()
+            if not producto_carta:
+                continue
+            producto_almacen = Producto.query.filter(
+                db.func.lower(db.func.trim(Producto.nombre)) == nombre_producto.lower()
+            ).first()
+            if not producto_almacen:
+                producto_almacen = Producto(
+                    nombre=nombre_producto,
+                    unidad_medida='unidad',
+                    categoria_id=categoria_bebidas.id if categoria_bebidas else None,
+                    stock_actual=0,
+                    stock_minimo=0,
+                    activo=True,
+                )
+                db.session.add(producto_almacen)
+                db.session.flush()
+            producto_carta.descuenta_inventario = True
+            producto_carta.producto_almacen_id = producto_almacen.id
 
         db.session.commit()
 
