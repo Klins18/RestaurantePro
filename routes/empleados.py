@@ -4,7 +4,7 @@ import math
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, current_app
 from flask_login import login_required, current_user
 from routes.decorators import admin_required, permiso_required
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from models import (db, Empleado, Asistencia, FuncionDiaria, Usuario,
                     AuditoriaAsistencia, CierreAsistencia, Honorario, registrar_auditoria)
